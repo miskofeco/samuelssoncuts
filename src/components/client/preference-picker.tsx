@@ -1,311 +1,259 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState } from "react";
+import type { ReactNode } from "react";
 
-import { SegmentedControl } from "@/components/shared/segmented-control";
 import {
-  createCalendarDays,
   formatDay,
-  formatMonth,
   getAvailability,
   getAvailabilityTone,
+  monthGrid,
+  monthKey,
+  monthLabel,
+  shiftMonth,
+  todayIso,
 } from "@/domain/schedule";
-import type { AppState, DayWindow, Preference, ViewMode } from "@/domain/types";
+import type { AppState, DayWindow, Preference } from "@/domain/types";
 import { cn } from "@/lib/classnames";
+
+const weekdays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+const windows: DayWindow[] = ["Morning", "Midday", "Afternoon", "Evening"];
 
 export function PreferencePicker({
   preferences,
-  selectedView,
-  setSelectedView,
   state,
   blockedDates,
   updatePreferenceDate,
-}: {
-  preferences: Preference[];
-  selectedView: ViewMode;
-  setSelectedView: (view: ViewMode) => void;
-  state: AppState;
-  blockedDates: ReadonlySet<string>;
-  updatePreferenceDate: (rank: number, date: string) => void;
-}) {
-  const calendarDays = useMemo(() => createCalendarDays(0, 28), []);
-
-  return (
-    <div className="rounded-lg border border-black/10 bg-[#fafafa] p-3 dark:border-white/10 dark:bg-stone-800/40 sm:p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-            Availability
-          </p>
-          <h3 className="text-lg font-semibold text-black dark:text-white">
-            {formatMonth(calendarDays[0])}
-          </h3>
-        </div>
-        <SegmentedControl
-          ariaLabel="Date picker view"
-          value={selectedView}
-          onChange={setSelectedView}
-          options={[
-            { label: "Calendar", value: "calendar" },
-            { label: "List", value: "list" },
-          ]}
-        />
-      </div>
-
-      <PreferenceRankBar preferences={preferences} />
-
-      {selectedView === "calendar" ? (
-        <CalendarPreferenceGrid
-          calendarDays={calendarDays}
-          preferences={preferences}
-          state={state}
-          blockedDates={blockedDates}
-          updatePreferenceDate={updatePreferenceDate}
-        />
-      ) : (
-        <AvailabilityList
-          calendarDays={calendarDays}
-          preferences={preferences}
-          state={state}
-          blockedDates={blockedDates}
-          updatePreferenceDate={updatePreferenceDate}
-        />
-      )}
-    </div>
-  );
-}
-
-function PreferenceRankBar({ preferences }: { preferences: Preference[] }) {
-  return (
-    <div className="mt-4 grid gap-2 sm:grid-cols-3">
-      {preferences.map((preference) => (
-        <div
-          key={preference.id}
-          className="rounded-md border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-stone-900"
-        >
-          <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-            Choice {preference.rank}
-          </p>
-          <p className="mt-1 text-sm font-semibold text-black dark:text-white">
-            {formatDay(preference.date)}
-          </p>
-          <p className="text-xs text-stone-500 dark:text-stone-400">{preference.window}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function CalendarPreferenceGrid({
-  calendarDays,
-  preferences,
-  state,
-  blockedDates,
-  updatePreferenceDate,
-}: {
-  calendarDays: string[];
-  preferences: Preference[];
-  state: AppState;
-  blockedDates: ReadonlySet<string>;
-  updatePreferenceDate: (rank: number, date: string) => void;
-}) {
-  return (
-    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
-      {calendarDays.map((date) => {
-        const availability = getAvailability(state, date, blockedDates);
-        const rank = preferences.find((preference) => preference.date === date)
-          ?.rank;
-
-        return (
-          <DayButton
-            key={date}
-            date={date}
-            rank={rank}
-            tone={getAvailabilityTone(availability)}
-            booked={availability.booked}
-            proposed={availability.proposed}
-            available={availability.available}
-            blocked={availability.blocked}
-            onPick={(targetRank) => updatePreferenceDate(targetRank, date)}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function AvailabilityList({
-  calendarDays,
-  preferences,
-  state,
-  blockedDates,
-  updatePreferenceDate,
-}: {
-  calendarDays: string[];
-  preferences: Preference[];
-  state: AppState;
-  blockedDates: ReadonlySet<string>;
-  updatePreferenceDate: (rank: number, date: string) => void;
-}) {
-  return (
-    <div className="mt-4 grid gap-2">
-      {calendarDays.map((date) => {
-        const availability = getAvailability(state, date, blockedDates);
-        const rank = preferences.find((preference) => preference.date === date)
-          ?.rank;
-
-        return (
-          <div
-            key={date}
-            className="grid gap-3 rounded-md border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-stone-900 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-          >
-            <div>
-              <p className="font-semibold text-black dark:text-white">{formatDay(date)}</p>
-              <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-                {availability.blocked
-                  ? "Unavailable"
-                  : `${availability.booked} booked, ${availability.proposed} proposed, ${availability.available} open`}
-              </p>
-            </div>
-            <RankButtons
-              activeRank={rank}
-              disabled={availability.available === 0 || availability.blocked}
-              onPick={(targetRank) => updatePreferenceDate(targetRank, date)}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function DayButton({
-  available,
-  booked,
-  date,
-  onPick,
-  proposed,
-  rank,
-  tone,
-  blocked,
-}: {
-  available: number;
-  booked: number;
-  date: string;
-  onPick: (rank: number) => void;
-  proposed: number;
-  rank?: number;
-  tone: "open" | "busy" | "full" | "blocked";
-  blocked: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-md border bg-white p-2 transition dark:bg-stone-900",
-        tone === "open" && "border-black/10 dark:border-white/10",
-        tone === "busy" && "border-amber-300 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10",
-        tone === "full" && "border-red-200 bg-red-50 opacity-80 dark:border-red-500/30 dark:bg-red-500/10",
-        tone === "blocked" &&
-          "border-stone-200 bg-stone-100 opacity-70 dark:border-white/5 dark:bg-stone-800",
-        rank ? "ring-2 ring-black dark:ring-white" : false,
-      )}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold text-black dark:text-white">
-            {formatDay(date)}
-          </p>
-          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            {blocked ? "Unavailable" : `${available} open slots`}
-          </p>
-        </div>
-        {rank ? (
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black text-xs font-semibold text-white dark:bg-white dark:text-black">
-            {rank}
-          </span>
-        ) : null}
-      </div>
-
-      {blocked ? (
-        <p className="mt-3 rounded bg-white/60 px-2 py-1 text-center text-[0.7rem] font-semibold uppercase tracking-wide text-stone-500 dark:bg-stone-900/60 dark:text-stone-400">
-          Closed
-        </p>
-      ) : (
-        <>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-stone-100 dark:bg-stone-800">
-            <div
-              className={cn(
-                "h-full rounded-full",
-                tone === "open" && "bg-emerald-500",
-                tone === "busy" && "bg-amber-500",
-                tone === "full" && "bg-red-500",
-              )}
-              style={{
-                width: `${Math.min(((booked + proposed) / 7) * 100, 100)}%`,
-              }}
-            />
-          </div>
-
-          <RankButtons activeRank={rank} disabled={available === 0} onPick={onPick} />
-        </>
-      )}
-    </div>
-  );
-}
-
-function RankButtons({
-  activeRank,
-  disabled,
-  onPick,
-}: {
-  activeRank?: number;
-  disabled: boolean;
-  onPick: (rank: number) => void;
-}) {
-  return (
-    <div className="mt-3 grid grid-cols-3 gap-1">
-      {[1, 2, 3].map((rank) => (
-        <button
-          key={rank}
-          type="button"
-          disabled={disabled}
-          onClick={() => onPick(rank)}
-          className={cn(
-            "min-h-8 rounded-md border px-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40",
-            activeRank === rank
-              ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-              : "border-black/10 bg-white text-stone-700 hover:border-black dark:border-white/15 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-white",
-          )}
-        >
-          #{rank}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-export function WindowSelect({
-  preference,
   updatePreferenceWindow,
 }: {
-  preference: Preference;
+  preferences: Preference[];
+  state: AppState;
+  blockedDates: ReadonlySet<string>;
+  updatePreferenceDate: (rank: number, date: string) => void;
   updatePreferenceWindow: (rank: number, window: DayWindow) => void;
 }) {
+  const today = todayIso();
+  const [month, setMonth] = useState(() => monthKey(preferences[0]?.date ?? today));
+  const [activeRank, setActiveRank] = useState(1);
+
+  const cells = monthGrid(month);
+  const rankByDate = new Map(preferences.map((preference) => [preference.date, preference.rank]));
+
+  function handleDayClick(date: string) {
+    const existing = rankByDate.get(date);
+    if (existing) {
+      // Re-activate an already-picked day so the user can change its window or replace it.
+      setActiveRank(existing);
+      return;
+    }
+    updatePreferenceDate(activeRank, date);
+    setActiveRank((rank) => (rank < 3 ? rank + 1 : 3));
+  }
+
   return (
-    <select
-      value={preference.window}
-      onChange={(event) =>
-        updatePreferenceWindow(preference.rank, event.target.value as DayWindow)
-      }
-      className="h-10 rounded-md border border-black/10 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white"
+    <div className="rounded-2xl border border-black/10 bg-white p-2 dark:border-white/10 dark:bg-stone-900 sm:p-5">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        {/* Month calendar */}
+        <div className="flex w-full flex-col">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-semibold text-black dark:text-white">
+              {monthLabel(month)}
+            </h3>
+            <div className="flex items-center gap-1">
+              <NavButton label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))}>
+                <path d="M15 18l-6-6 6-6" />
+              </NavButton>
+              <button
+                type="button"
+                onClick={() => setMonth(monthKey(today))}
+                className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
+              >
+                Today
+              </button>
+              <NavButton label="Next month" onClick={() => setMonth(shiftMonth(month, 1))}>
+                <path d="M9 18l6-6-6-6" />
+              </NavButton>
+            </div>
+          </div>
+
+          <div className="mt-4 grid flex-1 grid-cols-7 grid-rows-[auto_repeat(6,minmax(3.5rem,1fr))] gap-1">
+            {weekdays.map((day) => (
+              <div
+                key={day}
+                className="pb-1 text-center text-[0.7rem] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500"
+              >
+                {day}
+              </div>
+            ))}
+
+            {cells.map((cell) => {
+              const dayNumber = Number(cell.date.slice(8, 10));
+
+              if (!cell.inMonth) {
+                return (
+                  <div
+                    key={cell.date}
+                    aria-hidden
+                    className="flex h-full items-center justify-center text-sm text-stone-300 dark:text-stone-700"
+                  >
+                    {dayNumber}
+                  </div>
+                );
+              }
+
+              const availability = getAvailability(state, cell.date, blockedDates);
+              const tone = getAvailabilityTone(availability);
+              const rank = rankByDate.get(cell.date);
+              const selected = rank !== undefined;
+              const isPast = cell.date < today;
+              const selectable = !isPast && !availability.blocked && availability.available > 0;
+
+              return (
+                <button
+                  key={cell.date}
+                  type="button"
+                  disabled={!selectable && !selected}
+                  onClick={() => handleDayClick(cell.date)}
+                  aria-label={`${formatDay(cell.date)}${
+                    selected ? ` — choice ${rank}` : selectable ? " — available" : " — unavailable"
+                  }`}
+                  className={cn(
+                    "relative flex h-full items-center justify-center rounded-lg text-sm tabular-nums transition",
+                    selected &&
+                      "bg-black font-semibold text-white dark:bg-white dark:text-black",
+                    !selected &&
+                      selectable &&
+                      "text-stone-700 hover:bg-stone-100 dark:text-stone-200 dark:hover:bg-stone-800",
+                    !selected &&
+                      !selectable &&
+                      "cursor-not-allowed text-stone-300 dark:text-stone-600",
+                    cell.isToday && !selected && "ring-1 ring-inset ring-black/40 dark:ring-white/40",
+                  )}
+                >
+                  {dayNumber}
+                  {selected ? (
+                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[0.6rem] font-bold text-black ring-1 ring-black dark:bg-stone-900 dark:text-white dark:ring-white">
+                      {rank}
+                    </span>
+                  ) : tone === "busy" && selectable ? (
+                    <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-amber-500" />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 pt-4 text-[0.7rem] text-stone-500 dark:text-stone-400">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-black dark:bg-white" />
+              Selected
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              Limited
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-stone-300 dark:bg-stone-600" />
+              Unavailable
+            </span>
+          </div>
+        </div>
+
+        {/* Ranked choices + time window */}
+        <div className="space-y-3">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
+            Tap a day to set{" "}
+            <span className="font-semibold text-black dark:text-white">Choice {activeRank}</span>,
+            then pick a preferred time window.
+          </p>
+
+          {[...preferences]
+            .sort((a, b) => a.rank - b.rank)
+            .map((preference) => {
+              const active = preference.rank === activeRank;
+              return (
+                <div
+                  key={preference.id}
+                  className={cn(
+                    "rounded-xl border p-3 transition",
+                    active
+                      ? "border-black bg-stone-50 dark:border-white dark:bg-stone-800/60"
+                      : "border-black/10 dark:border-white/10",
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setActiveRank(preference.rank)}
+                    className="flex w-full items-center justify-between gap-2 text-left"
+                  >
+                    <span>
+                      <span className="block text-[0.7rem] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                        Choice {preference.rank}
+                      </span>
+                      <span className="block text-sm font-semibold text-black dark:text-white">
+                        {formatDay(preference.date)}
+                      </span>
+                    </span>
+                    <span
+                      className={cn(
+                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition",
+                        active
+                          ? "bg-black text-white dark:bg-white dark:text-black"
+                          : "border border-black/15 text-stone-500 dark:border-white/20 dark:text-stone-400",
+                      )}
+                    >
+                      {preference.rank}
+                    </span>
+                  </button>
+
+                  <div className="mt-3 grid grid-cols-2 gap-1.5">
+                    {windows.map((window) => (
+                      <button
+                        key={window}
+                        type="button"
+                        onClick={() => {
+                          updatePreferenceWindow(preference.rank, window);
+                          setActiveRank(preference.rank);
+                        }}
+                        className={cn(
+                          "rounded-lg border px-2 py-1.5 text-xs font-semibold transition",
+                          preference.window === window
+                            ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
+                            : "border-black/10 text-stone-600 hover:border-black dark:border-white/15 dark:text-stone-300 dark:hover:border-white",
+                        )}
+                      >
+                        {window}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NavButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="flex h-8 w-8 items-center justify-center rounded-lg border border-black/10 text-stone-600 transition hover:bg-stone-100 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-800"
     >
-      {(["Morning", "Midday", "Afternoon", "Evening"] as DayWindow[]).map(
-        (window) => (
-          <option key={window} value={window}>
-            {window}
-          </option>
-        ),
-      )}
-    </select>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {children}
+      </svg>
+    </button>
   );
 }

@@ -48,12 +48,14 @@ export function RequestQueue({
   appointments,
   clients,
   services,
+  blockedDates,
 }: {
   requests: BookingRequest[];
   proposals: Proposal[];
   appointments: Appointment[];
   clients: ClientProfile[];
   services: Service[];
+  blockedDates: ReadonlySet<string>;
 }) {
   const [filter, setFilter] = useState<FilterKey>("actionable");
 
@@ -132,6 +134,7 @@ export function RequestQueue({
               request={request}
               services={services}
               activeProposal={proposals.find((item) => item.id === request.proposalId)}
+              blockedDates={blockedDates}
             />
           ))
         )}

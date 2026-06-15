@@ -31,7 +31,7 @@ export function Sidebar({
   return (
     <div className="flex h-full flex-col">
       <Link href="/dashboard" className="block px-2 py-1">
-        <Logo className="h-9" priority />
+        <Logo className="h-8 lg:h-12" priority />
         <span className="sr-only">Samuelsson Cuts</span>
       </Link>
 

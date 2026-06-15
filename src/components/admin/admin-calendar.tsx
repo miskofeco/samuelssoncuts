@@ -2,11 +2,15 @@
 
 import { useMemo, useState } from "react";
 
+import { Button } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
 import { MonthCalendar } from "@/components/shared/month-calendar";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
-import { addDays, formatDay, serviceById, todayIso, workingHours } from "@/domain/schedule";
+import { addDays, formatDay, serviceById, todayIso } from "@/domain/schedule";
+
+import { AddBookingModal } from "./add-booking-modal";
+import { AppointmentDetailModal } from "./appointment-detail-modal";
 import type {
   Appointment,
   BookingRequest,
@@ -16,12 +20,23 @@ import type {
 } from "@/domain/types";
 import { cn } from "@/lib/classnames";
 
-type CalendarItem = {
+export type CalendarItem = {
   id: string;
   title: string;
   service: string;
+  servicePrice: number;
   time: string;
+  date: string;
+  durationMinutes: number;
   type: "Confirmed" | "Proposed";
+  // Identifiers for actions (reschedule / cancel).
+  appointmentId?: string;
+  proposalId?: string;
+  requestId?: string | null;
+  clientId?: string | null;
+  clientEmail?: string;
+  clientPhone?: string;
+  note?: string;
 };
 
 export function AdminCalendar({
@@ -40,6 +55,8 @@ export function AdminCalendar({
   blockedDates: Set<string>;
 }) {
   const [view, setView] = useState<"week" | "month">("week");
+  const [draft, setDraft] = useState<{ date?: string; time?: string } | null>(null);
+  const [selected, setSelected] = useState<CalendarItem | null>(null);
 
   const itemsByDate = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
@@ -50,24 +67,44 @@ export function AdminCalendar({
     };
 
     for (const appointment of appointments) {
+      const service = serviceById(appointment.serviceId, services);
+      const client = clients.find((c) => c.id === appointment.clientId);
       push(appointment.date, {
         id: appointment.id,
-        title: clients.find((c) => c.id === appointment.clientId)?.name ?? "Client",
-        service: serviceById(appointment.serviceId, services).name,
+        title: client?.name ?? appointment.clientName ?? "Client",
+        service: service.name,
+        servicePrice: service.price,
         time: appointment.time,
+        date: appointment.date,
+        durationMinutes: service.duration,
         type: "Confirmed",
+        appointmentId: appointment.id,
+        requestId: appointment.requestId,
+        clientId: appointment.clientId,
+        clientEmail: client?.email,
+        clientPhone: client?.phone,
       });
     }
     for (const proposal of proposals) {
       if (proposal.status !== "sent") continue;
       const request = requests.find((r) => r.id === proposal.requestId);
       const client = clients.find((c) => c.id === request?.clientId);
+      const service = request ? serviceById(request.serviceId, services) : undefined;
       push(proposal.date, {
         id: proposal.id,
         title: client?.name ?? "Client",
-        service: request ? serviceById(request.serviceId, services).name : "Proposal",
+        service: service?.name ?? "Proposal",
+        servicePrice: service?.price ?? 0,
         time: proposal.time,
+        date: proposal.date,
+        durationMinutes: service?.duration ?? 30,
         type: "Proposed",
+        proposalId: proposal.id,
+        requestId: proposal.requestId,
+        clientId: request?.clientId ?? null,
+        clientEmail: client?.email,
+        clientPhone: client?.phone,
+        note: proposal.note,
       });
     }
     for (const list of map.values()) {
@@ -82,9 +119,13 @@ export function AdminCalendar({
         eyebrow="Planner"
         title="Schedule"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <StatusPill tone="success">Confirmed</StatusPill>
             <StatusPill tone="info">Proposed</StatusPill>
+            <Button type="button" onClick={() => setDraft({})} className="gap-1.5">
+              <span aria-hidden className="text-base leading-none">+</span>
+              Add booking
+            </Button>
           </div>
         }
       />
@@ -102,7 +143,11 @@ export function AdminCalendar({
       </div>
 
       {view === "week" ? (
-        <WeekGrid itemsByDate={itemsByDate} />
+        <WeekGrid
+          itemsByDate={itemsByDate}
+          onAddSlot={(date, time) => setDraft({ date, time })}
+          onSelect={setSelected}
+        />
       ) : (
         <div className="mt-5">
           <MonthCalendar
@@ -141,24 +186,55 @@ export function AdminCalendar({
           />
         </div>
       )}
+
+      <AddBookingModal
+        open={draft !== null}
+        onClose={() => setDraft(null)}
+        clients={clients}
+        services={services}
+        initialDate={draft?.date}
+        initialTime={draft?.time}
+      />
+
+      <AppointmentDetailModal item={selected} onClose={() => setSelected(null)} />
     </Card>
   );
 }
 
-function WeekGrid({ itemsByDate }: { itemsByDate: Map<string, CalendarItem[]> }) {
+// Desktop time grid spans the working day. Each hour is HOUR_HEIGHT px tall, so
+// a booking's top offset and height map directly to its start time / duration.
+const START_HOUR = 9;
+const END_HOUR = 19; // exclusive — covers a booking that starts at 18:xx
+const GRID_HOURS = END_HOUR - START_HOUR;
+const HOUR_HEIGHT = 64;
+
+function minutesFromStart(time: string) {
+  const [hours, minutes] = time.split(":").map(Number);
+  return (hours - START_HOUR) * 60 + minutes;
+}
+
+export function addMinutesToTime(time: string, minutes: number) {
+  const [hours, mins] = time.split(":").map(Number);
+  const total = hours * 60 + mins + minutes;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function WeekGrid({
+  itemsByDate,
+  onAddSlot,
+  onSelect,
+}: {
+  itemsByDate: Map<string, CalendarItem[]>;
+  onAddSlot: (date: string, time: string) => void;
+  onSelect: (item: CalendarItem) => void;
+}) {
   const today = todayIso();
   const days = Array.from({ length: 7 }, (_, index) => addDays(index));
-  const rows = workingHours.filter((hour) => hour.endsWith(":00"));
-
-  function itemsFor(date: string, hour: string) {
-    return (itemsByDate.get(date) ?? []).filter(
-      (item) => item.time.slice(0, 2) === hour.slice(0, 2),
-    );
-  }
+  const hours = Array.from({ length: GRID_HOURS }, (_, index) => START_HOUR + index);
 
   return (
     <>
-      {/* Desktop grid */}
+      {/* Desktop time grid */}
       <div className="mt-5 hidden overflow-x-auto lg:block">
         <div className="min-w-[980px]">
           <div className="grid grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-px rounded-t-xl bg-black/5 dark:bg-white/10">
@@ -188,22 +264,27 @@ function WeekGrid({ itemsByDate }: { itemsByDate: Map<string, CalendarItem[]> })
             })}
           </div>
           <div className="grid grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-px bg-black/5 dark:bg-white/10">
-            {rows.map((hour) => (
-              <CalendarRow key={hour} hour={hour}>
-                {days.map((day) => (
-                  <div
-                    key={`${day}-${hour}`}
-                    className={cn(
-                      "min-h-[72px] bg-white p-1.5 dark:bg-stone-900",
-                      day === today && "bg-stone-50 dark:bg-stone-800/50",
-                    )}
-                  >
-                    {itemsFor(day, hour).map((item) => (
-                      <CalendarChip key={item.id} item={item} />
-                    ))}
-                  </div>
-                ))}
-              </CalendarRow>
+            {/* Time gutter */}
+            <div className="bg-white dark:bg-stone-900">
+              {hours.map((hour) => (
+                <div key={hour} style={{ height: HOUR_HEIGHT }} className="relative">
+                  <span className="absolute right-2 top-1 text-xs font-medium text-stone-400 dark:text-stone-500">
+                    {String(hour).padStart(2, "0")}:00
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Day columns */}
+            {days.map((day) => (
+              <DayColumn
+                key={day}
+                day={day}
+                items={itemsByDate.get(day) ?? []}
+                isToday={day === today}
+                onAddSlot={onAddSlot}
+                onSelect={onSelect}
+              />
             ))}
           </div>
         </div>
@@ -222,9 +303,19 @@ function WeekGrid({ itemsByDate }: { itemsByDate: Map<string, CalendarItem[]> })
                 isToday ? "border-stone-900 dark:border-white" : "border-black/10 dark:border-white/10",
               )}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <h3 className="font-semibold text-black dark:text-white">{formatDay(day)}</h3>
-                {isToday ? <StatusPill tone="neutral">Today</StatusPill> : null}
+                <div className="flex items-center gap-2">
+                  {isToday ? <StatusPill tone="neutral">Today</StatusPill> : null}
+                  <button
+                    type="button"
+                    onClick={() => onAddSlot(day, "09:00")}
+                    className="flex h-8 items-center gap-1 rounded-lg border border-black/10 px-2.5 text-xs font-semibold text-stone-600 transition hover:border-black hover:text-black dark:border-white/15 dark:text-stone-300 dark:hover:border-white dark:hover:text-white"
+                  >
+                    <span aria-hidden className="text-sm leading-none">+</span>
+                    Add
+                  </button>
+                </div>
               </div>
               <div className="mt-3 space-y-2">
                 {items.length === 0 ? (
@@ -232,7 +323,9 @@ function WeekGrid({ itemsByDate }: { itemsByDate: Map<string, CalendarItem[]> })
                     No appointments.
                   </p>
                 ) : (
-                  items.map((item) => <CalendarChip key={item.id} item={item} />)
+                  items.map((item) => (
+                    <MobileChip key={item.id} item={item} onSelect={onSelect} />
+                  ))
                 )}
               </div>
             </div>
@@ -243,31 +336,119 @@ function WeekGrid({ itemsByDate }: { itemsByDate: Map<string, CalendarItem[]> })
   );
 }
 
-function CalendarRow({ hour, children }: { hour: string; children: React.ReactNode }) {
-  return (
-    <>
-      <div className="bg-white px-2 py-3 text-xs font-medium text-stone-400 dark:bg-stone-900 dark:text-stone-500">
-        {hour}
-      </div>
-      {children}
-    </>
-  );
-}
+function DayColumn({
+  day,
+  items,
+  isToday,
+  onAddSlot,
+  onSelect,
+}: {
+  day: string;
+  items: CalendarItem[];
+  isToday: boolean;
+  onAddSlot: (date: string, time: string) => void;
+  onSelect: (item: CalendarItem) => void;
+}) {
+  const hours = Array.from({ length: GRID_HOURS }, (_, index) => START_HOUR + index);
 
-function CalendarChip({ item }: { item: CalendarItem }) {
   return (
     <div
       className={cn(
-        "mb-1 rounded-lg px-2 py-1.5 text-xs",
+        "relative",
+        isToday ? "bg-stone-50 dark:bg-stone-800/50" : "bg-white dark:bg-stone-900",
+      )}
+      style={{ height: GRID_HOURS * HOUR_HEIGHT }}
+    >
+      {/* Hour cells — background gridlines + click-to-add target */}
+      {hours.map((hour) => (
+        <button
+          key={hour}
+          type="button"
+          onClick={() => onAddSlot(day, `${String(hour).padStart(2, "0")}:00`)}
+          title={`Add a booking on ${formatDay(day)} at ${String(hour).padStart(2, "0")}:00`}
+          style={{ height: HOUR_HEIGHT }}
+          className="group block w-full border-t border-black/5 transition first:border-t-0 hover:bg-stone-100/70 dark:border-white/5 dark:hover:bg-stone-800"
+        >
+          <span className="flex h-full items-center justify-center text-lg text-stone-300 opacity-0 transition group-hover:opacity-100 dark:text-stone-600">
+            +
+          </span>
+        </button>
+      ))}
+
+      {/* Bookings positioned by start time, sized by duration */}
+      {items.map((item) => {
+        const top = (minutesFromStart(item.time) / 60) * HOUR_HEIGHT;
+        const height = Math.max((item.durationMinutes / 60) * HOUR_HEIGHT, 22);
+        return (
+          <CalendarChip
+            key={item.id}
+            item={item}
+            style={{ top, height }}
+            onSelect={onSelect}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function CalendarChip({
+  item,
+  style,
+  onSelect,
+}: {
+  item: CalendarItem;
+  style?: React.CSSProperties;
+  onSelect: (item: CalendarItem) => void;
+}) {
+  const endTime = addMinutesToTime(item.time, item.durationMinutes);
+  // Compact single-line layout for short (≤30 min) bookings.
+  const compact = item.durationMinutes <= 30;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(item)}
+      style={style}
+      title={`${item.time}–${endTime} · ${item.title}`}
+      className={cn(
+        "absolute inset-x-1 z-10 overflow-hidden rounded-lg border-l-2 px-2 py-1 text-left text-xs transition hover:brightness-95",
         item.type === "Confirmed"
-          ? "bg-emerald-100 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-200"
-          : "bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-200",
+          ? "border-emerald-500 bg-emerald-100 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100"
+          : "border-sky-500 bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-100",
+      )}
+    >
+      <p className={cn("font-semibold tabular-nums", compact && "truncate")}>
+        {item.time}–{endTime} · {item.title}
+      </p>
+      {!compact ? <p className="truncate opacity-80">{item.service}</p> : null}
+    </button>
+  );
+}
+
+function MobileChip({
+  item,
+  onSelect,
+}: {
+  item: CalendarItem;
+  onSelect: (item: CalendarItem) => void;
+}) {
+  const endTime = addMinutesToTime(item.time, item.durationMinutes);
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(item)}
+      className={cn(
+        "block w-full rounded-lg border-l-2 px-3 py-2 text-left text-sm transition hover:brightness-95",
+        item.type === "Confirmed"
+          ? "border-emerald-500 bg-emerald-100 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100"
+          : "border-sky-500 bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-100",
       )}
     >
       <p className="font-semibold tabular-nums">
-        {item.time} · {item.title}
+        {item.time}–{endTime} · {item.title}
       </p>
       <p className="truncate opacity-80">{item.service}</p>
-    </div>
+    </button>
   );
 }

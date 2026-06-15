@@ -110,6 +110,7 @@ export function mapAppointmentRow(row: AppointmentRow): Appointment {
     id: row.id,
     requestId: row.request_id,
     clientId: row.client_id,
+    clientName: row.customer_name ?? undefined,
     serviceId: row.service_id,
     date: dateFromIso(row.starts_at),
     time: timeFromIso(row.starts_at),
@@ -441,9 +442,10 @@ export async function loadRequestQueue(): Promise<{
   proposals: Proposal[];
   appointments: Appointment[];
   services: Service[];
+  blockedDates: Set<string>;
 }> {
   const supabase = await createClient();
-  const [servicesResult, profilesResult, requestsResult, appointmentsResult] =
+  const [servicesResult, profilesResult, requestsResult, appointmentsResult, blocked] =
     await Promise.all([
       supabase.from("services").select("*"),
       supabase.from("profiles").select("*"),
@@ -451,6 +453,7 @@ export async function loadRequestQueue(): Promise<{
         ascending: false,
       }),
       supabase.from("appointments").select("*").order("starts_at"),
+      loadBlockedDays(),
     ]);
 
   fail("services", servicesResult.error);
@@ -465,6 +468,7 @@ export async function loadRequestQueue(): Promise<{
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
     appointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
+    blockedDates: blocked.dates,
   };
 }
 

@@ -14,6 +14,8 @@ const signInSchema = z.object({
   password: z.string().min(8),
 });
 
+const oauthProviderSchema = z.enum(["google", "apple"]);
+
 const registerSchema = signInSchema.extend({
   fullName: z.string().min(2).max(120),
   phone: z.string().min(4).max(40),
@@ -35,6 +37,32 @@ const proposeSchema = z.object({
   requestId: z.uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().regex(/^\d{2}:\d{2}$/),
+  note: z.string().max(1000).optional(),
+});
+
+const adminBookingSchema = z
+  .object({
+    clientId: z.uuid().optional(),
+    customerName: z.string().trim().min(1).max(120).optional(),
+    serviceId: z.uuid(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    time: z.string().regex(/^\d{2}:\d{2}$/),
+    note: z.string().max(1000).optional(),
+  })
+  // Exactly one of clientId / customerName: an existing client or a walk-in.
+  .refine((value) => Boolean(value.clientId) !== Boolean(value.customerName), {
+    message: "Choose an existing client or enter a walk-in name.",
+  });
+
+const rescheduleSchema = z.object({
+  appointmentId: z.uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  time: z.string().regex(/^\d{2}:\d{2}$/),
+  note: z.string().max(1000).optional(),
+});
+
+const cancelAppointmentSchema = z.object({
+  appointmentId: z.uuid(),
   note: z.string().max(1000).optional(),
 });
 
@@ -89,6 +117,29 @@ export async function signInAction(formData: FormData) {
   }
 
   redirect("/dashboard");
+}
+
+export async function signInWithOAuthAction(formData: FormData) {
+  const provider = oauthProviderSchema.safeParse(formString(formData, "provider"));
+
+  if (!provider.success) {
+    redirect("/login?error=Unsupported sign-in provider.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: provider.data,
+    options: {
+      redirectTo: `${getSiteUrl()}/auth/callback`,
+    },
+  });
+
+  if (error || !data.url) {
+    redirect(`/login?error=${encodeURIComponent(error?.message ?? "Could not start sign-in.")}`);
+  }
+
+  // Hand off to the provider's consent screen.
+  redirect(data.url);
 }
 
 export async function registerAction(formData: FormData) {
@@ -361,6 +412,268 @@ export async function proposeTimeFromAdminAction(
   note: string,
 ): Promise<ActionResult> {
   return proposeAppointmentAction({ requestId, date, time, note });
+}
+
+// Move a confirmed appointment: free its slot now and send the client a fresh
+// proposal for the new time. The booking reverts to "proposed" until accepted.
+export async function rescheduleAppointmentAction(input: unknown): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const parsed = rescheduleSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { ok: false, error: "Pick a valid new date and time." };
+  }
+
+  const supabase = await createClient();
+
+  const { data: appointment, error: appointmentError } = await supabase
+    .from("appointments")
+    .select("id, request_id, client_id, service_id, status")
+    .eq("id", parsed.data.appointmentId)
+    .single();
+
+  if (appointmentError || !appointment) {
+    return { ok: false, error: appointmentError?.message ?? "Appointment not found." };
+  }
+
+  if (!appointment.request_id) {
+    return {
+      ok: false,
+      error: "Walk-in bookings can't be rescheduled — cancel and add a new one.",
+    };
+  }
+
+  const start = startsAt(parsed.data.date, parsed.data.time);
+  if (new Date(start).getTime() < Date.now()) {
+    return { ok: false, error: "Choose a time in the future." };
+  }
+
+  const { data: service, error: serviceError } = await supabase
+    .from("services")
+    .select("duration_minutes")
+    .eq("id", appointment.service_id)
+    .single();
+
+  if (serviceError || !service) {
+    return { ok: false, error: serviceError?.message ?? "Service not found." };
+  }
+
+  const end = addMinutes(start, service.duration_minutes);
+
+  // Conflict-check the new slot against *other* confirmed appointments.
+  const { data: clash } = await supabase
+    .from("appointments")
+    .select("id")
+    .eq("barber_id", admin.id)
+    .eq("starts_at", start)
+    .eq("status", "confirmed")
+    .neq("id", appointment.id)
+    .maybeSingle();
+
+  if (clash) {
+    return { ok: false, error: "That slot is already booked. Pick another time." };
+  }
+
+  const { data: clientProfile } = appointment.client_id
+    ? await supabase
+        .from("profiles")
+        .select("email")
+        .eq("id", appointment.client_id)
+        .single()
+    : { data: null };
+
+  // Free the current slot.
+  const { error: deleteError } = await supabase
+    .from("appointments")
+    .delete()
+    .eq("id", appointment.id);
+
+  if (deleteError) {
+    return { ok: false, error: deleteError.message };
+  }
+
+  // Supersede any earlier outstanding proposal, then send the new one.
+  await supabase
+    .from("appointment_proposals")
+    .update({ status: "expired" })
+    .eq("request_id", appointment.request_id)
+    .eq("status", "sent");
+
+  const { data: proposal, error: proposalError } = await supabase
+    .from("appointment_proposals")
+    .insert({
+      request_id: appointment.request_id,
+      barber_id: admin.id,
+      starts_at: start,
+      ends_at: end,
+      note: parsed.data.note ?? null,
+    })
+    .select("id")
+    .single();
+
+  if (proposalError || !proposal) {
+    return { ok: false, error: proposalError?.message ?? "Unable to send the new time." };
+  }
+
+  await supabase
+    .from("booking_requests")
+    .update({ status: "proposed", selected_proposal_id: proposal.id })
+    .eq("id", appointment.request_id);
+
+  await supabase.from("notifications").insert({
+    user_id: appointment.client_id,
+    channel: "email",
+    recipient: clientProfile?.email ?? "client",
+    subject: `Your appointment was moved — new time proposed for ${parsed.data.date} at ${parsed.data.time}`,
+    body: parsed.data.note ?? null,
+  });
+
+  revalidatePath("/admin", "layout");
+  revalidatePath("/client", "layout");
+  return { ok: true, message: "Slot freed and a new time was proposed to the client." };
+}
+
+// Cancel a confirmed appointment from the calendar. Frees the slot; for a
+// client booking it also cancels the request and notifies the client.
+export async function cancelAppointmentAdminAction(input: unknown): Promise<ActionResult> {
+  await requireAdmin();
+  const parsed = cancelAppointmentSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { ok: false, error: "Could not cancel this appointment." };
+  }
+
+  const supabase = await createClient();
+
+  const { data: appointment, error: appointmentError } = await supabase
+    .from("appointments")
+    .select("id, request_id, client_id")
+    .eq("id", parsed.data.appointmentId)
+    .single();
+
+  if (appointmentError || !appointment) {
+    return { ok: false, error: appointmentError?.message ?? "Appointment not found." };
+  }
+
+  const { data: clientProfile } = appointment.client_id
+    ? await supabase
+        .from("profiles")
+        .select("email")
+        .eq("id", appointment.client_id)
+        .single()
+    : { data: null };
+
+  const { error: deleteError } = await supabase
+    .from("appointments")
+    .delete()
+    .eq("id", appointment.id);
+
+  if (deleteError) {
+    return { ok: false, error: deleteError.message };
+  }
+
+  if (appointment.request_id) {
+    await supabase
+      .from("appointment_proposals")
+      .update({ status: "expired" })
+      .eq("request_id", appointment.request_id)
+      .eq("status", "sent");
+
+    await supabase
+      .from("booking_requests")
+      .update({ status: "cancelled" })
+      .eq("id", appointment.request_id);
+  }
+
+  // Walk-ins (no client_id) have nobody to notify.
+  if (appointment.client_id) {
+    await supabase.from("notifications").insert({
+      user_id: appointment.client_id,
+      channel: "email",
+      recipient: clientProfile?.email ?? "client",
+      subject: "Your appointment was cancelled",
+      body: parsed.data.note ?? null,
+    });
+  }
+
+  revalidatePath("/admin", "layout");
+  revalidatePath("/client", "layout");
+  return { ok: true, message: "Appointment cancelled." };
+}
+
+export async function createAdminBookingAction(input: unknown): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const parsed = adminBookingSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Fill in the booking details.",
+    };
+  }
+
+  const supabase = await createClient();
+  const start = startsAt(parsed.data.date, parsed.data.time);
+
+  if (new Date(start).getTime() < Date.now()) {
+    return { ok: false, error: "Choose a time in the future." };
+  }
+
+  // An existing client must be a real, non-admin profile.
+  if (parsed.data.clientId) {
+    const { data: clientProfile } = await supabase
+      .from("profiles")
+      .select("id, role")
+      .eq("id", parsed.data.clientId)
+      .maybeSingle();
+
+    if (!clientProfile || clientProfile.role === "admin") {
+      return { ok: false, error: "Pick a valid client." };
+    }
+  }
+
+  const { data: service, error: serviceError } = await supabase
+    .from("services")
+    .select("duration_minutes")
+    .eq("id", parsed.data.serviceId)
+    .single();
+
+  if (serviceError || !service) {
+    return { ok: false, error: serviceError?.message ?? "Service not found." };
+  }
+
+  const end = addMinutes(start, service.duration_minutes);
+
+  // Pre-check the slot; the appointments_unique_start index is the hard backstop.
+  const { data: existing } = await supabase
+    .from("appointments")
+    .select("id")
+    .eq("barber_id", admin.id)
+    .eq("starts_at", start)
+    .eq("status", "confirmed")
+    .maybeSingle();
+
+  if (existing) {
+    return { ok: false, error: "That slot is already booked. Pick another time." };
+  }
+
+  const { error: insertError } = await supabase.from("appointments").insert({
+    request_id: null,
+    proposal_id: null,
+    client_id: parsed.data.clientId ?? null,
+    customer_name: parsed.data.customerName ?? null,
+    barber_id: admin.id,
+    service_id: parsed.data.serviceId,
+    starts_at: start,
+    ends_at: end,
+  });
+
+  if (insertError) {
+    return { ok: false, error: "That slot is already booked. Pick another time." };
+  }
+
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: "Booking added to the calendar." };
 }
 
 export async function respondToProposalAction(

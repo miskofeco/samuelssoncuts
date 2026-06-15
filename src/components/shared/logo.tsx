@@ -21,7 +21,7 @@ export function Logo({
         width={INTRINSIC.width}
         height={INTRINSIC.height}
         priority={priority}
-        className={cn("h-auto w-auto dark:hidden", className)}
+        className={cn("w-auto dark:hidden", className)}
       />
       <Image
         src="/logo-dark.png"
@@ -29,7 +29,7 @@ export function Logo({
         width={INTRINSIC.width}
         height={INTRINSIC.height}
         priority={priority}
-        className={cn("hidden h-auto w-auto dark:block", className)}
+        className={cn("hidden w-auto dark:block", className)}
       />
     </>
   );

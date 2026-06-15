@@ -166,9 +166,10 @@ export type Database = {
       appointments: {
         Row: {
           id: string;
-          request_id: string;
+          request_id: string | null;
           proposal_id: string | null;
-          client_id: string;
+          client_id: string | null;
+          customer_name: string | null;
           barber_id: string;
           service_id: string;
           starts_at: string;
@@ -178,9 +179,10 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          request_id: string;
+          request_id?: string | null;
           proposal_id?: string | null;
-          client_id: string;
+          client_id?: string | null;
+          customer_name?: string | null;
           barber_id: string;
           service_id: string;
           starts_at: string;

@@ -28,7 +28,7 @@ export function RequestsByStatusChart({
   return (
     <div className="flex h-full items-center gap-4">
       <div className="h-full flex-1">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 256 }}>
           <PieChart>
             <Pie
               data={data}

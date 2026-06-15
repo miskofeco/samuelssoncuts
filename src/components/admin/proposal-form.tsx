@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import type { ReactNode } from "react";
 
 import { proposeTimeFromAdminAction } from "@/app/actions";
 import { Button } from "@/components/shared/button";
@@ -8,9 +9,15 @@ import { Feedback } from "@/components/shared/feedback";
 import { StatusPill } from "@/components/shared/status-pill";
 import {
   addDays,
+  dayCapacity,
   formatDay,
   hoursInWindow,
+  monthGrid,
+  monthKey,
+  monthLabel,
   serviceById,
+  shiftMonth,
+  todayIso,
   windowForTime,
   workingHours,
 } from "@/domain/schedule";
@@ -20,11 +27,14 @@ import type {
   BookingRequest,
   ClientProfile,
   DayWindow,
+  Preference,
   Proposal,
   RequestStatus,
   Service,
 } from "@/domain/types";
 import { cn } from "@/lib/classnames";
+
+const calendarWeekdays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
 const statusMeta: Record<
   RequestStatus,
@@ -42,12 +52,14 @@ export function ProposalComposer({
   request,
   services,
   activeProposal,
+  blockedDates,
 }: {
   appointments: Appointment[];
   client?: ClientProfile;
   request: BookingRequest;
   services: Service[];
   activeProposal?: Proposal;
+  blockedDates: ReadonlySet<string>;
 }) {
   const service = serviceById(request.serviceId, services);
   const meta = statusMeta[request.status];
@@ -207,8 +219,20 @@ export function ProposalComposer({
 
           {canPropose ? (
             <>
+              <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
+                {/* Availability calendar */}
+                <AvailabilityCalendar
+                  appointments={appointments}
+                  blockedDates={blockedDates}
+                  preferences={request.preferences}
+                  selectedDate={date}
+                  onPickDate={chooseDate}
+                />
+
+                {/* Date + window + slot controls */}
+                <div>
               {/* Date + window controls */}
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
                     Date
@@ -246,7 +270,7 @@ export function ProposalComposer({
                 <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
                   Pick a slot
                 </span>
-                <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-5">
+                <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
                   {slots.map(({ hour, taken }) => {
                     const selected = hour === time;
                     return (
@@ -272,6 +296,18 @@ export function ProposalComposer({
                       </button>
                     );
                   })}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.7rem] text-stone-400 dark:text-stone-500">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded border border-black/10 bg-white dark:border-white/15 dark:bg-stone-900" />
+                    Open
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded border border-black/5 bg-stone-100 dark:bg-stone-800" />
+                    Booked
+                  </span>
+                </div>
+              </div>
                 </div>
               </div>
 
@@ -312,5 +348,171 @@ export function ProposalComposer({
         </div>
       ) : null}
     </article>
+  );
+}
+
+function AvailabilityCalendar({
+  appointments,
+  blockedDates,
+  preferences,
+  selectedDate,
+  onPickDate,
+}: {
+  appointments: Appointment[];
+  blockedDates: ReadonlySet<string>;
+  preferences: Preference[];
+  selectedDate: string;
+  onPickDate: (date: string) => void;
+}) {
+  const today = todayIso();
+  const [month, setMonth] = useState(() => monthKey(selectedDate || today));
+  const cells = monthGrid(month);
+
+  const bookedByDate = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const appointment of appointments) {
+      counts.set(appointment.date, (counts.get(appointment.date) ?? 0) + 1);
+    }
+    return counts;
+  }, [appointments]);
+
+  const preferenceRank = new Map(preferences.map((p) => [p.date, p.rank]));
+
+  return (
+    <div className="rounded-xl border border-black/10 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-800/40">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-black dark:text-white">{monthLabel(month)}</h4>
+        <div className="flex items-center gap-1">
+          <CalNav label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))}>
+            <path d="M15 18l-6-6 6-6" />
+          </CalNav>
+          <CalNav label="Next month" onClick={() => setMonth(shiftMonth(month, 1))}>
+            <path d="M9 18l6-6-6-6" />
+          </CalNav>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-7 gap-1">
+        {calendarWeekdays.map((day) => (
+          <div
+            key={day}
+            className="pb-1 text-center text-[0.65rem] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500"
+          >
+            {day}
+          </div>
+        ))}
+
+        {cells.map((cell) => {
+          const dayNumber = Number(cell.date.slice(8, 10));
+
+          if (!cell.inMonth) {
+            return <div key={cell.date} aria-hidden className="h-9" />;
+          }
+
+          const isPast = cell.date < today;
+          const blocked = blockedDates.has(cell.date);
+          const booked = bookedByDate.get(cell.date) ?? 0;
+          const full = booked >= dayCapacity;
+          const rank = preferenceRank.get(cell.date);
+          const selected = cell.date === selectedDate;
+          const disabled = isPast || blocked;
+          const load = Math.min(booked / dayCapacity, 1);
+
+          return (
+            <button
+              key={cell.date}
+              type="button"
+              disabled={disabled}
+              onClick={() => onPickDate(cell.date)}
+              title={
+                blocked
+                  ? "Closed"
+                  : `${booked}/${dayCapacity} booked${rank ? ` · client choice ${rank}` : ""}`
+              }
+              className={cn(
+                "relative flex h-9 flex-col items-center justify-center rounded-lg border text-xs tabular-nums transition",
+                selected
+                  ? "border-black bg-black font-semibold text-white dark:border-white dark:bg-white dark:text-black"
+                  : disabled
+                    ? "cursor-not-allowed border-transparent text-stone-300 dark:text-stone-600"
+                    : "border-black/10 text-stone-700 hover:border-black dark:border-white/10 dark:text-stone-200 dark:hover:border-white",
+                !selected && !disabled && full && "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10",
+                rank !== undefined && !selected && "ring-1 ring-inset ring-black/40 dark:ring-white/40",
+              )}
+            >
+              <span>{dayNumber}</span>
+              {/* Booking-load bar */}
+              {!disabled && !selected ? (
+                <span className="absolute inset-x-1.5 bottom-1 h-0.5 overflow-hidden rounded-full bg-stone-200 dark:bg-stone-700">
+                  <span
+                    className={cn(
+                      "block h-full rounded-full",
+                      full ? "bg-red-500" : load > 0.6 ? "bg-amber-500" : "bg-emerald-500",
+                    )}
+                    style={{ width: `${Math.max(load * 100, booked > 0 ? 12 : 0)}%` }}
+                  />
+                </span>
+              ) : null}
+              {rank ? (
+                <span
+                  className={cn(
+                    "absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[0.55rem] font-bold ring-1",
+                    selected
+                      ? "bg-white text-black ring-black dark:bg-stone-900 dark:text-white dark:ring-white"
+                      : "bg-black text-white ring-white dark:bg-white dark:text-black dark:ring-stone-900",
+                  )}
+                >
+                  {rank}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.65rem] text-stone-500 dark:text-stone-400">
+        <span className="flex items-center gap-1.5">
+          <span className="h-1.5 w-3 rounded-full bg-emerald-500" />
+          Open
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-1.5 w-3 rounded-full bg-amber-500" />
+          Filling
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-1.5 w-3 rounded-full bg-red-500" />
+          Full
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="flex h-3 w-3 items-center justify-center rounded-full bg-black text-[0.5rem] font-bold text-white dark:bg-white dark:text-black">
+            #
+          </span>
+          Client pick
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function CalNav({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="flex h-7 w-7 items-center justify-center rounded-lg border border-black/10 text-stone-600 transition hover:bg-stone-100 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-800"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {children}
+      </svg>
+    </button>
   );
 }

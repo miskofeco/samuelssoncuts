@@ -35,6 +35,27 @@ export const workingHours = [
   "18:00",
 ];
 
+// Quarter-hour slots across the same working window (09:00–18:00). Used where
+// the barber needs finer control than the 30-minute `workingHours` grid, e.g.
+// the admin "add booking" time picker.
+export const workingHoursQuarterly = (() => {
+  const first = workingHours[0];
+  const last = workingHours[workingHours.length - 1];
+  const toMinutes = (time: string) => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return hours * 60 + minutes;
+  };
+  const start = toMinutes(first);
+  const end = toMinutes(last);
+  const slots: string[] = [];
+  for (let total = start; total <= end; total += 15) {
+    slots.push(
+      `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`,
+    );
+  }
+  return slots;
+})();
+
 // Start hour (inclusive) and end hour (exclusive) that each preference window maps to.
 export const windowRanges: Record<DayWindow, { start: number; end: number }> = {
   Morning: { start: 9, end: 11.5 },

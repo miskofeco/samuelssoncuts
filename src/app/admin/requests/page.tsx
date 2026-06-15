@@ -22,6 +22,7 @@ export default async function AdminRequestsPage() {
         appointments={data.appointments}
         clients={data.clients}
         services={data.services}
+        blockedDates={data.blockedDates}
       />
     </div>
   );

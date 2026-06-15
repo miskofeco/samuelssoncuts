@@ -1,5 +1,6 @@
 import { registerAction } from "@/app/actions";
 import { AuthPanel } from "@/components/auth/auth-panel";
+import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { Button } from "@/components/shared/button";
 import { Field } from "@/components/shared/form";
 
@@ -38,6 +39,7 @@ export default async function RegisterPage({
           Create account
         </Button>
       </form>
+      <OAuthButtons />
     </AuthPanel>
   );
 }

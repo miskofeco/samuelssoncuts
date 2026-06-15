@@ -61,8 +61,10 @@ export type Proposal = {
 
 export type Appointment = {
   id: string;
-  requestId: string;
-  clientId: string;
+  requestId: string | null;
+  clientId: string | null;
+  /** Walk-in name when the booking has no registered client (barber-created). */
+  clientName?: string;
   serviceId: string;
   date: string;
   time: string;

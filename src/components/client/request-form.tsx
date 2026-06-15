@@ -14,10 +14,9 @@ import type {
   AppState,
   DayWindow,
   Preference,
-  ViewMode,
 } from "@/domain/types";
 
-import { PreferencePicker, WindowSelect } from "./preference-picker";
+import { PreferencePicker } from "./preference-picker";
 
 // First N future days that are not blocked — used to seed sensible defaults.
 function firstOpenDays(blockedDates: ReadonlySet<string>, count: number) {
@@ -38,7 +37,6 @@ export function RequestForm({
 }) {
   const [serviceId, setServiceId] = useState(state.services[0]?.id ?? "");
   const [note, setNote] = useState("");
-  const [selectedView, setSelectedView] = useState<ViewMode>("calendar");
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
   const [preferences, setPreferences] = useState<Preference[]>(() => {
@@ -80,7 +78,7 @@ export function RequestForm({
   }
 
   return (
-    <Card className="rounded-2xl p-5">
+    <Card className="rounded-2xl p-3 sm:p-5">
       <form onSubmit={onSubmit}>
         <SectionHeader
           eyebrow="New appointment"
@@ -105,29 +103,11 @@ export function RequestForm({
         <div className="mt-4">
           <PreferencePicker
             preferences={preferences}
-            selectedView={selectedView}
-            setSelectedView={setSelectedView}
             state={state}
             blockedDates={blockedDates}
             updatePreferenceDate={updatePreferenceDate}
+            updatePreferenceWindow={updatePreferenceWindow}
           />
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          {preferences.map((preference) => (
-            <div
-              key={preference.id}
-              className="rounded-md border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-stone-900"
-            >
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                Window for choice {preference.rank}
-              </p>
-              <WindowSelect
-                preference={preference}
-                updatePreferenceWindow={updatePreferenceWindow}
-              />
-            </div>
-          ))}
         </div>
 
         <TextAreaField

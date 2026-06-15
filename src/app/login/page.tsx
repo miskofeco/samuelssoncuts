@@ -1,5 +1,6 @@
 import { signInAction } from "@/app/actions";
 import { AuthPanel } from "@/components/auth/auth-panel";
+import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { Button } from "@/components/shared/button";
 import { Field } from "@/components/shared/form";
 
@@ -31,6 +32,7 @@ export default async function LoginPage({
           Sign in
         </Button>
       </form>
+      <OAuthButtons />
     </AuthPanel>
   );
 }
