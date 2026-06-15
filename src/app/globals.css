@@ -40,6 +40,23 @@ body {
   font-family: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Desktop density: render the whole app shell as if zoomed to 80%, so text and
+   fixed pixel sizes scale together. zoom (not transform) keeps sticky working.
+   Compensate 100vh utilities so the zoomed layout still fills the viewport
+   (100vh / 0.8 = 125vh) instead of leaving a gap at the bottom. */
+@media (min-width: 1024px) {
+  .desktop-zoom {
+    zoom: 0.8;
+    min-height: 125vh;
+  }
+  .desktop-zoom :where(.min-h-screen) {
+    min-height: 125vh;
+  }
+  .desktop-zoom :where(.h-screen) {
+    height: 125vh;
+  }
+}
+
 .app-surface {
   background:
     radial-gradient(circle at 50% 14%, rgba(0, 0, 0, 0.08), transparent 28rem),

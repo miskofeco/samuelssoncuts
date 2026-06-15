@@ -402,26 +402,26 @@ function CalendarChip({
   onSelect: (item: CalendarItem) => void;
 }) {
   const endTime = addMinutesToTime(item.time, item.durationMinutes);
-  // Compact single-line layout for short (≤30 min) bookings.
-  const compact = item.durationMinutes <= 30;
+  // Show the service line only when the block is tall enough for a second row.
+  const showService = item.durationMinutes >= 45;
 
   return (
     <button
       type="button"
       onClick={() => onSelect(item)}
       style={style}
-      title={`${item.time}–${endTime} · ${item.title}`}
+      title={`${item.time}–${endTime} · ${item.title} · ${item.service}`}
       className={cn(
-        "absolute inset-x-1 z-10 overflow-hidden rounded-lg border-l-2 px-2 py-1 text-left text-xs transition hover:brightness-95",
+        "absolute inset-x-1 z-10 flex flex-col overflow-hidden rounded-lg border-l-2 px-2 py-0.5 text-left text-[0.7rem] leading-tight transition hover:brightness-95",
         item.type === "Confirmed"
           ? "border-emerald-500 bg-emerald-100 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100"
           : "border-sky-500 bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-100",
       )}
     >
-      <p className={cn("font-semibold tabular-nums", compact && "truncate")}>
+      <span className="truncate font-semibold tabular-nums">
         {item.time}–{endTime} · {item.title}
-      </p>
-      {!compact ? <p className="truncate opacity-80">{item.service}</p> : null}
+      </span>
+      {showService ? <span className="truncate opacity-80">{item.service}</span> : null}
     </button>
   );
 }

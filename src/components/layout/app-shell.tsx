@@ -19,7 +19,7 @@ export function AppShell({
   const sections = role === "admin" ? adminNav : clientNav;
 
   return (
-    <div className="app-surface min-h-screen text-stone-950 dark:text-stone-100">
+    <div className="desktop-zoom app-surface min-h-screen text-stone-950 dark:text-stone-100">
       {/* Mobile top bar + drawer */}
       <MobileNav sections={sections} profile={profile} />
 
