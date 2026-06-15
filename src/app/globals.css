@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+/* Class-based dark mode for Tailwind v4 (no JS config file). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f4f4f5;
+  --foreground: #1c1917;
+  --surface: #ffffff;
+  --surface-muted: #f8f8f8;
+  --border: rgba(0, 0, 0, 0.1);
+  --muted-foreground: #78716c;
+  --ring: rgba(0, 0, 0, 0.1);
+}
+
+.dark {
+  --background: #0c0a09;
+  --foreground: #fafaf9;
+  --surface: #1c1917;
+  --surface-muted: #262320;
+  --border: rgba(255, 255, 255, 0.12);
+  --muted-foreground: #a8a29e;
+  --ring: rgba(255, 255, 255, 0.14);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border-token: var(--border);
+  --color-muted-foreground: var(--muted-foreground);
+  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+}
+
+.app-surface {
+  background:
+    radial-gradient(circle at 50% 14%, rgba(255, 120, 176, 0.16), transparent 28rem),
+    radial-gradient(circle at 82% 34%, rgba(255, 226, 82, 0.14), transparent 20rem),
+    linear-gradient(180deg, #f5f5f5 0%, #eeeeee 100%);
+}
+
+.dark .app-surface {
+  background:
+    radial-gradient(circle at 50% 14%, rgba(236, 72, 153, 0.12), transparent 28rem),
+    radial-gradient(circle at 82% 34%, rgba(234, 179, 8, 0.08), transparent 20rem),
+    linear-gradient(180deg, #0c0a09 0%, #161312 100%);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Smooth color transitions when toggling theme. */
+* {
+  transition-property: background-color, border-color;
+  transition-duration: 150ms;
+}
