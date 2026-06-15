@@ -89,7 +89,7 @@ export function RequestForm({
               label="Service"
               value={serviceId}
               onChange={(event) => setServiceId(event.target.value)}
-              className="min-w-[220px]"
+              className="min-w-55"
             >
               {state.services.map((service) => (
                 <option key={service.id} value={service.id}>

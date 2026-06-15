@@ -13,55 +13,34 @@ export const dayWindows: DayWindow[] = [
   "Evening",
 ];
 
-export const workingHours = [
-  "09:00",
-  "09:30",
-  "10:00",
-  "10:30",
-  "11:00",
-  "11:30",
-  "12:00",
-  "12:30",
-  "13:00",
-  "13:30",
-  "14:00",
-  "14:30",
-  "15:00",
-  "15:30",
-  "16:00",
-  "16:30",
-  "17:00",
-  "17:30",
-  "18:00",
-];
-
-// Quarter-hour slots across the same working window (09:00–18:00). Used where
-// the barber needs finer control than the 30-minute `workingHours` grid, e.g.
-// the admin "add booking" time picker.
-export const workingHoursQuarterly = (() => {
-  const first = workingHours[0];
-  const last = workingHours[workingHours.length - 1];
-  const toMinutes = (time: string) => {
-    const [hours, minutes] = time.split(":").map(Number);
-    return hours * 60 + minutes;
-  };
-  const start = toMinutes(first);
-  const end = toMinutes(last);
+// The shop opens at 07:00; the last bookable start is 20:00 (so a visit can run
+// to ~21:00). Generated rather than listed so the range stays easy to change.
+function buildSlots(startMinutes: number, endMinutes: number, stepMinutes: number) {
   const slots: string[] = [];
-  for (let total = start; total <= end; total += 15) {
+  for (let total = startMinutes; total <= endMinutes; total += stepMinutes) {
     slots.push(
       `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`,
     );
   }
   return slots;
-})();
+}
+
+const OPEN_MINUTES = 7 * 60; // 07:00
+const LAST_BOOK_MINUTES = 20 * 60; // 20:00 — last bookable start
+
+export const workingHours = buildSlots(OPEN_MINUTES, LAST_BOOK_MINUTES, 30);
+
+// Quarter-hour slots across the same working window. Used where the barber needs
+// finer control than the 30-minute `workingHours` grid, e.g. the admin "add
+// booking" time picker.
+export const workingHoursQuarterly = buildSlots(OPEN_MINUTES, LAST_BOOK_MINUTES, 15);
 
 // Start hour (inclusive) and end hour (exclusive) that each preference window maps to.
 export const windowRanges: Record<DayWindow, { start: number; end: number }> = {
-  Morning: { start: 9, end: 11.5 },
+  Morning: { start: 7, end: 11.5 },
   Midday: { start: 11.5, end: 13.5 },
   Afternoon: { start: 13.5, end: 16 },
-  Evening: { start: 16, end: 18.5 },
+  Evening: { start: 16, end: 20.5 },
 };
 
 function hourValue(time: string) {

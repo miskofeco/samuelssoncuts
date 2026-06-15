@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
@@ -203,10 +204,12 @@ export function AdminCalendar({
 
 // Desktop time grid spans the working day. Each hour is HOUR_HEIGHT px tall, so
 // a booking's top offset and height map directly to its start time / duration.
-const START_HOUR = 9;
-const END_HOUR = 19; // exclusive — covers a booking that starts at 18:xx
+const START_HOUR = 7;
+const END_HOUR = 21; // exclusive end — 07:00 open, last book 20:00 (runs to ~21:00)
 const GRID_HOURS = END_HOUR - START_HOUR;
 const HOUR_HEIGHT = 64;
+// Visible height of the scrollable grid body (the full grid is taller and scrolls).
+const VIEWPORT_HEIGHT = 9 * HOUR_HEIGHT;
 
 function minutesFromStart(time: string) {
   const [hours, minutes] = time.split(":").map(Number);
@@ -217,6 +220,42 @@ export function addMinutesToTime(time: string, minutes: number) {
   const [hours, mins] = time.split(":").map(Number);
   const total = hours * 60 + mins + minutes;
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+// Pixel offset of the current time within the grid (clamped to the visible band).
+function nowOffsetPx() {
+  const now = new Date();
+  const minutes = (now.getHours() - START_HOUR) * 60 + now.getMinutes();
+  const max = GRID_HOURS * 60;
+  const clamped = Math.min(Math.max(minutes, 0), max);
+  return (clamped / 60) * HOUR_HEIGHT;
+}
+
+function CurrentTimeLine() {
+  const [offset, setOffset] = useState<number | null>(null);
+
+  // Set on mount and tick each minute (avoids SSR/initial-render time mismatch).
+  useEffect(() => {
+    const update = () => setOffset(nowOffsetPx());
+    update();
+    const id = setInterval(update, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (offset === null) return null;
+
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 z-20"
+      style={{ top: offset }}
+      aria-hidden
+    >
+      {/* Offset by the 64px time gutter so the line crosses only the day columns. */}
+      <div className="relative ml-16 border-t border-dashed border-red-500/70">
+        <span className="absolute left-0 top-0 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500" />
+      </div>
+    </div>
+  );
 }
 
 function WeekGrid({
@@ -231,6 +270,15 @@ function WeekGrid({
   const today = todayIso();
   const days = Array.from({ length: 7 }, (_, index) => addDays(index));
   const hours = Array.from({ length: GRID_HOURS }, (_, index) => START_HOUR + index);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Center the current time in the scroll viewport on first open.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = Math.max(nowOffsetPx() - VIEWPORT_HEIGHT / 2, 0);
+  }, []);
 
   return (
     <>
@@ -263,29 +311,39 @@ function WeekGrid({
               );
             })}
           </div>
-          <div className="grid grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-px bg-black/5 dark:bg-white/10">
-            {/* Time gutter */}
-            <div className="bg-white dark:bg-stone-900">
-              {hours.map((hour) => (
-                <div key={hour} style={{ height: HOUR_HEIGHT }} className="relative">
-                  <span className="absolute right-2 top-1 text-xs font-medium text-stone-400 dark:text-stone-500">
-                    {String(hour).padStart(2, "0")}:00
-                  </span>
-                </div>
-              ))}
-            </div>
+          {/* Scrollable time body */}
+          <div
+            ref={scrollRef}
+            className="overflow-y-auto"
+            style={{ height: VIEWPORT_HEIGHT }}
+          >
+            <div className="relative grid grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-px bg-black/5 dark:bg-white/10">
+              {/* Time gutter */}
+              <div className="bg-white dark:bg-stone-900">
+                {hours.map((hour) => (
+                  <div key={hour} style={{ height: HOUR_HEIGHT }} className="relative">
+                    <span className="absolute right-2 top-1 text-xs font-medium text-stone-400 dark:text-stone-500">
+                      {String(hour).padStart(2, "0")}:00
+                    </span>
+                  </div>
+                ))}
+              </div>
 
-            {/* Day columns */}
-            {days.map((day) => (
-              <DayColumn
-                key={day}
-                day={day}
-                items={itemsByDate.get(day) ?? []}
-                isToday={day === today}
-                onAddSlot={onAddSlot}
-                onSelect={onSelect}
-              />
-            ))}
+              {/* Day columns */}
+              {days.map((day) => (
+                <DayColumn
+                  key={day}
+                  day={day}
+                  items={itemsByDate.get(day) ?? []}
+                  isToday={day === today}
+                  onAddSlot={onAddSlot}
+                  onSelect={onSelect}
+                />
+              ))}
+
+              {/* Current-time dashed indicator across all columns */}
+              <CurrentTimeLine />
+            </div>
           </div>
         </div>
       </div>
@@ -402,27 +460,57 @@ function CalendarChip({
   onSelect: (item: CalendarItem) => void;
 }) {
   const endTime = addMinutesToTime(item.time, item.durationMinutes);
-  // Show the service line only when the block is tall enough for a second row.
+  // Add lines as the block gets taller: time → +name → +service.
+  const showName = item.durationMinutes >= 30;
   const showService = item.durationMinutes >= 45;
 
+  // Fixed-position tooltip — the chip lives in an overflow-hidden scroller, so a
+  // normally-positioned tooltip would be clipped. Anchor it to the chip's rect.
+  const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
+
+  function showTip(event: React.MouseEvent<HTMLButtonElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setTip({ x: rect.left, y: rect.top });
+  }
+
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(item)}
-      style={style}
-      title={`${item.time}–${endTime} · ${item.title} · ${item.service}`}
-      className={cn(
-        "absolute inset-x-1 z-10 flex flex-col overflow-hidden rounded-lg border-l-2 px-2 py-0.5 text-left text-[0.7rem] leading-tight transition hover:brightness-95",
-        item.type === "Confirmed"
-          ? "border-emerald-500 bg-emerald-100 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100"
-          : "border-sky-500 bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-100",
-      )}
-    >
-      <span className="truncate font-semibold tabular-nums">
-        {item.time}–{endTime} · {item.title}
-      </span>
-      {showService ? <span className="truncate opacity-80">{item.service}</span> : null}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => onSelect(item)}
+        onMouseEnter={showTip}
+        onMouseLeave={() => setTip(null)}
+        style={style}
+        className={cn(
+          "absolute inset-x-1 z-10 flex flex-col overflow-hidden rounded-lg border-l-2 px-1.5 py-0.5 text-left text-[0.6rem] leading-[1.15] transition hover:brightness-95",
+          item.type === "Confirmed"
+            ? "border-emerald-500 bg-emerald-100 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100"
+            : "border-sky-500 bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-100",
+        )}
+      >
+        <span className="truncate font-semibold tabular-nums">
+          {item.time}–{endTime}
+        </span>
+        {showName ? <span className="truncate font-medium">{item.title}</span> : null}
+        {showService ? <span className="truncate opacity-70">{item.service}</span> : null}
+      </button>
+
+      {tip
+        ? createPortal(
+            <div
+              className="pointer-events-none fixed z-50 -translate-y-full rounded-lg bg-stone-900 px-2.5 py-1.5 text-xs leading-snug text-white shadow-lg dark:bg-stone-700"
+              style={{ left: tip.x, top: tip.y - 6 }}
+            >
+              <p className="font-semibold tabular-nums">
+                {item.time}–{endTime}
+              </p>
+              <p>{item.title}</p>
+              <p className="opacity-80">{item.service}</p>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 
