@@ -1,12 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { getSiteUrl } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
-import { dashboardPathFor, requireAdmin, requireApprovedClient, requireProfile } from "@/server/auth";
+import { CONSENT_VERSION } from "@/lib/consent/config";
+import { dashboardPathFor, getCurrentProfile, requireAdmin, requireApprovedClient, requireProfile } from "@/server/auth";
 import type { ActionResult, Preference } from "@/domain/types";
 import { getDict } from "@/i18n/server";
 
@@ -16,6 +18,14 @@ const signInSchema = z.object({
 });
 
 const oauthProviderSchema = z.enum(["google", "apple"]);
+
+const consentSchema = z.object({
+  functional: z.boolean(),
+  analytics: z.boolean(),
+  marketing: z.boolean(),
+  version: z.number().int(),
+  timestamp: z.string().max(40).optional(),
+});
 
 const registerSchema = signInSchema.extend({
   fullName: z.string().min(2).max(120),
@@ -183,6 +193,42 @@ export async function signOutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+// Persist a signed-in user's cookie-consent choice as an auditable, append-only
+// record (proof of consent). The runtime source of truth is the client-side
+// `cookie_consent` cookie; this only mirrors the decision to the DB and is a
+// no-op for logged-out visitors. It never blocks the UI — failures are silent.
+export async function recordConsentAction(input: unknown): Promise<ActionResult> {
+  const parsed = consentSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "Invalid consent payload." };
+  }
+
+  // Logged-out visitors are fine — their choice lives only in the cookie.
+  const { configured, profile } = await getCurrentProfile();
+  if (!configured || !profile) {
+    return { ok: true };
+  }
+
+  const userAgent = (await headers()).get("user-agent")?.slice(0, 500) ?? null;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("cookie_consents").insert({
+    user_id: profile.id,
+    necessary: true,
+    functional: parsed.data.functional,
+    analytics: parsed.data.analytics,
+    marketing: parsed.data.marketing,
+    policy_version: parsed.data.version || CONSENT_VERSION,
+    user_agent: userAgent,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true };
 }
 
 export async function createBookingRequestAction(input: unknown): Promise<ActionResult> {

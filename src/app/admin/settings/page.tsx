@@ -1,4 +1,5 @@
 import { ServiceManager } from "@/components/admin/service-manager";
+import { OpenPreferencesCard } from "@/components/consent/open-preferences-button";
 import { PageHeader } from "@/components/shared/page-header";
 import { ProfileForm } from "@/components/shared/profile-form";
 import { getDict } from "@/i18n/server";
@@ -21,11 +22,14 @@ export default async function AdminSettingsPage() {
       />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
         <ServiceManager services={services} />
-        <ProfileForm
-          fullName={profile.full_name}
-          phone={profile.phone ?? ""}
-          email={profile.email}
-        />
+        <div className="space-y-6">
+          <ProfileForm
+            fullName={profile.full_name}
+            phone={profile.phone ?? ""}
+            email={profile.email}
+          />
+          <OpenPreferencesCard />
+        </div>
       </div>
     </div>
   );

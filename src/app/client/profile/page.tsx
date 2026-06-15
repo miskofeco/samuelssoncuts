@@ -1,3 +1,4 @@
+import { OpenPreferencesCard } from "@/components/consent/open-preferences-button";
 import { ProfileForm } from "@/components/shared/profile-form";
 import { PageHeader } from "@/components/shared/page-header";
 import { getDict } from "@/i18n/server";
@@ -16,12 +17,13 @@ export default async function ClientProfilePage() {
         title={t.client.profileTitle}
         description={t.client.profileDescription}
       />
-      <div className="max-w-xl">
+      <div className="max-w-xl space-y-6">
         <ProfileForm
           fullName={profile.full_name}
           phone={profile.phone ?? ""}
           email={profile.email}
         />
+        <OpenPreferencesCard />
       </div>
     </div>
   );

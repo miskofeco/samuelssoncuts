@@ -93,6 +93,7 @@ const en = {
     clients: "Clients",
     availability: "Availability",
     settings: "Settings",
+    cookiePreferences: "Cookie preferences",
   },
   windows: {
     Morning: "Morning",
@@ -458,6 +459,92 @@ const en = {
     chooseClientOrWalkIn: "Choose an existing client or enter a walk-in name.",
     bookingAdded: "Booking added to the calendar.",
   },
+  consent: {
+    banner: {
+      title: "We value your privacy",
+      body: "We use cookies that are strictly necessary to run this site and, with your permission, additional cookies to remember your preferences and help us improve. You can accept all, reject everything that isn't essential, or choose for yourself. Your choice is saved and you can change it at any time.",
+      acceptAll: "Accept all",
+      rejectAll: "Reject all",
+      customize: "Manage preferences",
+      policyLink: "Read our Cookie Policy",
+    },
+    modal: {
+      title: "Cookie preferences",
+      intro:
+        "Choose which categories of cookies we may use. Strictly necessary cookies are always active because the site cannot function without them. You can update these choices whenever you like.",
+      save: "Save preferences",
+      acceptAll: "Accept all",
+      rejectAll: "Reject all",
+      alwaysOn: "Always on",
+      cookiesUsedLabel: "Cookies used",
+      policyLink: "Full Cookie Policy",
+      saved: "Your cookie preferences have been saved.",
+      lastUpdated: (date: string) => `Last updated: ${date}`,
+      version: (n: number) => `Policy version ${n}`,
+    },
+    categories: {
+      necessary: {
+        name: "Strictly necessary",
+        description:
+          "Required for the site to work — signing in, keeping you logged in securely, remembering your chosen language, and protecting against fraud. These cannot be switched off.",
+        cookies:
+          "Supabase authentication/session cookies; language preference (lang).",
+        status: "Currently in use.",
+      },
+      functional: {
+        name: "Functional & preferences",
+        description:
+          "Remember choices you make to give you a more personal experience, such as interface settings. The site works without them, but some conveniences may reset.",
+        cookies: "Interface and preference settings stored on your device.",
+        status: "Currently in use.",
+      },
+      analytics: {
+        name: "Analytics & performance",
+        description:
+          "Help us understand how visitors use the site — anonymously and in aggregate — so we can improve it. They are only set if you allow them.",
+        cookies:
+          "No analytics cookies are set at this time. This category is reserved for future, privacy-respecting measurement.",
+        status: "Not currently used — reserved.",
+      },
+      marketing: {
+        name: "Marketing",
+        description:
+          "Used to deliver and measure promotions or content relevant to you, potentially across other sites. They are only set if you allow them.",
+        cookies:
+          "No marketing cookies are set at this time. This category is reserved for any future promotional features.",
+        status: "Not currently used — reserved.",
+      },
+    },
+    policy: {
+      title: "Cookie Policy",
+      backToApp: "Back",
+      intro:
+        "This Cookie Policy explains what cookies and similar technologies are, how Samuelsson Cuts uses them, and the choices available to you. It should be read together with how we handle your personal data. By using this site you can accept, reject, or fine-tune the optional cookies described below; strictly necessary cookies are always active.",
+      whatTitle: "What are cookies?",
+      whatBody:
+        "Cookies are small text files placed on your device when you visit a website. They are widely used to make sites work, or work more efficiently, and to provide information to the site owner. Similar technologies such as local storage perform comparable functions. We group everything we use into the categories described below.",
+      howTitle: "How we use cookies",
+      howBody:
+        "We keep our use of cookies to a minimum. Strictly necessary cookies are always set so you can sign in, stay securely authenticated, and keep your language choice. We only set optional cookies — functional, analytics, or marketing — after you give consent, and you may withdraw that consent at any time. We do not use cookies to build advertising profiles unless you explicitly opt in to marketing.",
+      categoriesTitle: "Categories of cookies we use",
+      tableCategory: "Category",
+      tablePurpose: "Purpose",
+      tableExamples: "Examples",
+      tableStatus: "Status",
+      manageTitle: "Managing your consent",
+      manageBody:
+        "When you first visit, a banner lets you accept all cookies, reject everything that isn't strictly necessary, or open the preference panel to choose category by category. You can reopen these preferences at any time from the “Cookie preferences” option in the sidebar or on your settings/profile page. Changes take effect immediately. You can also delete cookies through your browser settings; note that removing strictly necessary cookies may sign you out or break parts of the site.",
+      retentionTitle: "Storing your choice & retention",
+      retentionBody:
+        "Your consent choice is stored in a cookie for up to six months, after which we will ask again. If you are signed in, we also keep a dated record of your choice as proof of consent, in line with data-protection requirements. We will ask you to review your preferences again if this policy changes materially.",
+      legalTitle: "Your rights & legal basis",
+      legalBody:
+        "Strictly necessary cookies are used on the legal basis of our legitimate interest in providing a functioning, secure service. All other cookies are used only with your consent (which you may withdraw at any time). Depending on where you live, you may have rights to access, correct, or erase your personal data and to lodge a complaint with your local data-protection authority.",
+      contactTitle: "Contact",
+      contactBody:
+        "If you have questions about this policy or how we use cookies, please contact the barbershop directly and we will be happy to help.",
+    },
+  },
 };
 
 export type Dict = typeof en;
@@ -549,6 +636,7 @@ const sk: Dict = {
     clients: "Klienti",
     availability: "Dostupnosť",
     settings: "Nastavenia",
+    cookiePreferences: "Nastavenia cookies",
   },
   windows: {
     Morning: "Ráno",
@@ -894,6 +982,92 @@ const sk: Dict = {
     fillBookingDetails: "Vyplňte údaje rezervácie.",
     chooseClientOrWalkIn: "Vyberte existujúceho klienta alebo zadajte meno zákazníka.",
     bookingAdded: "Rezervácia pridaná do kalendára.",
+  },
+  consent: {
+    banner: {
+      title: "Záleží nám na vašom súkromí",
+      body: "Používame cookies, ktoré sú nevyhnutné na fungovanie tejto stránky, a s vaším súhlasom aj ďalšie cookies na zapamätanie vašich preferencií a na zlepšovanie služby. Môžete prijať všetky, odmietnuť všetko okrem nevyhnutných, alebo si vybrať sami. Vaša voľba sa uloží a kedykoľvek ju môžete zmeniť.",
+      acceptAll: "Prijať všetky",
+      rejectAll: "Odmietnuť všetky",
+      customize: "Spravovať predvoľby",
+      policyLink: "Prečítať zásady používania cookies",
+    },
+    modal: {
+      title: "Nastavenia cookies",
+      intro:
+        "Vyberte, ktoré kategórie cookies smieme používať. Nevyhnutné cookies sú vždy aktívne, pretože bez nich stránka nemôže fungovať. Tieto voľby môžete kedykoľvek upraviť.",
+      save: "Uložiť predvoľby",
+      acceptAll: "Prijať všetky",
+      rejectAll: "Odmietnuť všetky",
+      alwaysOn: "Vždy zapnuté",
+      cookiesUsedLabel: "Použité cookies",
+      policyLink: "Úplné zásady cookies",
+      saved: "Vaše nastavenia cookies boli uložené.",
+      lastUpdated: (date: string) => `Naposledy aktualizované: ${date}`,
+      version: (n: number) => `Verzia zásad ${n}`,
+    },
+    categories: {
+      necessary: {
+        name: "Nevyhnutné",
+        description:
+          "Potrebné na fungovanie stránky — prihlásenie, bezpečné udržanie prihlásenia, zapamätanie zvoleného jazyka a ochranu pred zneužitím. Tieto sa nedajú vypnúť.",
+        cookies:
+          "Autentifikačné/relačné cookies Supabase; predvoľba jazyka (lang).",
+        status: "Aktuálne v používaní.",
+      },
+      functional: {
+        name: "Funkčné a predvoľby",
+        description:
+          "Zapamätajú si vaše voľby a poskytnú osobnejší zážitok, napríklad nastavenia rozhrania. Stránka funguje aj bez nich, no niektoré pohodlné funkcie sa môžu vynulovať.",
+        cookies: "Nastavenia rozhrania a predvolieb uložené vo vašom zariadení.",
+        status: "Aktuálne v používaní.",
+      },
+      analytics: {
+        name: "Analytické a výkonnostné",
+        description:
+          "Pomáhajú nám pochopiť, ako návštevníci používajú stránku — anonymne a súhrnne — aby sme ju mohli zlepšovať. Nastavia sa len s vaším súhlasom.",
+        cookies:
+          "Momentálne nie sú nastavené žiadne analytické cookies. Táto kategória je vyhradená pre budúce meranie rešpektujúce súkromie.",
+        status: "Aktuálne sa nepoužíva — vyhradené.",
+      },
+      marketing: {
+        name: "Marketingové",
+        description:
+          "Slúžia na doručovanie a meranie propagácie alebo obsahu relevantného pre vás, prípadne aj na iných stránkach. Nastavia sa len s vaším súhlasom.",
+        cookies:
+          "Momentálne nie sú nastavené žiadne marketingové cookies. Táto kategória je vyhradená pre prípadné budúce propagačné funkcie.",
+        status: "Aktuálne sa nepoužíva — vyhradené.",
+      },
+    },
+    policy: {
+      title: "Zásady používania cookies",
+      backToApp: "Späť",
+      intro:
+        "Tieto zásady vysvetľujú, čo sú cookies a podobné technológie, ako ich Samuelsson Cuts používa a aké máte možnosti. Mali by sa čítať spolu s tým, ako spracúvame vaše osobné údaje. Používaním tejto stránky môžete prijať, odmietnuť alebo doladiť voliteľné cookies opísané nižšie; nevyhnutné cookies sú vždy aktívne.",
+      whatTitle: "Čo sú cookies?",
+      whatBody:
+        "Cookies sú malé textové súbory umiestnené vo vašom zariadení pri návšteve webovej stránky. Bežne sa používajú na to, aby stránky fungovali alebo fungovali efektívnejšie, a na poskytovanie informácií prevádzkovateľovi. Podobné technológie, ako je lokálne úložisko, plnia obdobné funkcie. Všetko, čo používame, zaraďujeme do nižšie opísaných kategórií.",
+      howTitle: "Ako používame cookies",
+      howBody:
+        "Používanie cookies obmedzujeme na minimum. Nevyhnutné cookies sa nastavujú vždy, aby ste sa mohli prihlásiť, zostať bezpečne prihlásený a zachovať si voľbu jazyka. Voliteľné cookies — funkčné, analytické alebo marketingové — nastavujeme až po vašom súhlase a tento súhlas môžete kedykoľvek odvolať. Cookies nepoužívame na tvorbu reklamných profilov, pokiaľ sa výslovne neprihlásite k marketingu.",
+      categoriesTitle: "Kategórie cookies, ktoré používame",
+      tableCategory: "Kategória",
+      tablePurpose: "Účel",
+      tableExamples: "Príklady",
+      tableStatus: "Stav",
+      manageTitle: "Správa vášho súhlasu",
+      manageBody:
+        "Pri prvej návšteve vám lišta umožní prijať všetky cookies, odmietnuť všetko okrem nevyhnutných alebo otvoriť panel predvolieb a vybrať si kategóriu po kategórii. Tieto predvoľby môžete kedykoľvek znovu otvoriť cez možnosť „Nastavenia cookies“ v bočnom paneli alebo na stránke nastavení/profilu. Zmeny sa prejavia okamžite. Cookies môžete odstrániť aj v nastaveniach prehliadača; odstránenie nevyhnutných cookies vás však môže odhlásiť alebo narušiť časti stránky.",
+      retentionTitle: "Uloženie voľby a doba uchovávania",
+      retentionBody:
+        "Vaša voľba súhlasu sa ukladá v cookie najviac na šesť mesiacov, po ktorých sa opýtame znova. Ak ste prihlásený, uchovávame aj datovaný záznam vašej voľby ako doklad o súhlase v súlade s požiadavkami na ochranu údajov. Ak sa tieto zásady podstatne zmenia, požiadame vás o opätovné posúdenie predvolieb.",
+      legalTitle: "Vaše práva a právny základ",
+      legalBody:
+        "Nevyhnutné cookies používame na základe nášho oprávneného záujmu poskytovať funkčnú a bezpečnú službu. Všetky ostatné cookies používame len s vaším súhlasom (ktorý môžete kedykoľvek odvolať). V závislosti od miesta, kde žijete, môžete mať právo na prístup k svojim osobným údajom, ich opravu alebo vymazanie a právo podať sťažnosť miestnemu dozornému úradu pre ochranu údajov.",
+      contactTitle: "Kontakt",
+      contactBody:
+        "Ak máte otázky k týmto zásadám alebo k tomu, ako používame cookies, kontaktujte priamo holičstvo a radi vám pomôžeme.",
+    },
   },
 };
 

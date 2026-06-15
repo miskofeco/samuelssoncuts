@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { signOutAction } from "@/app/actions";
+import { useConsent } from "@/components/consent/consent-provider";
 import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
 import { Logo } from "@/components/shared/logo";
@@ -29,6 +30,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const t = useT();
+  const { openPreferences } = useConsent();
 
   return (
     <div className="flex h-full flex-col">
@@ -92,6 +94,17 @@ export function Sidebar({
             {profile.approval_status}
           </StatusPill>
         </div>
+        <button
+          type="button"
+          onClick={openPreferences}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold text-stone-500 transition hover:bg-stone-100 hover:text-black dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-white"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5Z" />
+            <path d="M8.5 8.5v.01M16 12v.01M12 16v.01" />
+          </svg>
+          {t.nav.cookiePreferences}
+        </button>
         <form action={signOutAction} className="mt-3">
           <Button type="submit" variant="secondary" className="w-full">
             {t.common.signOut}

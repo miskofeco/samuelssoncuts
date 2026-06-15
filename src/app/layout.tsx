@@ -2,8 +2,12 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+import { ConsentBanner } from "@/components/consent/consent-banner";
+import { ConsentPreferences } from "@/components/consent/consent-preferences";
+import { ConsentProvider } from "@/components/consent/consent-provider";
 import { ThemeScript } from "@/components/shared/theme-script";
 import { LanguageProvider } from "@/i18n/provider";
+import { getConsent } from "@/lib/consent/server";
 import { getDict, getLang } from "@/i18n/server";
 
 const geistSans = Geist({
@@ -30,6 +34,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const lang = await getLang();
+  const consent = await getConsent();
 
   return (
     <html
@@ -41,7 +46,13 @@ export default async function RootLayout({
         <ThemeScript />
       </head>
       <body className="flex min-h-full flex-col antialiased">
-        <LanguageProvider lang={lang}>{children}</LanguageProvider>
+        <LanguageProvider lang={lang}>
+          <ConsentProvider initial={consent}>
+            {children}
+            <ConsentBanner />
+            <ConsentPreferences />
+          </ConsentProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

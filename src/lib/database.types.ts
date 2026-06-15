@@ -97,6 +97,32 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["blocked_times"]["Insert"]>;
         Relationships: [];
       };
+      cookie_consents: {
+        Row: {
+          id: string;
+          user_id: string;
+          necessary: boolean;
+          functional: boolean;
+          analytics: boolean;
+          marketing: boolean;
+          policy_version: number;
+          user_agent: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          necessary?: boolean;
+          functional?: boolean;
+          analytics?: boolean;
+          marketing?: boolean;
+          policy_version: number;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["cookie_consents"]["Insert"]>;
+        Relationships: [];
+      };
       booking_requests: {
         Row: {
           id: string;
