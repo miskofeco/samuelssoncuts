@@ -152,7 +152,7 @@ function BookingForm({
         >
           {services.map((service) => (
             <option key={service.id} value={service.id}>
-              {service.name} — {service.duration} {t.admin.minutesShort} · ${service.price}
+              {service.name} — {service.duration} {t.admin.minutesShort} · {service.price} €
             </option>
           ))}
         </SelectField>

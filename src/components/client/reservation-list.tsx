@@ -99,7 +99,7 @@ function ReservationCard({
         <div>
           <h3 className="font-semibold text-black dark:text-white">{service.name}</h3>
           <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
-            {service.duration} min · ${service.price}
+            {service.duration} min · {service.price} €
           </p>
         </div>
         <StatusPill tone={meta.tone}>{meta.label}</StatusPill>

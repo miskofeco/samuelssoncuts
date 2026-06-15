@@ -40,6 +40,7 @@ export type CalendarItem = {
   clientId?: string | null;
   clientEmail?: string;
   clientPhone?: string;
+  clientAvatarUrl?: string | null;
   note?: string;
 };
 
@@ -89,6 +90,7 @@ export function AdminCalendar({
         clientId: appointment.clientId,
         clientEmail: client?.email,
         clientPhone: client?.phone,
+        clientAvatarUrl: client?.avatarUrl,
       });
     }
     for (const proposal of proposals) {
@@ -110,6 +112,7 @@ export function AdminCalendar({
         clientId: request?.clientId ?? null,
         clientEmail: client?.email,
         clientPhone: client?.phone,
+        clientAvatarUrl: client?.avatarUrl,
         note: proposal.note,
       });
     }

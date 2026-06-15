@@ -59,7 +59,7 @@ export async function ClientDetail({
       <Card className="rounded-2xl p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <Avatar name={client.name} size="lg" />
+            <Avatar name={client.name} src={client.avatarUrl} size="lg" />
             <div>
               <h2 className="text-xl font-semibold text-black dark:text-white">{client.name}</h2>
               <p className="text-sm text-stone-500 dark:text-stone-400">{client.email}</p>
@@ -81,7 +81,7 @@ export async function ClientDetail({
         <StatCard label={t.admin.detailTotalVisits} value={appointments.length} />
         <StatCard label={t.admin.detailUpcoming} value={upcoming} tone={upcoming > 0 ? "emerald" : "neutral"} />
         <StatCard label={t.admin.detailRequests} value={requests.length} />
-        <StatCard label={t.admin.detailLifetimeValue} value={`$${totalSpend}`} hint={t.admin.detailConfirmedVisits} />
+        <StatCard label={t.admin.detailLifetimeValue} value={`${totalSpend} €`} hint={t.admin.detailConfirmedVisits} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">

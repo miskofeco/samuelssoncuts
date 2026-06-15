@@ -104,7 +104,7 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
                 {!service.active ? <StatusPill tone="neutral">{t.admin.hiddenLabel}</StatusPill> : null}
               </div>
               <p className="text-sm text-stone-500 dark:text-stone-400">
-                {service.duration} {t.admin.minutesShort} · ${service.price}
+                {service.duration} {t.admin.minutesShort} · {service.price} €
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">

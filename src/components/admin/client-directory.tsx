@@ -60,7 +60,7 @@ export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
       header: t.admin.colClient,
       cell: (client) => (
         <div className="flex items-center gap-3">
-          <Avatar name={client.name} size="sm" tone="muted" />
+          <Avatar name={client.name} src={client.avatarUrl} size="sm" tone="muted" />
           <div className="min-w-0">
             <p className="truncate font-semibold text-black dark:text-white">{client.name}</p>
             <p className="truncate text-xs text-stone-500 dark:text-stone-400">{client.email}</p>

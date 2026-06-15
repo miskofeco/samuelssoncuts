@@ -8,6 +8,7 @@ import {
   proposeAppointmentAction,
   rescheduleAppointmentAction,
 } from "@/app/actions";
+import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
 import { Combobox } from "@/components/shared/combobox";
 import { Feedback } from "@/components/shared/feedback";
@@ -107,12 +108,17 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
       {/* Summary */}
       <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-lg font-semibold text-black dark:text-white">{item.title}</p>
-            <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
-              {item.service} · {item.durationMinutes} {t.admin.minutesShort}
-              {item.servicePrice ? ` · $${item.servicePrice}` : ""}
-            </p>
+          <div className="flex min-w-0 items-start gap-3">
+            {!isWalkIn ? (
+              <Avatar size="md" name={item.title} src={item.clientAvatarUrl} />
+            ) : null}
+            <div className="min-w-0">
+              <p className="text-lg font-semibold text-black dark:text-white">{item.title}</p>
+              <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
+                {item.service} · {item.durationMinutes} {t.admin.minutesShort}
+                {item.servicePrice ? ` · ${item.servicePrice} €` : ""}
+              </p>
+            </div>
           </div>
           <StatusPill tone={isConfirmed ? "success" : "info"}>
             {isConfirmed ? t.admin.confirmed : t.statuses.proposedShort}

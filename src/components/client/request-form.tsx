@@ -95,7 +95,7 @@ export function RequestForm({
             >
               {state.services.map((service) => (
                 <option key={service.id} value={service.id}>
-                  {service.name} — {service.duration} min · ${service.price}
+                  {service.name} — {service.duration} min · {service.price} €
                 </option>
               ))}
             </SelectField>

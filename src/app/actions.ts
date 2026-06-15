@@ -858,6 +858,88 @@ export async function updateProfileAction(input: {
 }
 
 // ---------------------------------------------------------------------------
+// Profile picture — stored in the public `avatars` bucket under a per-user
+// folder (avatars/{id}/…). One file per user (upsert), so storage never grows
+// unbounded. A cache-buster query keeps next/image from serving a stale photo.
+// ---------------------------------------------------------------------------
+
+const AVATAR_MAX_BYTES = 3 * 1024 * 1024; // 3 MB
+const AVATAR_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+export async function uploadAvatarAction(formData: FormData): Promise<ActionResult> {
+  const profile = await requireProfile();
+  const t = await getDict();
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: t.feedback.avatarUploadFailed };
+  }
+
+  const ext = AVATAR_EXT[file.type];
+  if (!ext) {
+    return { ok: false, error: t.feedback.invalidImageType };
+  }
+  if (file.size > AVATAR_MAX_BYTES) {
+    return { ok: false, error: t.feedback.imageTooLarge };
+  }
+
+  const supabase = await createClient();
+  const path = `${profile.id}/avatar.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("avatars")
+    .upload(path, file, { upsert: true, contentType: file.type });
+
+  if (uploadError) {
+    return { ok: false, error: uploadError.message };
+  }
+
+  const { data: publicUrlData } = supabase.storage.from("avatars").getPublicUrl(path);
+  const publicUrl = `${publicUrlData.publicUrl}?v=${Date.now()}`;
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ avatar_url: publicUrl })
+    .eq("id", profile.id);
+
+  if (updateError) {
+    return { ok: false, error: updateError.message };
+  }
+
+  revalidatePath("/client", "layout");
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: t.feedback.avatarUpdated };
+}
+
+export async function removeAvatarAction(): Promise<ActionResult> {
+  const profile = await requireProfile();
+  const t = await getDict();
+  const supabase = await createClient();
+
+  // Remove every known extension variant; ignore "not found".
+  await supabase.storage
+    .from("avatars")
+    .remove(Object.values(AVATAR_EXT).map((ext) => `${profile.id}/avatar.${ext}`));
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ avatar_url: null })
+    .eq("id", profile.id);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/client", "layout");
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: t.feedback.avatarRemoved };
+}
+
+// ---------------------------------------------------------------------------
 // Services (admin) — soft delete via `active`, never hard delete.
 // ---------------------------------------------------------------------------
 

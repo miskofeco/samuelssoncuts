@@ -68,6 +68,7 @@ export function mapClientRow(row: ProfileRow): ClientProfile {
     role: row.role,
     emailConfirmed: Boolean(row.email_confirmed_at),
     createdAt: row.created_at,
+    avatarUrl: row.avatar_url,
   };
 }
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Avatar } from "@/components/shared/avatar";
 import { ButtonLink } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -64,13 +65,20 @@ export async function AdminOverview({
                     key={appointment.id}
                     className="flex items-center justify-between gap-3 rounded-lg border border-black/5 px-3 py-2.5 dark:border-white/5"
                   >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-black dark:text-white">
-                        {client?.name ?? t.admin.clientFallback}
-                      </p>
-                      <p className="truncate text-xs text-stone-500 dark:text-stone-400">
-                        {serviceById(appointment.serviceId, services).name}
-                      </p>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Avatar
+                        size="sm"
+                        name={client?.name ?? appointment.clientName ?? t.admin.clientFallback}
+                        src={client?.avatarUrl}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-black dark:text-white">
+                          {client?.name ?? appointment.clientName ?? t.admin.clientFallback}
+                        </p>
+                        <p className="truncate text-xs text-stone-500 dark:text-stone-400">
+                          {serviceById(appointment.serviceId, services).name}
+                        </p>
+                      </div>
                     </div>
                     <p className="shrink-0 text-sm font-medium tabular-nums text-stone-600 dark:text-stone-300">
                       {formatFullDay(appointment.date, locale)} · {appointment.time}

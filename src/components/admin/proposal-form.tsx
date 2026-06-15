@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 
 import { proposeTimeFromAdminAction } from "@/app/actions";
+import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
 import { Feedback } from "@/components/shared/feedback";
 import { StatusPill } from "@/components/shared/status-pill";
@@ -155,17 +156,24 @@ export function ProposalComposer({
         onClick={() => setOpen((value) => !value)}
         className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left"
       >
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-semibold text-black dark:text-white">
-              {client?.name ?? t.admin.clientFallback}
+        <div className="flex min-w-0 items-start gap-3">
+          <Avatar
+            size="md"
+            name={client?.name ?? t.admin.clientFallback}
+            src={client?.avatarUrl}
+          />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold text-black dark:text-white">
+                {client?.name ?? t.admin.clientFallback}
+              </p>
+              <StatusPill tone={tone}>{label}</StatusPill>
+            </div>
+            <p className="mt-0.5 truncate text-sm text-stone-500 dark:text-stone-400">
+              {service.name} · {service.duration} {t.admin.minutesShort}
+              {client?.email ? ` · ${client.email}` : ""}
             </p>
-            <StatusPill tone={tone}>{label}</StatusPill>
           </div>
-          <p className="mt-0.5 truncate text-sm text-stone-500 dark:text-stone-400">
-            {service.name} · {service.duration} {t.admin.minutesShort}
-            {client?.email ? ` · ${client.email}` : ""}
-          </p>
         </div>
         <span
           className={cn(

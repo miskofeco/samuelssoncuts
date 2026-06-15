@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import { initials } from "@/lib/initials";
 import { cn } from "@/lib/classnames";
 
@@ -7,17 +9,44 @@ const sizes = {
   lg: "h-12 w-12 text-sm",
 };
 
+// Pixel dimensions matching the size classes above — needed for next/image.
+const pixels = {
+  sm: 32,
+  md: 40,
+  lg: 48,
+};
+
 export function Avatar({
   name,
+  src,
   size = "md",
   tone = "dark",
   className,
 }: {
   name: string;
+  /** Profile picture URL. Falls back to the initials circle when absent. */
+  src?: string | null;
   size?: keyof typeof sizes;
   tone?: "dark" | "muted";
   className?: string;
 }) {
+  if (src) {
+    const px = pixels[size];
+    return (
+      <Image
+        src={src}
+        alt={name}
+        width={px}
+        height={px}
+        className={cn(
+          "shrink-0 rounded-full object-cover",
+          sizes[size],
+          className,
+        )}
+      />
+    );
+  }
+
   return (
     <span
       className={cn(

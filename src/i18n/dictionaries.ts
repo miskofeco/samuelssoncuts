@@ -336,7 +336,7 @@ const en = {
     serviceName: "Name",
     serviceDescription: "Description",
     serviceDuration: "Duration (min)",
-    servicePrice: "Price ($)",
+    servicePrice: "Price (€)",
     edit: "Edit",
     hide: "Hide",
     show: "Show",
@@ -412,6 +412,12 @@ const en = {
   profile: {
     eyebrow: "Account",
     title: "Your details",
+    photo: "Profile picture",
+    uploadPhoto: "Upload photo",
+    changePhoto: "Change photo",
+    removePhoto: "Remove",
+    photoHint: "JPG, PNG or WebP · max 3 MB",
+    uploading: "Uploading…",
   },
   feedback: {
     checkEmailPassword: "Check your email and password.",
@@ -469,6 +475,11 @@ const en = {
     fillBookingDetails: "Fill in the booking details.",
     chooseClientOrWalkIn: "Choose an existing client or enter a walk-in name.",
     bookingAdded: "Booking added to the calendar.",
+    invalidImageType: "Please choose a JPG, PNG or WebP image.",
+    imageTooLarge: "Image is too large. Maximum size is 3 MB.",
+    avatarUpdated: "Profile picture updated.",
+    avatarRemoved: "Profile picture removed.",
+    avatarUploadFailed: "Could not upload the image. Try again.",
   },
   consent: {
     banner: {
@@ -875,7 +886,7 @@ const sk: Dict = {
     serviceName: "Názov",
     serviceDescription: "Popis",
     serviceDuration: "Trvanie (min)",
-    servicePrice: "Cena ($)",
+    servicePrice: "Cena (€)",
     edit: "Upraviť",
     hide: "Skryť",
     show: "Zobraziť",
@@ -947,6 +958,12 @@ const sk: Dict = {
   profile: {
     eyebrow: "Účet",
     title: "Vaše údaje",
+    photo: "Profilová fotka",
+    uploadPhoto: "Nahrať fotku",
+    changePhoto: "Zmeniť fotku",
+    removePhoto: "Odstrániť",
+    photoHint: "JPG, PNG alebo WebP · max 3 MB",
+    uploading: "Nahráva sa…",
   },
   feedback: {
     checkEmailPassword: "Skontrolujte svoj e-mail a heslo.",
@@ -1003,6 +1020,11 @@ const sk: Dict = {
     fillBookingDetails: "Vyplňte údaje rezervácie.",
     chooseClientOrWalkIn: "Vyberte existujúceho klienta alebo zadajte meno zákazníka.",
     bookingAdded: "Rezervácia pridaná do kalendára.",
+    invalidImageType: "Vyberte obrázok vo formáte JPG, PNG alebo WebP.",
+    imageTooLarge: "Obrázok je príliš veľký. Maximálna veľkosť je 3 MB.",
+    avatarUpdated: "Profilová fotka aktualizovaná.",
+    avatarRemoved: "Profilová fotka odstránená.",
+    avatarUploadFailed: "Obrázok sa nepodarilo nahrať. Skúste znova.",
   },
   consent: {
     banner: {

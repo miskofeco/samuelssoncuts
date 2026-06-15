@@ -95,7 +95,7 @@ export function ApprovalQueue({
                 className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-500/30 dark:bg-amber-500/5"
               >
                 <div className="flex items-center gap-3">
-                  <Avatar name={client.name} size="md" />
+                  <Avatar name={client.name} src={client.avatarUrl} size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-black dark:text-white">
                       {client.name}

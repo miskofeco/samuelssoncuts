@@ -76,7 +76,7 @@ export function Sidebar({
 
       <div className="mt-6 border-t border-black/10 pt-4 dark:border-white/10">
         <div className="flex items-center gap-3">
-          <Avatar name={profile.full_name} size="md" />
+          <Avatar name={profile.full_name} src={profile.avatar_url} size="md" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-black dark:text-white">
               {profile.full_name}

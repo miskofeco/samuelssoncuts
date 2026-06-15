@@ -23,6 +23,7 @@ export type ClientProfile = {
   role: Role;
   emailConfirmed: boolean;
   createdAt: string;
+  avatarUrl?: string | null;
 };
 
 export type Service = {
