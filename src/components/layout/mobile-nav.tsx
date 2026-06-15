@@ -68,11 +68,11 @@ export function MobileNav({
       {open ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="ss-overlay-in absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <div className="absolute left-0 top-0 h-full w-[82%] max-w-xs overflow-y-auto bg-white p-4 shadow-2xl dark:bg-stone-900">
+          <div className="ss-drawer-in absolute left-0 top-0 h-full w-[82%] max-w-xs overflow-y-auto bg-white p-4 shadow-2xl dark:bg-stone-900">
             <Sidebar sections={sections} profile={profile} />
           </div>
         </div>

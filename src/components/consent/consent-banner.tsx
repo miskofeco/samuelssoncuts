@@ -29,7 +29,7 @@ export function ConsentBanner() {
       aria-label={t.consent.banner.title}
       className="fixed inset-x-0 bottom-0 z-50 p-3 sm:p-4"
     >
-      <div className="mx-auto w-full max-w-3xl rounded-2xl border border-black/10 bg-white/95 p-4 shadow-[0_18px_70px_rgba(0,0,0,0.18)] backdrop-blur-xl dark:border-white/10 dark:bg-stone-900/95 sm:p-5">
+      <div className="ss-banner-in mx-auto w-full max-w-3xl rounded-2xl border border-black/10 bg-white/95 p-4 shadow-[0_18px_70px_rgba(0,0,0,0.18)] backdrop-blur-xl dark:border-white/10 dark:bg-stone-900/95 sm:p-5">
         <div className="flex flex-col gap-4">
           <div>
             <h2 className="text-base font-semibold text-black dark:text-white">

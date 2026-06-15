@@ -40,7 +40,7 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="ss-overlay-in absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden
       />
@@ -49,7 +49,7 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-t-2xl border border-black/10 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-stone-900 sm:max-w-lg sm:rounded-2xl",
+          "ss-modal-panel relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-t-2xl border border-black/10 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-stone-900 sm:max-w-lg sm:rounded-2xl",
           className,
         )}
       >
