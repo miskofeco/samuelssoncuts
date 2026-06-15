@@ -11,9 +11,9 @@ import {
   todayIso,
   type MonthCell,
 } from "@/domain/schedule";
+import { localeFor } from "@/i18n/config";
+import { useLang, useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
-
-const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function MonthCalendar({
   initialMonth,
@@ -30,6 +30,9 @@ export function MonthCalendar({
   className?: string;
   footer?: ReactNode;
 }) {
+  const t = useT();
+  const locale = localeFor(useLang());
+  const weekdays = t.weekdaysShort;
   const [month, setMonth] = useState(initialMonth ?? monthKey(todayIso()));
   const cells = monthGrid(month);
 
@@ -37,10 +40,10 @@ export function MonthCalendar({
     <div className={cn("w-full", className)}>
       <div className="flex items-center justify-between">
         <h3 className="text-base font-semibold text-black dark:text-white">
-          {monthLabel(month)}
+          {monthLabel(month, locale)}
         </h3>
         <div className="flex items-center gap-1">
-          <NavButton label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))}>
+          <NavButton label={t.common.previousMonth} onClick={() => setMonth(shiftMonth(month, -1))}>
             <path d="M15 18l-6-6 6-6" />
           </NavButton>
           <button
@@ -48,9 +51,9 @@ export function MonthCalendar({
             onClick={() => setMonth(monthKey(todayIso()))}
             className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
           >
-            Today
+            {t.common.today}
           </button>
-          <NavButton label="Next month" onClick={() => setMonth(shiftMonth(month, 1))}>
+          <NavButton label={t.common.nextMonth} onClick={() => setMonth(shiftMonth(month, 1))}>
             <path d="M9 18l6-6-6-6" />
           </NavButton>
         </div>

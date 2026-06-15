@@ -1,13 +1,19 @@
 import type { ReactNode } from "react";
 
+import type { Dict } from "@/i18n/dictionaries";
+
+// Stable keys into the `nav` dictionary group. The label is resolved at render
+// time in the consuming component (Sidebar) so it stays localized.
+type NavKey = keyof Dict["nav"];
+
 export type NavItem = {
   href: string;
-  label: string;
+  key: NavKey;
   icon: ReactNode;
 };
 
 export type NavSection = {
-  heading?: string;
+  headingKey?: NavKey;
   items: NavItem[];
 };
 
@@ -93,16 +99,16 @@ const Settings = () => (
 export const clientNav: NavSection[] = [
   {
     items: [
-      { href: "/client", label: "Overview", icon: <Grid /> },
-      { href: "/client/book", label: "Book appointment", icon: <CalendarPlus /> },
-      { href: "/client/reservations", label: "My reservations", icon: <ListChecks /> },
+      { href: "/client", key: "overview", icon: <Grid /> },
+      { href: "/client/book", key: "bookAppointment", icon: <CalendarPlus /> },
+      { href: "/client/reservations", key: "myReservations", icon: <ListChecks /> },
     ],
   },
   {
-    heading: "Account",
+    headingKey: "account",
     items: [
-      { href: "/client/notifications", label: "Notifications", icon: <Bell /> },
-      { href: "/client/profile", label: "Profile", icon: <User /> },
+      { href: "/client/notifications", key: "notifications", icon: <Bell /> },
+      { href: "/client/profile", key: "profile", icon: <User /> },
     ],
   },
 ];
@@ -110,18 +116,18 @@ export const clientNav: NavSection[] = [
 export const adminNav: NavSection[] = [
   {
     items: [
-      { href: "/admin", label: "Dashboard", icon: <Grid /> },
-      { href: "/admin/calendar", label: "Calendar", icon: <Calendar /> },
-      { href: "/admin/requests", label: "Requests", icon: <Inbox /> },
-      { href: "/admin/approvals", label: "Approvals", icon: <UserCheck /> },
+      { href: "/admin", key: "dashboard", icon: <Grid /> },
+      { href: "/admin/calendar", key: "calendar", icon: <Calendar /> },
+      { href: "/admin/requests", key: "requests", icon: <Inbox /> },
+      { href: "/admin/approvals", key: "approvals", icon: <UserCheck /> },
     ],
   },
   {
-    heading: "Manage",
+    headingKey: "manage",
     items: [
-      { href: "/admin/clients", label: "Clients", icon: <Users /> },
-      { href: "/admin/availability", label: "Availability", icon: <CalendarOff /> },
-      { href: "/admin/settings", label: "Settings", icon: <Settings /> },
+      { href: "/admin/clients", key: "clients", icon: <Users /> },
+      { href: "/admin/availability", key: "availability", icon: <CalendarOff /> },
+      { href: "/admin/settings", key: "settings", icon: <Settings /> },
     ],
   },
 ];

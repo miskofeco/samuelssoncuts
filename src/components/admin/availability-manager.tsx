@@ -12,6 +12,8 @@ import { MonthCalendar } from "@/components/shared/month-calendar";
 import { StatusPill } from "@/components/shared/status-pill";
 import { addDays, formatFullDay } from "@/domain/schedule";
 import type { ActionResult } from "@/domain/types";
+import { localeFor } from "@/i18n/config";
+import { useLang, useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
 
 type BlockedRange = { id: string; start: string; end: string; reason: string | null };
@@ -23,6 +25,8 @@ export function AvailabilityManager({
   ranges: BlockedRange[];
   blockedDates: Set<string>;
 }) {
+  const t = useT();
+  const locale = localeFor(useLang());
   const [start, setStart] = useState(addDays(1));
   const [end, setEnd] = useState(addDays(1));
   const [reason, setReason] = useState("");
@@ -48,15 +52,15 @@ export function AvailabilityManager({
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
       <Card className="rounded-2xl p-5">
-        <SectionHeader eyebrow="Vacation" title="Block dates" />
+        <SectionHeader eyebrow={t.admin.vacation} title={t.admin.blockDates} />
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-          Blocked days are hidden from clients when they pick preferred dates.
+          {t.admin.blockDatesDescription}
         </p>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <Field
             type="date"
-            label="From"
+            label={t.admin.from}
             value={start}
             min={addDays(0)}
             onChange={(event) => {
@@ -66,24 +70,24 @@ export function AvailabilityManager({
           />
           <Field
             type="date"
-            label="To"
+            label={t.admin.to}
             value={end}
             min={start}
             onChange={(event) => setEnd(event.target.value)}
           />
         </div>
         <Field
-          label="Reason (optional)"
+          label={`${t.admin.reason} ${t.common.optional}`}
           value={reason}
           onChange={(event) => setReason(event.target.value)}
-          placeholder="Holiday, training, …"
+          placeholder={t.admin.reasonPlaceholder}
           className="mt-3"
         />
 
         <Feedback result={feedback} className="mt-3" />
 
         <Button type="button" onClick={block} disabled={pending} className="mt-3">
-          {pending ? "Saving…" : "Block these dates"}
+          {pending ? t.common.saving : t.admin.blockTheseDates}
         </Button>
 
         <div className="mt-6">
@@ -91,7 +95,7 @@ export function AvailabilityManager({
             renderDay={(cell) =>
               blockedDates.has(cell.date) ? (
                 <span className="mt-1 block rounded bg-red-100 px-1 py-0.5 text-center text-[0.6rem] font-semibold uppercase text-red-700 dark:bg-red-500/20 dark:text-red-300">
-                  Off
+                  {t.admin.off}
                 </span>
               ) : null
             }
@@ -101,12 +105,12 @@ export function AvailabilityManager({
 
       <Card className="rounded-2xl p-5">
         <SectionHeader
-          title="Blocked periods"
+          title={t.admin.blockedPeriods}
           action={<StatusPill tone={ranges.length > 0 ? "danger" : "success"}>{ranges.length}</StatusPill>}
         />
         <div className="mt-4 space-y-2">
           {ranges.length === 0 ? (
-            <EmptyState title="No blocked dates" description="Your full calendar is open for bookings." />
+            <EmptyState title={t.admin.noBlockedDates} description={t.admin.noBlockedDescription} />
           ) : (
             ranges.map((range) => (
               <div
@@ -118,8 +122,8 @@ export function AvailabilityManager({
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-black dark:text-white">
                     {range.start === range.end
-                      ? formatFullDay(range.start)
-                      : `${formatFullDay(range.start)} → ${formatFullDay(range.end)}`}
+                      ? formatFullDay(range.start, locale)
+                      : `${formatFullDay(range.start, locale)} → ${formatFullDay(range.end, locale)}`}
                   </p>
                   {range.reason ? (
                     <p className="truncate text-xs text-stone-500 dark:text-stone-400">
@@ -134,7 +138,7 @@ export function AvailabilityManager({
                   onClick={() => unblock(range.id)}
                   className="shrink-0 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
                 >
-                  Reopen
+                  {t.admin.reopen}
                 </Button>
               </div>
             ))

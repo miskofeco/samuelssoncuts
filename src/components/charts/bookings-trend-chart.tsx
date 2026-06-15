@@ -17,7 +17,7 @@ export function BookingsTrendChart({
 }) {
   return (
     <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 600, height: 256 }}>
-      <AreaChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+      <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="bookingsFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="currentColor" stopOpacity={0.25} />
@@ -26,7 +26,7 @@ export function BookingsTrendChart({
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.08} vertical={false} />
         <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "currentColor", opacity: 0.6 }} />
-        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={32} tick={{ fontSize: 12, fill: "currentColor", opacity: 0.6 }} />
+        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} tick={{ fontSize: 12, fill: "currentColor", opacity: 0.7 }} />
         <Tooltip
           cursor={{ stroke: "currentColor", strokeOpacity: 0.15 }}
           contentStyle={{

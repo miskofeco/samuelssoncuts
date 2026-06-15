@@ -2,22 +2,27 @@ import { Card, SectionHeader } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusPill } from "@/components/shared/status-pill";
 import type { Notification } from "@/domain/types";
+import { getDict } from "@/i18n/server";
 
-export function NotificationList({
+export async function NotificationList({
   notifications,
-  title = "Notifications",
+  title,
   maxHeight = "max-h-[420px]",
 }: {
   notifications: Notification[];
   title?: string;
   maxHeight?: string;
 }) {
+  const t = await getDict();
   return (
     <Card className="rounded-2xl p-5">
-      <SectionHeader title={title} action={<StatusPill>{notifications.length}</StatusPill>} />
+      <SectionHeader
+        title={title ?? t.client.notificationsTitle}
+        action={<StatusPill>{notifications.length}</StatusPill>}
+      />
       <div className={`mt-4 space-y-2 overflow-auto pr-1 ${maxHeight}`}>
         {notifications.length === 0 ? (
-          <EmptyState title="No notifications yet" />
+          <EmptyState title={t.client.noNotifications} />
         ) : (
           notifications.map((notification) => (
             <div

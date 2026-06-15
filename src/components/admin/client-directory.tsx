@@ -9,6 +9,8 @@ import { DataTable, type Column } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusPill } from "@/components/shared/status-pill";
 import type { ApprovalStatus, ClientProfile } from "@/domain/types";
+import type { Dict } from "@/i18n/dictionaries";
+import { useT } from "@/i18n/provider";
 
 const statusTone: Record<ApprovalStatus, "success" | "warning" | "danger"> = {
   approved: "success",
@@ -16,7 +18,19 @@ const statusTone: Record<ApprovalStatus, "success" | "warning" | "danger"> = {
   rejected: "danger",
 };
 
+function statusLabel(t: Dict, status: ApprovalStatus) {
+  switch (status) {
+    case "approved":
+      return t.statuses.approved;
+    case "pending":
+      return t.statuses.approvalPending;
+    case "rejected":
+      return t.statuses.rejected;
+  }
+}
+
 export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
+  const t = useT();
   const router = useRouter();
   const [query, setQuery] = useState("");
 
@@ -43,7 +57,7 @@ export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
   const columns: Column<ClientProfile>[] = [
     {
       key: "name",
-      header: "Client",
+      header: t.admin.colClient,
       cell: (client) => (
         <div className="flex items-center gap-3">
           <Avatar name={client.name} size="sm" tone="muted" />
@@ -56,41 +70,44 @@ export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
     },
     {
       key: "phone",
-      header: "Phone",
+      header: t.admin.colPhone,
       hideOnMobile: true,
       cell: (client) => client.phone || "—",
     },
     {
       key: "verified",
-      header: "Email",
+      header: t.admin.colEmail,
       hideOnMobile: true,
       cell: (client) =>
         client.emailConfirmed ? (
-          <StatusPill tone="success">Verified</StatusPill>
+          <StatusPill tone="success">{t.admin.verified}</StatusPill>
         ) : (
-          <StatusPill tone="neutral">Unverified</StatusPill>
+          <StatusPill tone="neutral">{t.admin.unverified}</StatusPill>
         ),
     },
     {
       key: "status",
-      header: "Status",
+      header: t.admin.colStatus,
       align: "right",
-      cell: (client) => <StatusPill tone={statusTone[client.status]}>{client.status}</StatusPill>,
+      cell: (client) => (
+        <StatusPill tone={statusTone[client.status]}>{statusLabel(t, client.status)}</StatusPill>
+      ),
     },
   ];
 
   return (
     <Card className="rounded-2xl p-5">
       <SectionHeader
-        eyebrow="Directory"
-        title="Clients"
-        action={<StatusPill tone="neutral">{people.length} total</StatusPill>}
+        eyebrow={t.admin.clientsEyebrow}
+        title={t.admin.clientsTitle}
+        action={<StatusPill tone="neutral">{t.admin.totalCount(people.length)}</StatusPill>}
       />
       <input
         type="search"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search by name or email"
+        aria-label={t.admin.searchClientsLabel}
+        placeholder={t.admin.searchClientsPlaceholder}
         className="mt-4 h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white dark:placeholder:text-stone-500"
       />
       <div className="mt-3">
@@ -99,7 +116,7 @@ export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
           rows={rows}
           rowKey={(client) => client.id}
           onRowClick={(client) => router.push(`/admin/clients/${client.id}`)}
-          empty={<EmptyState title="No clients found" description={`Nothing matches “${query}”.`} />}
+          empty={<EmptyState title={t.admin.noClientsFound} description={t.admin.nothingMatches(query)} />}
         />
       </div>
     </Card>

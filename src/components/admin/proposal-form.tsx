@@ -11,10 +11,10 @@ import {
   addDays,
   dayCapacity,
   formatDay,
+  formatMonth,
   hoursInWindow,
   monthGrid,
   monthKey,
-  monthLabel,
   serviceById,
   shiftMonth,
   todayIso,
@@ -32,19 +32,33 @@ import type {
   RequestStatus,
   Service,
 } from "@/domain/types";
+import { localeFor } from "@/i18n/config";
+import { useLang, useT } from "@/i18n/provider";
+import type { Dict } from "@/i18n/dictionaries";
 import { cn } from "@/lib/classnames";
 
-const calendarWeekdays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
-
-const statusMeta: Record<
+const statusTone: Record<
   RequestStatus,
-  { label: string; tone: "neutral" | "info" | "success" | "warning" | "danger" }
+  "neutral" | "info" | "success" | "warning" | "danger"
 > = {
-  pending: { label: "New request", tone: "warning" },
-  proposed: { label: "Awaiting client", tone: "info" },
-  confirmed: { label: "Confirmed", tone: "success" },
-  declined: { label: "Declined — re-propose", tone: "danger" },
+  pending: "warning",
+  proposed: "info",
+  confirmed: "success",
+  declined: "danger",
 };
+
+function statusLabel(t: Dict, status: RequestStatus) {
+  switch (status) {
+    case "pending":
+      return t.admin.statusNewRequest;
+    case "proposed":
+      return t.admin.statusAwaitingClient;
+    case "confirmed":
+      return t.admin.statusConfirmed;
+    case "declined":
+      return t.admin.statusDeclined;
+  }
+}
 
 export function ProposalComposer({
   appointments,
@@ -61,8 +75,11 @@ export function ProposalComposer({
   activeProposal?: Proposal;
   blockedDates: ReadonlySet<string>;
 }) {
+  const t = useT();
+  const locale = localeFor(useLang());
   const service = serviceById(request.serviceId, services);
-  const meta = statusMeta[request.status];
+  const tone = statusTone[request.status];
+  const label = statusLabel(t, request.status);
   const canPropose = request.status === "pending" || request.status === "declined";
 
   const [open, setOpen] = useState(request.status === "pending");
@@ -72,7 +89,7 @@ export function ProposalComposer({
     request.preferences[0]?.window ?? "all",
   );
   const [time, setTime] = useState(() => firstFreeTime(initialDate));
-  const [note, setNote] = useState("Please confirm if this time works for you.");
+  const [note, setNote] = useState(t.admin.defaultProposalNote);
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
 
@@ -141,12 +158,12 @@ export function ProposalComposer({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-semibold text-black dark:text-white">
-              {client?.name ?? "Unknown client"}
+              {client?.name ?? t.admin.clientFallback}
             </p>
-            <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
+            <StatusPill tone={tone}>{label}</StatusPill>
           </div>
           <p className="mt-0.5 truncate text-sm text-stone-500 dark:text-stone-400">
-            {service.name} · {service.duration} min
+            {service.name} · {service.duration} {t.admin.minutesShort}
             {client?.email ? ` · ${client.email}` : ""}
           </p>
         </div>
@@ -165,7 +182,7 @@ export function ProposalComposer({
       {request.status === "confirmed" && activeProposal ? (
         <div className="border-t border-black/5 px-4 py-3 dark:border-white/5">
           <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-300">
-            Booked for {formatDay(activeProposal.date)} at {activeProposal.time}.
+            {t.admin.bookedConfirmed(formatDay(activeProposal.date, locale), activeProposal.time)}
           </p>
         </div>
       ) : null}
@@ -174,8 +191,7 @@ export function ProposalComposer({
       {request.status === "proposed" && activeProposal ? (
         <div className="border-t border-black/5 px-4 py-3 dark:border-white/5">
           <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm font-medium text-sky-900 dark:bg-sky-500/10 dark:text-sky-300">
-            Proposed {formatDay(activeProposal.date)} at {activeProposal.time} — waiting for
-            the client to confirm.
+            {t.admin.proposedWaiting(formatDay(activeProposal.date, locale), activeProposal.time)}
           </p>
         </div>
       ) : null}
@@ -190,7 +206,7 @@ export function ProposalComposer({
           ) : null}
 
           <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-            Client preferences
+            {t.admin.clientPreferences}
           </p>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
             {request.preferences.map((preference) => {
@@ -208,10 +224,10 @@ export function ProposalComposer({
                   )}
                 >
                   <span className="block text-xs font-semibold opacity-70">
-                    Choice {preference.rank}
+                    {t.client.choice(preference.rank)}
                   </span>
-                  <span className="block font-semibold">{formatDay(preference.date)}</span>
-                  <span className="block text-xs opacity-80">{preference.window}</span>
+                  <span className="block font-semibold">{formatDay(preference.date, locale)}</span>
+                  <span className="block text-xs opacity-80">{t.windows[preference.window]}</span>
                 </button>
               );
             })}
@@ -222,6 +238,8 @@ export function ProposalComposer({
               <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
                 {/* Availability calendar */}
                 <AvailabilityCalendar
+                  t={t}
+                  locale={locale}
                   appointments={appointments}
                   blockedDates={blockedDates}
                   preferences={request.preferences}
@@ -235,7 +253,7 @@ export function ProposalComposer({
               <div className="grid gap-2 sm:grid-cols-2">
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                    Date
+                    {t.admin.date}
                   </span>
                   <input
                     type="date"
@@ -247,7 +265,7 @@ export function ProposalComposer({
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                    Time of day
+                    {t.admin.timeOfDay}
                   </span>
                   <select
                     value={windowFilter}
@@ -256,11 +274,11 @@ export function ProposalComposer({
                     }
                     className="mt-1.5 h-11 w-full rounded-lg border border-black/10 px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white"
                   >
-                    <option value="all">All hours</option>
-                    <option value="Morning">Morning</option>
-                    <option value="Midday">Midday</option>
-                    <option value="Afternoon">Afternoon</option>
-                    <option value="Evening">Evening</option>
+                    <option value="all">{t.admin.allHours}</option>
+                    <option value="Morning">{t.windows.Morning}</option>
+                    <option value="Midday">{t.windows.Midday}</option>
+                    <option value="Afternoon">{t.windows.Afternoon}</option>
+                    <option value="Evening">{t.windows.Evening}</option>
                   </select>
                 </label>
               </div>
@@ -268,7 +286,7 @@ export function ProposalComposer({
               {/* Time slot grid */}
               <div className="mt-3">
                 <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                  Pick a slot
+                  {t.admin.pickSlot}
                 </span>
                 <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
                   {slots.map(({ hour, taken }) => {
@@ -279,7 +297,7 @@ export function ProposalComposer({
                         type="button"
                         disabled={taken}
                         onClick={() => setTime(hour)}
-                        title={taken ? "Already booked" : windowForTime(hour)}
+                        title={taken ? t.admin.alreadyBooked : t.windows[windowForTime(hour)]}
                         className={cn(
                           "h-10 rounded-lg border text-sm font-semibold tabular-nums transition",
                           taken &&
@@ -300,11 +318,11 @@ export function ProposalComposer({
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.7rem] text-stone-400 dark:text-stone-500">
                   <span className="flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded border border-black/10 bg-white dark:border-white/15 dark:bg-stone-900" />
-                    Open
+                    {t.admin.legendOpen}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded border border-black/5 bg-stone-100 dark:bg-stone-800" />
-                    Booked
+                    {t.admin.legendBooked}
                   </span>
                 </div>
               </div>
@@ -314,7 +332,7 @@ export function ProposalComposer({
               {/* Note */}
               <label className="mt-3 block">
                 <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                  Message to client
+                  {t.admin.messageToClient}
                 </span>
                 <textarea
                   value={note}
@@ -326,7 +344,7 @@ export function ProposalComposer({
 
               {conflict ? (
                 <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-500/10 dark:text-red-300">
-                  That slot is already booked. Pick another.
+                  {t.admin.slotTakenShort}
                 </p>
               ) : null}
               <Feedback result={feedback && !feedback.ok ? feedback : null} className="mt-2" />
@@ -338,10 +356,10 @@ export function ProposalComposer({
                 className="mt-3 w-full"
               >
                 {pending
-                  ? "Sending…"
+                  ? t.common.sending
                   : request.status === "declined"
-                    ? `Re-propose ${formatDay(date)} at ${time}`
-                    : `Propose ${formatDay(date)} at ${time}`}
+                    ? t.admin.reproposeAt(formatDay(date, locale), time)
+                    : t.admin.proposeAt(formatDay(date, locale), time)}
               </Button>
             </>
           ) : null}
@@ -352,12 +370,16 @@ export function ProposalComposer({
 }
 
 function AvailabilityCalendar({
+  t,
+  locale,
   appointments,
   blockedDates,
   preferences,
   selectedDate,
   onPickDate,
 }: {
+  t: Dict;
+  locale: string;
   appointments: Appointment[];
   blockedDates: ReadonlySet<string>;
   preferences: Preference[];
@@ -381,19 +403,19 @@ function AvailabilityCalendar({
   return (
     <div className="rounded-xl border border-black/10 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-800/40">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-black dark:text-white">{monthLabel(month)}</h4>
+        <h4 className="text-sm font-semibold text-black dark:text-white">{formatMonth(`${month}-01`, locale)}</h4>
         <div className="flex items-center gap-1">
-          <CalNav label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))}>
+          <CalNav label={t.common.previousMonth} onClick={() => setMonth(shiftMonth(month, -1))}>
             <path d="M15 18l-6-6 6-6" />
           </CalNav>
-          <CalNav label="Next month" onClick={() => setMonth(shiftMonth(month, 1))}>
+          <CalNav label={t.common.nextMonth} onClick={() => setMonth(shiftMonth(month, 1))}>
             <path d="M9 18l6-6-6-6" />
           </CalNav>
         </div>
       </div>
 
       <div className="mt-3 grid grid-cols-7 gap-1">
-        {calendarWeekdays.map((day) => (
+        {t.weekdaysMini.map((day) => (
           <div
             key={day}
             className="pb-1 text-center text-[0.65rem] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500"
@@ -426,8 +448,8 @@ function AvailabilityCalendar({
               onClick={() => onPickDate(cell.date)}
               title={
                 blocked
-                  ? "Closed"
-                  : `${booked}/${dayCapacity} booked${rank ? ` · client choice ${rank}` : ""}`
+                  ? t.admin.off
+                  : `${t.admin.bookedOfCapacity(booked, dayCapacity)}${rank ? ` · ${t.admin.clientChoiceN(rank)}` : ""}`
               }
               className={cn(
                 "relative flex h-9 flex-col items-center justify-center rounded-lg border text-xs tabular-nums transition",
@@ -473,21 +495,21 @@ function AvailabilityCalendar({
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.65rem] text-stone-500 dark:text-stone-400">
         <span className="flex items-center gap-1.5">
           <span className="h-1.5 w-3 rounded-full bg-emerald-500" />
-          Open
+          {t.admin.legendOpen}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-1.5 w-3 rounded-full bg-amber-500" />
-          Filling
+          {t.admin.legendFilling}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-1.5 w-3 rounded-full bg-red-500" />
-          Full
+          {t.admin.legendFull}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="flex h-3 w-3 items-center justify-center rounded-full bg-black text-[0.5rem] font-bold text-white dark:bg-white dark:text-black">
             #
           </span>
-          Client pick
+          {t.admin.legendClientPick}
         </span>
       </div>
     </div>

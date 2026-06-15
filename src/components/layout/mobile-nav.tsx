@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
 import { Logo } from "@/components/shared/logo";
+import { LanguageToggle } from "@/components/shared/language-toggle";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { useT } from "@/i18n/provider";
 import type { AuthProfile } from "@/server/auth";
 import type { NavSection } from "./nav-items";
 import { Sidebar } from "./sidebar";
@@ -16,6 +18,7 @@ export function MobileNav({
   sections: NavSection[];
   profile: AuthProfile;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const [openedAt, setOpenedAt] = useState(pathname);
@@ -46,7 +49,7 @@ export function MobileNav({
           <button
             type="button"
             onClick={openDrawer}
-            aria-label="Open menu"
+            aria-label={t.common.openMenu}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-black/10 text-stone-700 dark:border-white/10 dark:text-stone-300"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -56,7 +59,10 @@ export function MobileNav({
           <Logo className="h-6 max-w-full shrink" priority />
           <span className="sr-only">Samuelsson Cuts</span>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <LanguageToggle />
+          <ThemeToggle />
+        </div>
       </div>
 
       {open ? (

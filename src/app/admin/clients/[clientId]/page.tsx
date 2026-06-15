@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { ClientDetail } from "@/components/admin/client-detail";
 import { PageHeader } from "@/components/shared/page-header";
+import { getDict } from "@/i18n/server";
 import { requireAdmin } from "@/server/auth";
 import { loadClientHistory } from "@/server/dashboard-data";
 
@@ -16,6 +17,7 @@ export default async function AdminClientDetailPage({
   await requireAdmin();
   const { clientId } = await params;
   const data = await loadClientHistory(clientId);
+  const t = await getDict();
 
   if (!data.client) {
     notFound();
@@ -26,10 +28,10 @@ export default async function AdminClientDetailPage({
       <PageHeader
         eyebrow={
           <Link href="/admin/clients" className="hover:underline">
-            ← All clients
+            {t.admin.allClientsBack}
           </Link>
         }
-        title="Client profile"
+        title={t.admin.clientProfile}
       />
       <ClientDetail
         client={data.client}

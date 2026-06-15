@@ -2,6 +2,8 @@
 
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
+import { useT } from "@/i18n/provider";
+
 // Monochrome-friendly: distinct stone/emerald/sky/amber so it reads in both themes.
 const colors: Record<string, string> = {
   pending: "#f59e0b",
@@ -15,12 +17,13 @@ export function RequestsByStatusChart({
 }: {
   data: { label: string; value: number; key: string }[];
 }) {
+  const t = useT();
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
   if (total === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-stone-500 dark:text-stone-400">
-        No requests yet.
+        {t.charts.noRequestsYet}
       </div>
     );
   }

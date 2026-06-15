@@ -14,6 +14,7 @@ import { Field, TextAreaField } from "@/components/shared/form";
 import { Modal } from "@/components/shared/modal";
 import { StatusPill } from "@/components/shared/status-pill";
 import type { ActionResult } from "@/domain/types";
+import { useT } from "@/i18n/provider";
 
 type ServiceItem = {
   id: string;
@@ -35,6 +36,7 @@ type Draft = {
 const emptyDraft: Draft = { name: "", description: "", duration: "45", price: "32" };
 
 export function ServiceManager({ services }: { services: ServiceItem[] }) {
+  const t = useT();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
@@ -81,9 +83,9 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
   return (
     <Card className="rounded-2xl p-5">
       <SectionHeader
-        eyebrow="Catalogue"
-        title="Services"
-        action={<Button type="button" onClick={openCreate}>Add service</Button>}
+        eyebrow={t.admin.catalogue}
+        title={t.admin.services}
+        action={<Button type="button" onClick={openCreate}>{t.admin.addService}</Button>}
       />
 
       <Feedback result={feedback} className="mt-4" />
@@ -99,15 +101,15 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
                 <p className="truncate font-semibold text-black dark:text-white">
                   {service.name}
                 </p>
-                {!service.active ? <StatusPill tone="neutral">Hidden</StatusPill> : null}
+                {!service.active ? <StatusPill tone="neutral">{t.admin.hiddenLabel}</StatusPill> : null}
               </div>
               <p className="text-sm text-stone-500 dark:text-stone-400">
-                {service.duration} min · ${service.price}
+                {service.duration} {t.admin.minutesShort} · ${service.price}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <Button type="button" variant="secondary" onClick={() => openEdit(service)}>
-                Edit
+                {t.admin.edit}
               </Button>
               <Button
                 type="button"
@@ -115,7 +117,7 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
                 disabled={pending}
                 onClick={() => toggle(service)}
               >
-                {service.active ? "Hide" : "Show"}
+                {service.active ? t.admin.hide : t.admin.show}
               </Button>
             </div>
           </div>
@@ -125,40 +127,40 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
       <Modal
         open={draft !== null}
         onClose={() => setDraft(null)}
-        title={draft?.id ? "Edit service" : "New service"}
+        title={draft?.id ? t.admin.editService : t.admin.addService}
       >
         {draft ? (
           <div className="space-y-4">
             <Field
-              label="Name"
+              label={t.admin.serviceName}
               value={draft.name}
               onChange={(event) => setDraft({ ...draft, name: event.target.value })}
             />
             <TextAreaField
-              label="Description"
+              label={t.admin.serviceDescription}
               value={draft.description}
               onChange={(event) => setDraft({ ...draft, description: event.target.value })}
             />
             <div className="grid grid-cols-2 gap-3">
               <Field
                 type="number"
-                label="Duration (min)"
+                label={t.admin.serviceDuration}
                 value={draft.duration}
                 onChange={(event) => setDraft({ ...draft, duration: event.target.value })}
               />
               <Field
                 type="number"
-                label="Price ($)"
+                label={t.admin.servicePrice}
                 value={draft.price}
                 onChange={(event) => setDraft({ ...draft, price: event.target.value })}
               />
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => setDraft(null)}>
-                Cancel
+                {t.common.cancel}
               </Button>
               <Button type="button" onClick={save} disabled={pending}>
-                {pending ? "Saving…" : "Save"}
+                {pending ? t.common.saving : t.common.save}
               </Button>
             </div>
           </div>

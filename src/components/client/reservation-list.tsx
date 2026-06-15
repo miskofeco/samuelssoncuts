@@ -14,8 +14,10 @@ import type {
   Proposal,
   Service,
 } from "@/domain/types";
+import { localeFor } from "@/i18n/config";
+import { useLang, useT } from "@/i18n/provider";
 
-import { requestStatusMeta } from "./status-meta";
+import { statusMeta } from "./status-meta";
 
 export function ReservationList({
   requests,
@@ -29,14 +31,15 @@ export function ReservationList({
   /** "active" shows actionable cards with controls; "history" is read-only. */
   variant: "active" | "history";
 }) {
+  const t = useT();
   if (requests.length === 0) {
     return (
       <EmptyState
-        title={variant === "active" ? "No open reservations" : "No past reservations"}
+        title={variant === "active" ? t.client.noOpenReservations : t.client.noPastReservations}
         description={
           variant === "active"
-            ? "Book an appointment and it will show up here while you wait for a proposed time."
-            : "Confirmed and closed reservations will be archived here."
+            ? t.client.noOpenDescription
+            : t.client.noPastDescription
         }
       />
     );
@@ -68,9 +71,11 @@ function ReservationCard({
   service: Service;
   variant: "active" | "history";
 }) {
+  const t = useT();
+  const locale = localeFor(useLang());
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
-  const meta = requestStatusMeta[request.status];
+  const meta = statusMeta(t)[request.status];
   const liveProposal = proposal && proposal.status === "sent" ? proposal : undefined;
 
   function respond(accepted: boolean) {
@@ -106,7 +111,7 @@ function ReservationCard({
             key={preference.id}
             className="rounded-lg bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300"
           >
-            {formatFullDay(preference.date)} · {preference.window}
+            {formatFullDay(preference.date, locale)} · {t.windows[preference.window]}
           </span>
         ))}
       </div>
@@ -120,7 +125,7 @@ function ReservationCard({
       {liveProposal ? (
         <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10">
           <p className="font-semibold text-emerald-950 dark:text-emerald-200">
-            Proposed: {formatFullDay(liveProposal.date)} at {liveProposal.time}
+            {t.client.proposedAt(formatFullDay(liveProposal.date, locale), liveProposal.time)}
           </p>
           {liveProposal.note ? (
             <p className="mt-1 text-sm text-emerald-900 dark:text-emerald-300">
@@ -130,7 +135,7 @@ function ReservationCard({
           {variant === "active" ? (
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Button type="button" disabled={pending} onClick={() => respond(true)}>
-                {pending ? "Working…" : "Confirm"}
+                {pending ? t.common.working : t.client.confirm}
               </Button>
               <Button
                 type="button"
@@ -138,7 +143,7 @@ function ReservationCard({
                 disabled={pending}
                 onClick={() => respond(false)}
               >
-                Decline
+                {t.client.decline}
               </Button>
             </div>
           ) : null}
@@ -147,7 +152,7 @@ function ReservationCard({
 
       {request.status === "confirmed" && proposal ? (
         <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-300">
-          Booked for {formatFullDay(proposal.date)} at {proposal.time}.
+          {t.client.bookedFor(formatFullDay(proposal.date, locale), proposal.time)}
         </p>
       ) : null}
 
@@ -163,7 +168,7 @@ function ReservationCard({
             onClick={cancel}
             className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
           >
-            Cancel request
+            {t.client.cancelRequest}
           </Button>
         </div>
       ) : null}

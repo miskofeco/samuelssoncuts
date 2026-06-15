@@ -15,6 +15,7 @@ import type {
   DayWindow,
   Preference,
 } from "@/domain/types";
+import { useT } from "@/i18n/provider";
 
 import { PreferencePicker } from "./preference-picker";
 
@@ -35,6 +36,7 @@ export function RequestForm({
   state: AppState;
   blockedDates: ReadonlySet<string>;
 }) {
+  const t = useT();
   const [serviceId, setServiceId] = useState(state.services[0]?.id ?? "");
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
@@ -81,12 +83,12 @@ export function RequestForm({
     <Card className="rounded-2xl p-3 sm:p-5">
       <form onSubmit={onSubmit}>
         <SectionHeader
-          eyebrow="New appointment"
-          title="Pick three preferred days"
+          eyebrow={t.client.newAppointment}
+          title={t.client.pickThreeDays}
           action={
             <SelectField
-              aria-label="Service"
-              label="Service"
+              aria-label={t.client.service}
+              label={t.client.service}
               value={serviceId}
               onChange={(event) => setServiceId(event.target.value)}
               className="min-w-55"
@@ -111,10 +113,10 @@ export function RequestForm({
         </div>
 
         <TextAreaField
-          label="Notes"
+          label={t.client.notes}
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          placeholder="Anything the barber should know?"
+          placeholder={t.client.notesPlaceholder}
           className="mt-4"
         />
 
@@ -126,10 +128,10 @@ export function RequestForm({
           className="mt-4 w-full sm:w-auto"
         >
           {pending
-            ? "Sending…"
+            ? t.common.sending
             : serviceId
-              ? "Send request"
-              : "No services configured"}
+              ? t.client.sendRequest
+              : t.client.noServices}
         </Button>
       </form>
     </Card>

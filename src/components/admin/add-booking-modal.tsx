@@ -11,6 +11,7 @@ import { Modal } from "@/components/shared/modal";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { workingHoursQuarterly } from "@/domain/schedule";
 import type { ActionResult, ClientProfile, Service } from "@/domain/types";
+import { useT } from "@/i18n/provider";
 
 type CustomerMode = "client" | "walkin";
 
@@ -29,12 +30,13 @@ export function AddBookingModal({
   initialDate?: string;
   initialTime?: string;
 }) {
+  const t = useT();
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Add booking"
-      description="Book an existing client or a walk-in. The slot is reserved immediately."
+      title={t.admin.addBookingTitle}
+      description={t.admin.addBookingDescription}
     >
       {/* Remount per slot so the form re-seeds from initialDate/initialTime
           without a setState-in-effect. */}
@@ -63,6 +65,7 @@ function BookingForm({
   initialTime?: string;
   onClose: () => void;
 }) {
+  const t = useT();
   // Only real, non-admin clients can be booked from the dropdown.
   const bookableClients = clients.filter((client) => client.role !== "admin");
 
@@ -102,15 +105,15 @@ function BookingForm({
     <div className="space-y-4">
         <div>
           <span className="mb-2 block text-sm font-medium text-stone-700 dark:text-stone-300">
-            Customer
+            {t.admin.customer}
           </span>
           <SegmentedControl
-            ariaLabel="Customer type"
+            ariaLabel={t.admin.customer}
             value={mode}
             onChange={setMode}
             options={[
-              { label: "Existing client", value: "client" },
-              { label: "Walk-in", value: "walkin" },
+              { label: t.admin.existingClient, value: "client" },
+              { label: t.admin.walkIn, value: "walkin" },
             ]}
           />
         </div>
@@ -118,8 +121,8 @@ function BookingForm({
         {mode === "client" ? (
           bookableClients.length > 0 ? (
             <Combobox
-              label="Client"
-              placeholder="Type to search clients…"
+              label={t.admin.client}
+              placeholder={t.admin.searchClients}
               value={clientId}
               onChange={setClientId}
               options={bookableClients.map((client) => ({
@@ -129,41 +132,41 @@ function BookingForm({
             />
           ) : (
             <p className="rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-500 dark:bg-stone-800/60 dark:text-stone-400">
-              No registered clients yet. Switch to “Walk-in” to enter a name.
+              {t.admin.noClientsYet}
             </p>
           )
         ) : (
           <Field
-            label="Walk-in name"
+            label={t.admin.walkInName}
             value={customerName}
             onChange={(event) => setCustomerName(event.target.value)}
-            placeholder="e.g. John (phone booking)"
+            placeholder={t.admin.walkInPlaceholder}
             maxLength={120}
           />
         )}
 
         <SelectField
-          label="Service"
+          label={t.client.service}
           value={serviceId}
           onChange={(event) => setServiceId(event.target.value)}
         >
           {services.map((service) => (
             <option key={service.id} value={service.id}>
-              {service.name} — {service.duration} min · ${service.price}
+              {service.name} — {service.duration} {t.admin.minutesShort} · ${service.price}
             </option>
           ))}
         </SelectField>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
-            label="Date"
+            label={t.admin.date}
             type="date"
             value={date}
             onChange={(event) => setDate(event.target.value)}
           />
           <Combobox
-            label="Time"
-            placeholder="Type a time…"
+            label={t.admin.time}
+            placeholder={t.admin.typeTime}
             value={time}
             onChange={setTime}
             options={workingHoursQuarterly.map((hour) => ({ value: hour, label: hour }))}
@@ -171,10 +174,10 @@ function BookingForm({
         </div>
 
         <Field
-          label="Note (optional)"
+          label={`${t.admin.note} ${t.common.optional}`}
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          placeholder="Anything to remember about this booking?"
+          placeholder={t.admin.bookingNotePlaceholder}
           maxLength={1000}
         />
 
@@ -182,10 +185,10 @@ function BookingForm({
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
+            {t.common.cancel}
           </Button>
           <Button type="button" onClick={submit} disabled={disabled}>
-            {pending ? "Adding…" : "Add booking"}
+            {pending ? t.admin.adding : t.admin.addBooking}
           </Button>
         </div>
     </div>

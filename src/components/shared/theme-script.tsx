@@ -10,5 +10,15 @@ const script = `(() => {
 })();`;
 
 export function ThemeScript() {
-  return <script dangerouslySetInnerHTML={{ __html: script }} />;
+  // On the server emit a runnable script (executes during HTML parse, before
+  // paint — preventing the theme flash). On the client emit an inert text/plain
+  // tag so React doesn't warn about rendering a <script>; suppressHydrationWarning
+  // covers the type attribute mismatch. Per Next.js "preventing flash" guide.
+  return (
+    <script
+      type={typeof window === "undefined" ? "text/javascript" : "text/plain"}
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{ __html: script }}
+    />
+  );
 }

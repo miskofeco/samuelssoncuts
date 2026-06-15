@@ -8,6 +8,7 @@ import { getSiteUrl } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { dashboardPathFor, requireAdmin, requireApprovedClient, requireProfile } from "@/server/auth";
 import type { ActionResult, Preference } from "@/domain/types";
+import { getDict } from "@/i18n/server";
 
 const signInSchema = z.object({
   email: z.email(),
@@ -50,8 +51,9 @@ const adminBookingSchema = z
     note: z.string().max(1000).optional(),
   })
   // Exactly one of clientId / customerName: an existing client or a walk-in.
+  // The sentinel message is mapped to a localized string in the action.
   .refine((value) => Boolean(value.clientId) !== Boolean(value.customerName), {
-    message: "Choose an existing client or enter a walk-in name.",
+    message: "client-or-walkin",
   });
 
 const rescheduleSchema = z.object({
@@ -100,13 +102,14 @@ function startsAt(date: string, time: string) {
 }
 
 export async function signInAction(formData: FormData) {
+  const t = await getDict();
   const input = signInSchema.safeParse({
     email: formString(formData, "email"),
     password: formString(formData, "password"),
   });
 
   if (!input.success) {
-    redirect("/login?error=Check your email and password.");
+    redirect(`/login?error=${encodeURIComponent(t.feedback.checkEmailPassword)}`);
   }
 
   const supabase = await createClient();
@@ -120,10 +123,11 @@ export async function signInAction(formData: FormData) {
 }
 
 export async function signInWithOAuthAction(formData: FormData) {
+  const t = await getDict();
   const provider = oauthProviderSchema.safeParse(formString(formData, "provider"));
 
   if (!provider.success) {
-    redirect("/login?error=Unsupported sign-in provider.");
+    redirect(`/login?error=${encodeURIComponent(t.feedback.unsupportedProvider)}`);
   }
 
   const supabase = await createClient();
@@ -135,7 +139,7 @@ export async function signInWithOAuthAction(formData: FormData) {
   });
 
   if (error || !data.url) {
-    redirect(`/login?error=${encodeURIComponent(error?.message ?? "Could not start sign-in.")}`);
+    redirect(`/login?error=${encodeURIComponent(error?.message ?? t.feedback.couldNotStartSignIn)}`);
   }
 
   // Hand off to the provider's consent screen.
@@ -143,6 +147,7 @@ export async function signInWithOAuthAction(formData: FormData) {
 }
 
 export async function registerAction(formData: FormData) {
+  const t = await getDict();
   const input = registerSchema.safeParse({
     email: formString(formData, "email"),
     password: formString(formData, "password"),
@@ -151,7 +156,7 @@ export async function registerAction(formData: FormData) {
   });
 
   if (!input.success) {
-    redirect("/register?error=Fill all fields correctly. Password must have at least 8 characters.");
+    redirect(`/register?error=${encodeURIComponent(t.feedback.fillAllFields)}`);
   }
 
   const supabase = await createClient();
@@ -171,7 +176,7 @@ export async function registerAction(formData: FormData) {
     redirect(`/register?error=${encodeURIComponent(error.message)}`);
   }
 
-  redirect("/login?message=Registration created. Confirm your email if required, then wait for barber approval.");
+  redirect(`/login?message=${encodeURIComponent(t.feedback.registrationCreated)}`);
 }
 
 export async function signOutAction() {
@@ -182,10 +187,11 @@ export async function signOutAction() {
 
 export async function createBookingRequestAction(input: unknown): Promise<ActionResult> {
   const profile = await requireApprovedClient();
+  const t = await getDict();
   const parsed = createRequestSchema.safeParse(input);
 
   if (!parsed.success) {
-    return { ok: false, error: "Pick a service and three preferred days." };
+    return { ok: false, error: t.feedback.pickServiceAndDays };
   }
 
   const supabase = await createClient();
@@ -201,7 +207,7 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
     .single();
 
   if (requestError || !request) {
-    return { ok: false, error: requestError?.message ?? "Unable to create booking request." };
+    return { ok: false, error: requestError?.message ?? t.feedback.unableCreateRequest };
   }
 
   const { error: preferencesError } = await supabase
@@ -228,7 +234,7 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
 
   revalidatePath("/client", "layout");
   revalidatePath("/admin", "layout");
-  return { ok: true, message: "Request sent. The barber will propose a time." };
+  return { ok: true, message: t.feedback.requestSent };
 }
 
 export async function createRequestFromClientAction(
@@ -241,6 +247,7 @@ export async function createRequestFromClientAction(
 
 export async function approveClientAction(clientId: string): Promise<ActionResult> {
   await requireAdmin();
+  const t = await getDict();
   const supabase = await createClient();
 
   // Don't approve anyone who hasn't verified their email yet.
@@ -251,7 +258,7 @@ export async function approveClientAction(clientId: string): Promise<ActionResul
     .single();
 
   if (!candidate?.email_confirmed_at) {
-    return { ok: false, error: "This client has not confirmed their email yet." };
+    return { ok: false, error: t.feedback.emailNotConfirmed };
   }
 
   const { data: profile, error } = await supabase
@@ -262,7 +269,7 @@ export async function approveClientAction(clientId: string): Promise<ActionResul
     .single();
 
   if (error || !profile) {
-    return { ok: false, error: error?.message ?? "Could not approve this client." };
+    return { ok: false, error: error?.message ?? t.feedback.couldNotApprove };
   }
 
   await supabase.from("notifications").insert({
@@ -275,11 +282,12 @@ export async function approveClientAction(clientId: string): Promise<ActionResul
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
-  return { ok: true, message: "Client approved." };
+  return { ok: true, message: t.feedback.clientApproved };
 }
 
 export async function rejectClientAction(clientId: string): Promise<ActionResult> {
   await requireAdmin();
+  const t = await getDict();
   const supabase = await createClient();
 
   const { data: profile, error } = await supabase
@@ -290,7 +298,7 @@ export async function rejectClientAction(clientId: string): Promise<ActionResult
     .single();
 
   if (error || !profile) {
-    return { ok: false, error: error?.message ?? "Could not update this client." };
+    return { ok: false, error: error?.message ?? t.feedback.couldNotUpdateClient };
   }
 
   await supabase.from("notifications").insert({
@@ -302,22 +310,23 @@ export async function rejectClientAction(clientId: string): Promise<ActionResult
   });
 
   revalidatePath("/admin", "layout");
-  return { ok: true, message: "Registration rejected." };
+  return { ok: true, message: t.feedback.registrationRejected };
 }
 
 export async function proposeAppointmentAction(input: unknown): Promise<ActionResult> {
   const admin = await requireAdmin();
+  const t = await getDict();
   const parsed = proposeSchema.safeParse(input);
 
   if (!parsed.success) {
-    return { ok: false, error: "Pick a valid date and time before sending." };
+    return { ok: false, error: t.feedback.pickValidDateTime };
   }
 
   const supabase = await createClient();
   const start = startsAt(parsed.data.date, parsed.data.time);
 
   if (new Date(start).getTime() < Date.now()) {
-    return { ok: false, error: "Choose a time in the future." };
+    return { ok: false, error: t.feedback.chooseFutureTime };
   }
 
   const { data: request, error: requestError } = await supabase
@@ -327,11 +336,11 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
     .single();
 
   if (requestError || !request) {
-    return { ok: false, error: requestError?.message ?? "Booking request not found." };
+    return { ok: false, error: requestError?.message ?? t.feedback.requestNotFound };
   }
 
   if (request.status === "confirmed") {
-    return { ok: false, error: "This request is already confirmed." };
+    return { ok: false, error: t.feedback.alreadyConfirmed };
   }
 
   const { data: service, error: serviceError } = await supabase
@@ -341,7 +350,7 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
     .single();
 
   if (serviceError || !service) {
-    return { ok: false, error: serviceError?.message ?? "Service not found." };
+    return { ok: false, error: serviceError?.message ?? t.feedback.serviceNotFound };
   }
 
   const { data: clientProfile } = await supabase
@@ -361,7 +370,7 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
     .maybeSingle();
 
   if (existing) {
-    return { ok: false, error: "That slot is already booked. Pick another time." };
+    return { ok: false, error: t.feedback.slotTaken };
   }
 
   // Supersede any earlier outstanding proposal so the client only sees the latest.
@@ -384,7 +393,7 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
     .single();
 
   if (proposalError || !proposal) {
-    return { ok: false, error: proposalError?.message ?? "Unable to send proposal." };
+    return { ok: false, error: proposalError?.message ?? t.feedback.unableSendProposal };
   }
 
   await supabase
@@ -402,7 +411,7 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
-  return { ok: true, message: "Proposal sent to the client." };
+  return { ok: true, message: t.feedback.proposalSent };
 }
 
 export async function proposeTimeFromAdminAction(
@@ -418,10 +427,11 @@ export async function proposeTimeFromAdminAction(
 // proposal for the new time. The booking reverts to "proposed" until accepted.
 export async function rescheduleAppointmentAction(input: unknown): Promise<ActionResult> {
   const admin = await requireAdmin();
+  const t = await getDict();
   const parsed = rescheduleSchema.safeParse(input);
 
   if (!parsed.success) {
-    return { ok: false, error: "Pick a valid new date and time." };
+    return { ok: false, error: t.feedback.pickValidNewDateTime };
   }
 
   const supabase = await createClient();
@@ -433,19 +443,19 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
     .single();
 
   if (appointmentError || !appointment) {
-    return { ok: false, error: appointmentError?.message ?? "Appointment not found." };
+    return { ok: false, error: appointmentError?.message ?? t.feedback.appointmentNotFound };
   }
 
   if (!appointment.request_id) {
     return {
       ok: false,
-      error: "Walk-in bookings can't be rescheduled — cancel and add a new one.",
+      error: t.feedback.walkInNoReschedule,
     };
   }
 
   const start = startsAt(parsed.data.date, parsed.data.time);
   if (new Date(start).getTime() < Date.now()) {
-    return { ok: false, error: "Choose a time in the future." };
+    return { ok: false, error: t.feedback.chooseFutureTime };
   }
 
   const { data: service, error: serviceError } = await supabase
@@ -455,7 +465,7 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
     .single();
 
   if (serviceError || !service) {
-    return { ok: false, error: serviceError?.message ?? "Service not found." };
+    return { ok: false, error: serviceError?.message ?? t.feedback.serviceNotFound };
   }
 
   const end = addMinutes(start, service.duration_minutes);
@@ -471,7 +481,7 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
     .maybeSingle();
 
   if (clash) {
-    return { ok: false, error: "That slot is already booked. Pick another time." };
+    return { ok: false, error: t.feedback.slotTaken };
   }
 
   const { data: clientProfile } = appointment.client_id
@@ -512,7 +522,7 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
     .single();
 
   if (proposalError || !proposal) {
-    return { ok: false, error: proposalError?.message ?? "Unable to send the new time." };
+    return { ok: false, error: proposalError?.message ?? t.feedback.unableSendNewTime };
   }
 
   await supabase
@@ -530,17 +540,18 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
-  return { ok: true, message: "Slot freed and a new time was proposed to the client." };
+  return { ok: true, message: t.feedback.slotFreedProposed };
 }
 
 // Cancel a confirmed appointment from the calendar. Frees the slot; for a
 // client booking it also cancels the request and notifies the client.
 export async function cancelAppointmentAdminAction(input: unknown): Promise<ActionResult> {
   await requireAdmin();
+  const t = await getDict();
   const parsed = cancelAppointmentSchema.safeParse(input);
 
   if (!parsed.success) {
-    return { ok: false, error: "Could not cancel this appointment." };
+    return { ok: false, error: t.feedback.couldNotCancelAppointment };
   }
 
   const supabase = await createClient();
@@ -552,7 +563,7 @@ export async function cancelAppointmentAdminAction(input: unknown): Promise<Acti
     .single();
 
   if (appointmentError || !appointment) {
-    return { ok: false, error: appointmentError?.message ?? "Appointment not found." };
+    return { ok: false, error: appointmentError?.message ?? t.feedback.appointmentNotFound };
   }
 
   const { data: clientProfile } = appointment.client_id
@@ -598,17 +609,19 @@ export async function cancelAppointmentAdminAction(input: unknown): Promise<Acti
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
-  return { ok: true, message: "Appointment cancelled." };
+  return { ok: true, message: t.feedback.appointmentCancelled };
 }
 
 export async function createAdminBookingAction(input: unknown): Promise<ActionResult> {
   const admin = await requireAdmin();
+  const t = await getDict();
   const parsed = adminBookingSchema.safeParse(input);
 
   if (!parsed.success) {
+    const issue = parsed.error.issues[0]?.message;
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Fill in the booking details.",
+      error: issue === "client-or-walkin" ? t.feedback.chooseClientOrWalkIn : t.feedback.fillBookingDetails,
     };
   }
 
@@ -616,7 +629,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
   const start = startsAt(parsed.data.date, parsed.data.time);
 
   if (new Date(start).getTime() < Date.now()) {
-    return { ok: false, error: "Choose a time in the future." };
+    return { ok: false, error: t.feedback.chooseFutureTime };
   }
 
   // An existing client must be a real, non-admin profile.
@@ -628,7 +641,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
       .maybeSingle();
 
     if (!clientProfile || clientProfile.role === "admin") {
-      return { ok: false, error: "Pick a valid client." };
+      return { ok: false, error: t.feedback.chooseValidClient };
     }
   }
 
@@ -639,7 +652,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
     .single();
 
   if (serviceError || !service) {
-    return { ok: false, error: serviceError?.message ?? "Service not found." };
+    return { ok: false, error: serviceError?.message ?? t.feedback.serviceNotFound };
   }
 
   const end = addMinutes(start, service.duration_minutes);
@@ -654,7 +667,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
     .maybeSingle();
 
   if (existing) {
-    return { ok: false, error: "That slot is already booked. Pick another time." };
+    return { ok: false, error: t.feedback.slotTaken };
   }
 
   const { error: insertError } = await supabase.from("appointments").insert({
@@ -669,11 +682,11 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
   });
 
   if (insertError) {
-    return { ok: false, error: "That slot is already booked. Pick another time." };
+    return { ok: false, error: t.feedback.slotTaken };
   }
 
   revalidatePath("/admin", "layout");
-  return { ok: true, message: "Booking added to the calendar." };
+  return { ok: true, message: t.feedback.bookingAdded };
 }
 
 export async function respondToProposalAction(
@@ -681,6 +694,7 @@ export async function respondToProposalAction(
   accepted: boolean,
 ): Promise<ActionResult> {
   const profile = await requireApprovedClient();
+  const t = await getDict();
   const supabase = await createClient();
 
   const { data: proposal, error } = await supabase
@@ -690,11 +704,11 @@ export async function respondToProposalAction(
     .single();
 
   if (error || !proposal) {
-    return { ok: false, error: error?.message ?? "Proposal not found." };
+    return { ok: false, error: error?.message ?? t.feedback.proposalNotFound };
   }
 
   if (proposal.status !== "sent") {
-    return { ok: false, error: "This proposal is no longer open." };
+    return { ok: false, error: t.feedback.proposalClosed };
   }
 
   const { data: request, error: requestError } = await supabase
@@ -704,7 +718,7 @@ export async function respondToProposalAction(
     .single();
 
   if (requestError || !request || request.client_id !== profile.id) {
-    return { ok: false, error: "You cannot respond to this proposal." };
+    return { ok: false, error: t.feedback.cannotRespond };
   }
 
   if (accepted) {
@@ -718,7 +732,7 @@ export async function respondToProposalAction(
       .maybeSingle();
 
     if (clash) {
-      return { ok: false, error: "That time was just booked. Ask for a new proposal." };
+      return { ok: false, error: t.feedback.timeJustTaken };
     }
 
     const { error: appointmentError } = await supabase.from("appointments").insert({
@@ -732,7 +746,7 @@ export async function respondToProposalAction(
     });
 
     if (appointmentError) {
-      return { ok: false, error: "That time was just booked. Ask for a new proposal." };
+      return { ok: false, error: t.feedback.timeJustTaken };
     }
   }
 
@@ -757,7 +771,7 @@ export async function respondToProposalAction(
   revalidatePath("/admin", "layout");
   return {
     ok: true,
-    message: accepted ? "Appointment confirmed." : "Proposal declined.",
+    message: accepted ? t.feedback.appointmentConfirmed : t.feedback.proposalDeclined,
   };
 }
 
@@ -775,10 +789,11 @@ export async function updateProfileAction(input: {
   phone: string;
 }): Promise<ActionResult> {
   const profile = await requireProfile();
+  const t = await getDict();
   const parsed = profileSchema.safeParse(input);
 
   if (!parsed.success) {
-    return { ok: false, error: "Enter a valid name and phone number." };
+    return { ok: false, error: t.feedback.enterValidNamePhone };
   }
 
   const supabase = await createClient();
@@ -793,7 +808,7 @@ export async function updateProfileAction(input: {
 
   revalidatePath("/client", "layout");
   revalidatePath("/admin", "layout");
-  return { ok: true, message: "Profile updated." };
+  return { ok: true, message: t.feedback.profileUpdated };
 }
 
 // ---------------------------------------------------------------------------
@@ -807,10 +822,11 @@ export async function createServiceAction(input: {
   priceCents: number;
 }): Promise<ActionResult> {
   await requireAdmin();
+  const t = await getDict();
   const parsed = serviceSchema.safeParse(input);
 
   if (!parsed.success) {
-    return { ok: false, error: "Check the service name, duration, and price." };
+    return { ok: false, error: t.feedback.checkServiceFields };
   }
 
   const supabase = await createClient();
@@ -826,7 +842,7 @@ export async function createServiceAction(input: {
   }
 
   revalidatePath("/admin", "layout");
-  return { ok: true, message: "Service added." };
+  return { ok: true, message: t.feedback.serviceAdded };
 }
 
 export async function updateServiceAction(
@@ -839,10 +855,11 @@ export async function updateServiceAction(
   },
 ): Promise<ActionResult> {
   await requireAdmin();
+  const t = await getDict();
   const parsed = serviceSchema.safeParse(input);
 
   if (!parsed.success) {
-    return { ok: false, error: "Check the service name, duration, and price." };
+    return { ok: false, error: t.feedback.checkServiceFields };
   }
 
   const supabase = await createClient();
@@ -861,7 +878,7 @@ export async function updateServiceAction(
   }
 
   revalidatePath("/admin", "layout");
-  return { ok: true, message: "Service updated." };
+  return { ok: true, message: t.feedback.serviceUpdated };
 }
 
 export async function toggleServiceActiveAction(
@@ -869,6 +886,7 @@ export async function toggleServiceActiveAction(
   active: boolean,
 ): Promise<ActionResult> {
   await requireAdmin();
+  const t = await getDict();
   const supabase = await createClient();
   const { error } = await supabase
     .from("services")
@@ -880,7 +898,7 @@ export async function toggleServiceActiveAction(
   }
 
   revalidatePath("/admin", "layout");
-  return { ok: true, message: active ? "Service activated." : "Service hidden." };
+  return { ok: true, message: active ? t.feedback.serviceActivated : t.feedback.serviceHidden };
 }
 
 // ---------------------------------------------------------------------------
@@ -893,14 +911,15 @@ export async function blockDateAction(input: {
   reason?: string;
 }): Promise<ActionResult> {
   const admin = await requireAdmin();
+  const t = await getDict();
   const parsed = blockDateSchema.safeParse(input);
 
   if (!parsed.success) {
-    return { ok: false, error: "Pick valid start and end dates." };
+    return { ok: false, error: t.feedback.pickValidStartEnd };
   }
 
   if (parsed.data.end < parsed.data.start) {
-    return { ok: false, error: "End date must be on or after the start date." };
+    return { ok: false, error: t.feedback.endAfterStart };
   }
 
   const supabase = await createClient();
@@ -921,11 +940,12 @@ export async function blockDateAction(input: {
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
-  return { ok: true, message: "Dates blocked." };
+  return { ok: true, message: t.feedback.datesBlocked };
 }
 
 export async function unblockDateAction(blockId: string): Promise<ActionResult> {
   await requireAdmin();
+  const t = await getDict();
   const supabase = await createClient();
   const { error } = await supabase.from("blocked_times").delete().eq("id", blockId);
 
@@ -935,7 +955,7 @@ export async function unblockDateAction(blockId: string): Promise<ActionResult> 
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
-  return { ok: true, message: "Dates reopened." };
+  return { ok: true, message: t.feedback.datesReopened };
 }
 
 // ---------------------------------------------------------------------------
@@ -945,6 +965,7 @@ export async function unblockDateAction(blockId: string): Promise<ActionResult> 
 
 export async function cancelRequestAction(requestId: string): Promise<ActionResult> {
   const profile = await requireApprovedClient();
+  const t = await getDict();
   const supabase = await createClient();
 
   const { data: request, error } = await supabase
@@ -954,15 +975,15 @@ export async function cancelRequestAction(requestId: string): Promise<ActionResu
     .single();
 
   if (error || !request) {
-    return { ok: false, error: error?.message ?? "Request not found." };
+    return { ok: false, error: error?.message ?? t.feedback.requestNotFound };
   }
 
   if (request.client_id !== profile.id) {
-    return { ok: false, error: "You cannot cancel this request." };
+    return { ok: false, error: t.feedback.cannotCancelRequest };
   }
 
   if (request.status === "confirmed") {
-    return { ok: false, error: "Confirmed appointments can't be cancelled here." };
+    return { ok: false, error: t.feedback.cannotCancelConfirmed };
   }
 
   // Expire any outstanding proposal, then cancel the request.
@@ -983,5 +1004,5 @@ export async function cancelRequestAction(requestId: string): Promise<ActionResu
 
   revalidatePath("/client", "layout");
   revalidatePath("/admin", "layout");
-  return { ok: true, message: "Request cancelled." };
+  return { ok: true, message: t.feedback.requestCancelled };
 }

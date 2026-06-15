@@ -8,6 +8,7 @@ import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
 import { Logo } from "@/components/shared/logo";
 import { StatusPill } from "@/components/shared/status-pill";
+import { useT } from "@/i18n/provider";
 import type { AuthProfile } from "@/server/auth";
 import { cn } from "@/lib/classnames";
 
@@ -27,6 +28,7 @@ export function Sidebar({
   profile: AuthProfile;
 }) {
   const pathname = usePathname();
+  const t = useT();
 
   return (
     <div className="flex h-full flex-col">
@@ -37,10 +39,10 @@ export function Sidebar({
 
       <nav className="mt-6 flex-1 space-y-6 overflow-y-auto">
         {sections.map((section, index) => (
-          <div key={section.heading ?? index}>
-            {section.heading ? (
+          <div key={section.headingKey ?? index}>
+            {section.headingKey ? (
               <p className="px-3 pb-2 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-stone-400 dark:text-stone-500">
-                {section.heading}
+                {t.nav[section.headingKey]}
               </p>
             ) : null}
             <div className="space-y-1">
@@ -61,7 +63,7 @@ export function Sidebar({
                     <span className={cn(active ? "" : "text-stone-400 dark:text-stone-500")}>
                       {item.icon}
                     </span>
-                    {item.label}
+                    {t.nav[item.key]}
                   </Link>
                 );
               })}
@@ -92,7 +94,7 @@ export function Sidebar({
         </div>
         <form action={signOutAction} className="mt-3">
           <Button type="submit" variant="secondary" className="w-full">
-            Sign out
+            {t.common.signOut}
           </Button>
         </form>
       </div>

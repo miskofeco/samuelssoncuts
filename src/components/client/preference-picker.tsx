@@ -5,18 +5,19 @@ import type { ReactNode } from "react";
 
 import {
   formatDay,
+  formatMonth,
   getAvailability,
   getAvailabilityTone,
   monthGrid,
   monthKey,
-  monthLabel,
   shiftMonth,
   todayIso,
 } from "@/domain/schedule";
 import type { AppState, DayWindow, Preference } from "@/domain/types";
+import { localeFor } from "@/i18n/config";
+import { useLang, useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
 
-const weekdays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const windows: DayWindow[] = ["Morning", "Midday", "Afternoon", "Evening"];
 
 export function PreferencePicker({
@@ -32,6 +33,8 @@ export function PreferencePicker({
   updatePreferenceDate: (rank: number, date: string) => void;
   updatePreferenceWindow: (rank: number, window: DayWindow) => void;
 }) {
+  const t = useT();
+  const locale = localeFor(useLang());
   const today = todayIso();
   const [month, setMonth] = useState(() => monthKey(preferences[0]?.date ?? today));
   const [activeRank, setActiveRank] = useState(1);
@@ -57,10 +60,10 @@ export function PreferencePicker({
         <div className="flex w-full flex-col">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-semibold text-black dark:text-white">
-              {monthLabel(month)}
+              {formatMonth(`${month}-01`, locale)}
             </h3>
             <div className="flex items-center gap-1">
-              <NavButton label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))}>
+              <NavButton label={t.common.previousMonth} onClick={() => setMonth(shiftMonth(month, -1))}>
                 <path d="M15 18l-6-6 6-6" />
               </NavButton>
               <button
@@ -68,18 +71,18 @@ export function PreferencePicker({
                 onClick={() => setMonth(monthKey(today))}
                 className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
               >
-                Today
+                {t.common.today}
               </button>
-              <NavButton label="Next month" onClick={() => setMonth(shiftMonth(month, 1))}>
+              <NavButton label={t.common.nextMonth} onClick={() => setMonth(shiftMonth(month, 1))}>
                 <path d="M9 18l6-6-6-6" />
               </NavButton>
             </div>
           </div>
 
           <div className="mt-4 grid flex-1 grid-cols-7 grid-rows-[auto_repeat(6,minmax(3.5rem,1fr))] gap-1">
-            {weekdays.map((day) => (
+            {t.weekdaysMini.map((day, index) => (
               <div
-                key={day}
+                key={index}
                 className="pb-1 text-center text-[0.7rem] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500"
               >
                 {day}
@@ -114,8 +117,12 @@ export function PreferencePicker({
                   type="button"
                   disabled={!selectable && !selected}
                   onClick={() => handleDayClick(cell.date)}
-                  aria-label={`${formatDay(cell.date)}${
-                    selected ? ` — choice ${rank}` : selectable ? " — available" : " — unavailable"
+                  aria-label={`${formatDay(cell.date, locale)} — ${
+                    selected
+                      ? t.client.choice(rank)
+                      : selectable
+                        ? t.client.availabilityLabel
+                        : t.client.unavailable
                   }`}
                   className={cn(
                     "relative flex h-full items-center justify-center rounded-lg text-sm tabular-nums transition",
@@ -146,15 +153,15 @@ export function PreferencePicker({
           <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 pt-4 text-[0.7rem] text-stone-500 dark:text-stone-400">
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-black dark:bg-white" />
-              Selected
+              {t.client.selected}
             </span>
             <span className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-              Limited
+              {t.client.limited}
             </span>
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-stone-300 dark:bg-stone-600" />
-              Unavailable
+              {t.client.unavailable}
             </span>
           </div>
         </div>
@@ -162,9 +169,11 @@ export function PreferencePicker({
         {/* Ranked choices + time window */}
         <div className="space-y-3">
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            Tap a day to set{" "}
-            <span className="font-semibold text-black dark:text-white">Choice {activeRank}</span>,
-            then pick a preferred time window.
+            {t.client.pickDayPrefix}{" "}
+            <span className="font-semibold text-black dark:text-white">
+              {t.client.choice(activeRank)}
+            </span>
+            , {t.client.pickWindowSuffix}
           </p>
 
           {[...preferences]
@@ -188,10 +197,10 @@ export function PreferencePicker({
                   >
                     <span>
                       <span className="block text-[0.7rem] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                        Choice {preference.rank}
+                        {t.client.choice(preference.rank)}
                       </span>
                       <span className="block text-sm font-semibold text-black dark:text-white">
-                        {formatDay(preference.date)}
+                        {formatDay(preference.date, locale)}
                       </span>
                     </span>
                     <span
@@ -222,7 +231,7 @@ export function PreferencePicker({
                             : "border-black/10 text-stone-600 hover:border-black dark:border-white/15 dark:text-stone-300 dark:hover:border-white",
                         )}
                       >
-                        {window}
+                        {t.windows[window]}
                       </button>
                     ))}
                   </div>

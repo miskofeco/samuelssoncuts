@@ -1,16 +1,18 @@
 import { signInWithOAuthAction } from "@/app/actions";
 import { buttonClass } from "@/components/shared/button";
+import { getDict } from "@/i18n/server";
 
 // Social sign-in / sign-up. The same OAuth flow handles both: Supabase creates
 // the auth user on first consent, and the handle_new_user() DB trigger seeds a
 // pending profile. Plain form posts to a server action — no client JS needed.
-export function OAuthButtons() {
+export async function OAuthButtons() {
+  const t = await getDict();
   return (
     <div>
       <div className="my-5 flex items-center gap-3" aria-hidden>
         <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
         <span className="text-xs font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">
-          or
+          {t.auth.orDivider}
         </span>
         <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
       </div>
@@ -20,7 +22,7 @@ export function OAuthButtons() {
           <input type="hidden" name="provider" value="google" />
           <button type="submit" className={buttonClass("secondary", "w-full gap-2.5")}>
             <GoogleIcon />
-            Continue with Google
+            {t.auth.continueWithGoogle}
           </button>
         </form>
 

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { LanguageToggle } from "@/components/shared/language-toggle";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import type { AuthProfile } from "@/server/auth";
 
@@ -32,6 +33,7 @@ export function AppShell({
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Desktop utility bar */}
           <div className="hidden items-center justify-end gap-2 px-6 pt-5 lg:flex xl:px-10">
+            <LanguageToggle />
             <ThemeToggle />
           </div>
 

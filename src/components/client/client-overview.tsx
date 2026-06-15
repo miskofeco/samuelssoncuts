@@ -5,17 +5,19 @@ import { Card, SectionHeader } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusPill } from "@/components/shared/status-pill";
-import { formatFullDay, serviceById, todayIso } from "@/domain/schedule";
+import { formatDay, formatFullDay, serviceById, todayIso } from "@/domain/schedule";
 import type {
   Appointment,
   BookingRequest,
   Proposal,
   Service,
 } from "@/domain/types";
+import { localeFor } from "@/i18n/config";
+import { getDict, getLang } from "@/i18n/server";
 
-import { requestStatusMeta } from "./status-meta";
+import { statusMeta } from "./status-meta";
 
-export function ClientOverview({
+export async function ClientOverview({
   requests,
   proposals,
   appointments,
@@ -26,6 +28,9 @@ export function ClientOverview({
   appointments: Appointment[];
   services: Service[];
 }) {
+  const t = await getDict();
+  const locale = localeFor(await getLang());
+  const meta = statusMeta(t);
   const today = todayIso();
   const upcoming = appointments
     .filter((appointment) => appointment.date >= today)
@@ -39,17 +44,17 @@ export function ClientOverview({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <StatCard label="Open requests" value={openRequests} hint="Waiting for a time" tone={openRequests > 0 ? "sky" : "neutral"} />
-        <StatCard label="Needs your reply" value={awaitingResponse} hint="Proposed times" tone={awaitingResponse > 0 ? "amber" : "neutral"} />
-        <StatCard label="Upcoming" value={upcoming.length} hint="Confirmed visits" tone={upcoming.length > 0 ? "emerald" : "neutral"} />
-        <StatCard label="Total visits" value={appointments.length} hint="All time" />
+        <StatCard label={t.client.openRequests} value={openRequests} hint={t.client.openRequestsHint} tone={openRequests > 0 ? "sky" : "neutral"} />
+        <StatCard label={t.client.needsReply} value={awaitingResponse} hint={t.client.needsReplyHint} tone={awaitingResponse > 0 ? "amber" : "neutral"} />
+        <StatCard label={t.client.upcoming} value={upcoming.length} hint={t.client.upcomingHint} tone={upcoming.length > 0 ? "emerald" : "neutral"} />
+        <StatCard label={t.client.totalVisits} value={appointments.length} hint={t.client.totalVisitsHint} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.6fr)]">
         <Card className="rounded-2xl p-5">
           <SectionHeader
-            title="Next appointment"
-            action={<ButtonLink href="/client/book">Book again</ButtonLink>}
+            title={t.client.nextAppointment}
+            action={<ButtonLink href="/client/book">{t.client.bookAgain}</ButtonLink>}
           />
           <div className="mt-4">
             {next ? (
@@ -58,15 +63,15 @@ export function ClientOverview({
                   {serviceById(next.serviceId, services).name}
                 </p>
                 <p className="mt-1 text-sm text-emerald-900 dark:text-emerald-300">
-                  {formatFullDay(next.date)} at {next.time}
+                  {t.client.bookedFor(formatFullDay(next.date, locale), next.time)}
                 </p>
               </div>
             ) : (
               <EmptyState
-                title="No upcoming appointments"
-                description="Request a new appointment and your confirmed visit will appear here."
+                title={t.client.noUpcoming}
+                description={t.client.noUpcomingDescription}
                 action={
-                  <ButtonLink href="/client/book">Book an appointment</ButtonLink>
+                  <ButtonLink href="/client/book">{t.client.bookTitle}</ButtonLink>
                 }
               />
             )}
@@ -74,15 +79,16 @@ export function ClientOverview({
         </Card>
 
         <Card className="rounded-2xl p-5">
-          <SectionHeader title="Recent activity" />
+          <SectionHeader title={t.client.recentActivity} />
           <div className="mt-4 space-y-2">
             {requests.slice(0, 5).length === 0 ? (
               <p className="text-sm text-stone-500 dark:text-stone-400">
-                No requests yet.
+                {t.client.noRequestsYet}
               </p>
             ) : (
               requests.slice(0, 5).map((request) => {
-                const meta = requestStatusMeta[request.status];
+                const status = meta[request.status];
+                const proposedDate = proposals.find((p) => p.id === request.proposalId)?.date;
                 return (
                   <Link
                     key={request.id}
@@ -94,12 +100,12 @@ export function ClientOverview({
                         {serviceById(request.serviceId, services).name}
                       </span>
                       <span className="block text-xs text-stone-500 dark:text-stone-400">
-                        {proposals.find((p) => p.id === request.proposalId)?.date
-                          ? `Proposed ${proposals.find((p) => p.id === request.proposalId)?.date}`
-                          : "Awaiting proposal"}
+                        {proposedDate
+                          ? t.client.proposedOn(formatDay(proposedDate, locale))
+                          : t.client.awaitingProposal}
                       </span>
                     </span>
-                    <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
+                    <StatusPill tone={status.tone}>{status.label}</StatusPill>
                   </Link>
                 );
               })

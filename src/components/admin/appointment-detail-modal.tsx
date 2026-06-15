@@ -17,6 +17,8 @@ import { addMinutesToTime } from "@/components/admin/admin-calendar";
 import type { CalendarItem } from "@/components/admin/admin-calendar";
 import { formatFullDay, workingHoursQuarterly } from "@/domain/schedule";
 import type { ActionResult } from "@/domain/types";
+import { localeFor } from "@/i18n/config";
+import { useLang, useT } from "@/i18n/provider";
 
 type Mode = "view" | "reschedule" | "cancel";
 
@@ -27,12 +29,13 @@ export function AppointmentDetailModal({
   item: CalendarItem | null;
   onClose: () => void;
 }) {
+  const t = useT();
   return (
     <Modal
       open={item !== null}
       onClose={onClose}
-      title="Appointment"
-      description="View the details, propose a new time, or cancel."
+      title={t.admin.appointment}
+      description={t.admin.appointmentDescription}
     >
       {item ? <DetailBody key={item.id} item={item} onClose={onClose} /> : null}
     </Modal>
@@ -40,6 +43,8 @@ export function AppointmentDetailModal({
 }
 
 function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void }) {
+  const t = useT();
+  const locale = localeFor(useLang());
   const [mode, setMode] = useState<Mode>("view");
   const [date, setDate] = useState(item.date);
   const [time, setTime] = useState(item.time);
@@ -105,28 +110,30 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
           <div className="min-w-0">
             <p className="text-lg font-semibold text-black dark:text-white">{item.title}</p>
             <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
-              {item.service} · {item.durationMinutes} min
+              {item.service} · {item.durationMinutes} {t.admin.minutesShort}
               {item.servicePrice ? ` · $${item.servicePrice}` : ""}
             </p>
           </div>
-          <StatusPill tone={isConfirmed ? "success" : "info"}>{item.type}</StatusPill>
+          <StatusPill tone={isConfirmed ? "success" : "info"}>
+            {isConfirmed ? t.admin.confirmed : t.statuses.proposedShort}
+          </StatusPill>
         </div>
 
         <dl className="mt-3 space-y-1.5 text-sm">
-          <Row label="When">
-            {formatFullDay(item.date)} · {item.time}–{endTime}
+          <Row label={t.admin.when}>
+            {formatFullDay(item.date, locale)} · {item.time}–{endTime}
           </Row>
           {isWalkIn ? (
-            <Row label="Customer">
-              <StatusPill tone="neutral">Walk-in</StatusPill>
+            <Row label={t.admin.customer}>
+              <StatusPill tone="neutral">{t.admin.walkIn}</StatusPill>
             </Row>
           ) : (
             <>
-              {item.clientEmail ? <Row label="Email">{item.clientEmail}</Row> : null}
-              {item.clientPhone ? <Row label="Phone">{item.clientPhone}</Row> : null}
+              {item.clientEmail ? <Row label={t.common.email}>{item.clientEmail}</Row> : null}
+              {item.clientPhone ? <Row label={t.common.phone}>{item.clientPhone}</Row> : null}
             </>
           )}
-          {item.note ? <Row label="Note">{item.note}</Row> : null}
+          {item.note ? <Row label={t.admin.note}>{item.note}</Row> : null}
         </dl>
       </div>
 
@@ -136,11 +143,11 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
           <div className="flex flex-wrap justify-end gap-2">
             {isWalkIn && isConfirmed ? (
               <p className="mr-auto self-center text-xs text-stone-500 dark:text-stone-400">
-                Walk-in bookings can’t be rescheduled — cancel and add a new one.
+                {t.admin.walkInNoReschedule}
               </p>
             ) : (
               <Button type="button" variant="secondary" onClick={() => setMode("reschedule")}>
-                Reschedule
+                {t.admin.reschedule}
               </Button>
             )}
             <Button
@@ -149,7 +156,7 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
               onClick={() => setMode("cancel")}
               className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
             >
-              Cancel appointment
+              {t.admin.cancelAppointment}
             </Button>
           </div>
         </>
@@ -159,12 +166,12 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
         <div className="space-y-4">
           <p className="text-sm text-stone-600 dark:text-stone-300">
             {isConfirmed
-              ? "This frees the current slot and sends the client a new time to confirm."
-              : "Send the client a new proposed time."}
+              ? t.admin.rescheduleConfirmedDescription
+              : t.admin.rescheduleProposedDescription}
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-sm font-medium text-stone-700 dark:text-stone-300">Date</span>
+              <span className="text-sm font-medium text-stone-700 dark:text-stone-300">{t.admin.date}</span>
               <input
                 type="date"
                 value={date}
@@ -173,8 +180,8 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
               />
             </label>
             <Combobox
-              label="Time"
-              placeholder="Type a time…"
+              label={t.admin.time}
+              placeholder={t.admin.typeTime}
               value={time}
               onChange={setTime}
               options={workingHoursQuarterly.map((hour) => ({ value: hour, label: hour }))}
@@ -182,13 +189,13 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
           </div>
           <label className="block">
             <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
-              Message to client (optional)
+              {`${t.admin.messageToClient} ${t.common.optional}`}
             </span>
             <textarea
               value={note}
               onChange={(event) => setNote(event.target.value)}
               rows={2}
-              placeholder="Sorry, I need to move this — does the new time work?"
+              placeholder={t.admin.rescheduleNotePlaceholder}
               maxLength={1000}
               className="mt-2 w-full resize-none rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white"
             />
@@ -196,10 +203,10 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
           <Feedback result={feedback && !feedback.ok ? feedback : null} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setMode("view")}>
-              Back
+              {t.common.back}
             </Button>
             <Button type="button" onClick={submitReschedule} disabled={pending || !date || !time}>
-              {pending ? "Sending…" : "Propose new time"}
+              {pending ? t.common.sending : t.admin.proposeNewTime}
             </Button>
           </div>
         </div>
@@ -208,19 +215,19 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
       {mode === "cancel" ? (
         <div className="space-y-4">
           <p className="text-sm text-stone-600 dark:text-stone-300">
-            Cancel this appointment? This frees the slot
-            {isWalkIn ? "." : " and notifies the client."}
+            {t.admin.cancelConfirmBase}
+            {isWalkIn ? t.admin.cancelConfirmWalkIn : t.admin.cancelConfirmClient}
           </p>
           {!isWalkIn ? (
             <label className="block">
               <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
-                Message to client (optional)
+                {`${t.admin.messageToClient} ${t.common.optional}`}
               </span>
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={2}
-                placeholder="Sorry, I have to cancel — please rebook when convenient."
+                placeholder={t.admin.cancelNotePlaceholder}
                 maxLength={1000}
                 className="mt-2 w-full resize-none rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white"
               />
@@ -229,7 +236,7 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
           <Feedback result={feedback && !feedback.ok ? feedback : null} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setMode("view")}>
-              Back
+              {t.common.back}
             </Button>
             <Button
               type="button"
@@ -237,7 +244,7 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
               disabled={pending}
               className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:text-white dark:hover:bg-red-500"
             >
-              {pending ? "Cancelling…" : "Cancel appointment"}
+              {pending ? t.admin.cancelling : t.admin.cancelAppointment}
             </Button>
           </div>
         </div>

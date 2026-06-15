@@ -9,6 +9,7 @@ import { Card, SectionHeader } from "@/components/shared/card";
 import { Feedback } from "@/components/shared/feedback";
 import { Field } from "@/components/shared/form";
 import type { ActionResult } from "@/domain/types";
+import { useT } from "@/i18n/provider";
 
 export function ProfileForm({
   fullName,
@@ -19,6 +20,7 @@ export function ProfileForm({
   phone: string;
   email: string;
 }) {
+  const t = useT();
   const [name, setName] = useState(fullName);
   const [phoneValue, setPhoneValue] = useState(phone);
   const [pending, startTransition] = useTransition();
@@ -34,10 +36,10 @@ export function ProfileForm({
 
   return (
     <Card className="rounded-2xl p-5">
-      <SectionHeader eyebrow="Account" title="Your details" />
+      <SectionHeader eyebrow={t.profile.eyebrow} title={t.profile.title} />
       <form onSubmit={onSubmit} className="mt-4 space-y-4">
         <Field
-          label="Email"
+          label={t.common.email}
           value={email}
           disabled
           readOnly
@@ -45,19 +47,19 @@ export function ProfileForm({
         />
         <Field
           required
-          label="Full name"
+          label={t.common.fullName}
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
         <Field
           required
-          label="Phone"
+          label={t.common.phone}
           value={phoneValue}
           onChange={(event) => setPhoneValue(event.target.value)}
         />
         <Feedback result={feedback} />
         <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : "Save changes"}
+          {pending ? t.common.saving : t.common.save}
         </Button>
       </form>
     </Card>

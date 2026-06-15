@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import type { BookingRequest, Proposal, Service } from "@/domain/types";
+import { useT } from "@/i18n/provider";
 
 import { ReservationList } from "./reservation-list";
 
@@ -18,6 +19,7 @@ export function ReservationsView({
   proposals: Proposal[];
   services: Service[];
 }) {
+  const t = useT();
   const [tab, setTab] = useState<Tab>("active");
 
   const { active, history } = useMemo(() => {
@@ -34,12 +36,12 @@ export function ReservationsView({
   return (
     <div className="space-y-4">
       <SegmentedControl
-        ariaLabel="Reservation filter"
+        ariaLabel={t.client.reservationFilter}
         value={tab}
         onChange={setTab}
         options={[
-          { label: `Active (${active.length})`, value: "active" },
-          { label: `History (${history.length})`, value: "history" },
+          { label: t.client.active(active.length), value: "active" },
+          { label: t.client.history(history.length), value: "history" },
         ]}
       />
       <ReservationList

@@ -78,23 +78,25 @@ export function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
 
-export function formatDay(date: string) {
-  return new Intl.DateTimeFormat("en", {
+// The optional `locale` lets callers localize dates (e.g. "sk-SK"). It defaults
+// to English so any call site not yet threading the locale keeps working.
+export function formatDay(date: string, locale = "en-US") {
+  return new Intl.DateTimeFormat(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
   }).format(new Date(`${date}T12:00:00`));
 }
 
-export function formatMonth(date: string) {
-  return new Intl.DateTimeFormat("en", {
+export function formatMonth(date: string, locale = "en-US") {
+  return new Intl.DateTimeFormat(locale, {
     month: "long",
     year: "numeric",
   }).format(new Date(`${date}T12:00:00`));
 }
 
-export function formatFullDay(date: string) {
-  return new Intl.DateTimeFormat("en", {
+export function formatFullDay(date: string, locale = "en-US") {
+  return new Intl.DateTimeFormat(locale, {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -142,8 +144,8 @@ export function monthGrid(key: string): MonthCell[] {
   });
 }
 
-export function monthLabel(key: string) {
-  return formatMonth(`${key}-01`);
+export function monthLabel(key: string, locale = "en-US") {
+  return formatMonth(`${key}-01`, locale);
 }
 
 export function serviceById(id: string, serviceList: Service[] = services) {

@@ -1,10 +1,24 @@
 import type { Appointment, BookingRequest } from "./types";
 
-const monthFormatter = new Intl.DateTimeFormat("en", { month: "short" });
-const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+// Labels are passed in by the caller so charts can be localized. `locale` drives
+// month names; `weekdayLabels`/`statusLabels` come from the active dictionary.
+type StatusLabels = { new: string; proposed: string; confirmed: string; closed: string };
+
+const DEFAULT_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DEFAULT_STATUS: StatusLabels = {
+  new: "New",
+  proposed: "Proposed",
+  confirmed: "Confirmed",
+  closed: "Closed",
+};
 
 /** Bookings per month for the last `months` months (oldest → newest). */
-export function bookingsTrend(appointments: Appointment[], months = 6) {
+export function bookingsTrend(
+  appointments: Appointment[],
+  months = 6,
+  locale = "en-US",
+) {
+  const monthFormatter = new Intl.DateTimeFormat(locale, { month: "short" });
   const buckets: { key: string; label: string; bookings: number }[] = [];
   const now = new Date();
   now.setDate(1);
@@ -25,7 +39,10 @@ export function bookingsTrend(appointments: Appointment[], months = 6) {
 }
 
 /** Count of requests by status. */
-export function requestsByStatus(requests: BookingRequest[]) {
+export function requestsByStatus(
+  requests: BookingRequest[],
+  labels: StatusLabels = DEFAULT_STATUS,
+) {
   const counts: Record<string, number> = {
     pending: 0,
     proposed: 0,
@@ -36,15 +53,18 @@ export function requestsByStatus(requests: BookingRequest[]) {
     counts[request.status] = (counts[request.status] ?? 0) + 1;
   }
   return [
-    { label: "New", value: counts.pending, key: "pending" },
-    { label: "Proposed", value: counts.proposed, key: "proposed" },
-    { label: "Confirmed", value: counts.confirmed, key: "confirmed" },
-    { label: "Closed", value: counts.declined, key: "declined" },
+    { label: labels.new, value: counts.pending, key: "pending" },
+    { label: labels.proposed, value: counts.proposed, key: "proposed" },
+    { label: labels.confirmed, value: counts.confirmed, key: "confirmed" },
+    { label: labels.closed, value: counts.declined, key: "declined" },
   ];
 }
 
 /** Confirmed bookings grouped by weekday (Mon-first). */
-export function bookingsByWeekday(appointments: Appointment[]) {
+export function bookingsByWeekday(
+  appointments: Appointment[],
+  weekdayLabels: readonly string[] = DEFAULT_WEEKDAYS,
+) {
   const counts = new Array(7).fill(0);
   for (const appointment of appointments) {
     const day = new Date(`${appointment.date}T12:00:00`).getDay();

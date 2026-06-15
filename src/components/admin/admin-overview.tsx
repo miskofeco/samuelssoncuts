@@ -5,6 +5,8 @@ import { Card, SectionHeader } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusPill } from "@/components/shared/status-pill";
+import { localeFor } from "@/i18n/config";
+import { getDict, getLang } from "@/i18n/server";
 import { formatFullDay, serviceById, todayIso } from "@/domain/schedule";
 import type {
   Appointment,
@@ -13,7 +15,7 @@ import type {
   Service,
 } from "@/domain/types";
 
-export function AdminOverview({
+export async function AdminOverview({
   clients,
   requests,
   appointments,
@@ -24,6 +26,8 @@ export function AdminOverview({
   appointments: Appointment[];
   services: Service[];
 }) {
+  const t = await getDict();
+  const locale = localeFor(await getLang());
   const today = todayIso();
   const pendingApprovals = clients.filter(
     (c) => c.role !== "admin" && c.status === "pending" && c.emailConfirmed,
@@ -37,21 +41,21 @@ export function AdminOverview({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <StatCard label="Pending approvals" value={pendingApprovals} hint="Verified, awaiting review" tone={pendingApprovals > 0 ? "amber" : "neutral"} />
-        <StatCard label="Open requests" value={openRequests} hint="Need a proposed time" tone={openRequests > 0 ? "sky" : "neutral"} />
-        <StatCard label="Awaiting client" value={awaitingClient} hint="Proposal sent" />
-        <StatCard label="Confirmed" value={appointments.length} hint="All bookings" tone={appointments.length > 0 ? "emerald" : "neutral"} />
+        <StatCard label={t.admin.pendingApprovals} value={pendingApprovals} hint={t.admin.pendingApprovalsHint} tone={pendingApprovals > 0 ? "amber" : "neutral"} />
+        <StatCard label={t.admin.openRequests} value={openRequests} hint={t.admin.openRequestsHint} tone={openRequests > 0 ? "sky" : "neutral"} />
+        <StatCard label={t.admin.awaitingClient} value={awaitingClient} hint={t.admin.awaitingClientHint} />
+        <StatCard label={t.admin.confirmed} value={appointments.length} hint={t.admin.confirmedHint} tone={appointments.length > 0 ? "emerald" : "neutral"} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.6fr)]">
         <Card className="rounded-2xl p-5">
           <SectionHeader
-            title="Upcoming appointments"
-            action={<ButtonLink href="/admin/calendar" variant="secondary">View calendar</ButtonLink>}
+            title={t.admin.upcomingAppointments}
+            action={<ButtonLink href="/admin/calendar" variant="secondary">{t.admin.viewCalendar}</ButtonLink>}
           />
           <div className="mt-4 space-y-2">
             {upcoming.length === 0 ? (
-              <EmptyState title="No upcoming appointments" />
+              <EmptyState title={t.admin.noUpcoming} />
             ) : (
               upcoming.slice(0, 6).map((appointment) => {
                 const client = clients.find((c) => c.id === appointment.clientId);
@@ -62,14 +66,14 @@ export function AdminOverview({
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-black dark:text-white">
-                        {client?.name ?? "Client"}
+                        {client?.name ?? t.admin.clientFallback}
                       </p>
                       <p className="truncate text-xs text-stone-500 dark:text-stone-400">
                         {serviceById(appointment.serviceId, services).name}
                       </p>
                     </div>
                     <p className="shrink-0 text-sm font-medium tabular-nums text-stone-600 dark:text-stone-300">
-                      {formatFullDay(appointment.date)} · {appointment.time}
+                      {formatFullDay(appointment.date, locale)} · {appointment.time}
                     </p>
                   </div>
                 );
@@ -79,23 +83,23 @@ export function AdminOverview({
         </Card>
 
         <Card className="rounded-2xl p-5">
-          <SectionHeader title="Needs attention" />
+          <SectionHeader title={t.admin.needsAttention} />
           <div className="mt-4 space-y-2">
             <AttentionRow
               href="/admin/approvals"
-              label="Pending approvals"
+              label={t.admin.pendingApprovals}
               count={pendingApprovals}
               tone="warning"
             />
             <AttentionRow
               href="/admin/requests"
-              label="New requests"
+              label={t.admin.newRequests}
               count={openRequests}
               tone="info"
             />
             <AttentionRow
               href="/admin/requests"
-              label="Awaiting client reply"
+              label={t.admin.awaitingClientReply}
               count={awaitingClient}
               tone="neutral"
             />

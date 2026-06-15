@@ -9,14 +9,15 @@ import { Card, SectionHeader } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
 import { StatusPill } from "@/components/shared/status-pill";
-import { formatFullDay } from "@/domain/schedule";
+import { formatFullDay, serviceById } from "@/domain/schedule";
 import type {
   ActionResult,
   BookingRequest,
   ClientProfile,
   Service,
 } from "@/domain/types";
-import { serviceById } from "@/domain/schedule";
+import { localeFor } from "@/i18n/config";
+import { useLang, useT } from "@/i18n/provider";
 
 export function ApprovalQueue({
   clients,
@@ -27,6 +28,8 @@ export function ApprovalQueue({
   requests: BookingRequest[];
   services: Service[];
 }) {
+  const t = useT();
+  const locale = localeFor(useLang());
   const [pendingTransition, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
@@ -55,13 +58,13 @@ export function ApprovalQueue({
   return (
     <Card className="rounded-2xl p-5">
       <SectionHeader
-        eyebrow="Access control"
-        title="Pending approvals"
+        eyebrow={t.admin.approvalsEyebrow}
+        title={t.admin.pendingApprovals}
         action={
           pending.length > 0 ? (
-            <StatusPill tone="warning">{pending.length} waiting</StatusPill>
+            <StatusPill tone="warning">{t.admin.waiting(pending.length)}</StatusPill>
           ) : (
-            <StatusPill tone="success">All clear</StatusPill>
+            <StatusPill tone="success">{t.admin.allClear}</StatusPill>
           )
         }
       />
@@ -70,16 +73,15 @@ export function ApprovalQueue({
 
       {awaitingVerification > 0 ? (
         <p className="mt-4 rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-500 dark:bg-stone-800/60 dark:text-stone-400">
-          {awaitingVerification} registration{awaitingVerification === 1 ? "" : "s"} waiting
-          on email verification — they appear here once confirmed.
+          {t.admin.awaitingVerification(awaitingVerification)}
         </p>
       ) : null}
 
       <div className="mt-4 space-y-3">
         {pending.length === 0 ? (
           <EmptyState
-            title="No verified registrations waiting"
-            description="New clients appear here once they confirm their email."
+            title={t.admin.noVerifiedWaiting}
+            description={t.admin.noVerifiedDescription}
           />
         ) : (
           pending.map((client) => {
@@ -112,7 +114,7 @@ export function ApprovalQueue({
                 {clientRequests.length > 0 ? (
                   <div className="mt-3 rounded-lg bg-white/70 p-3 dark:bg-stone-900/50">
                     <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                      Requested
+                      {t.admin.requested}
                     </p>
                     <div className="mt-2 space-y-1.5">
                       {clientRequests.slice(0, 2).map((request) => (
@@ -122,7 +124,7 @@ export function ApprovalQueue({
                           </span>{" "}
                           —{" "}
                           {request.preferences
-                            .map((preference) => formatFullDay(preference.date))
+                            .map((preference) => formatFullDay(preference.date, locale))
                             .join(", ")}
                         </div>
                       ))}
@@ -136,7 +138,7 @@ export function ApprovalQueue({
                     disabled={Boolean(busy)}
                     onClick={() => run(approveClientAction, client.id)}
                   >
-                    {busy ? "Working…" : "Approve"}
+                    {busy ? t.common.working : t.admin.approve}
                   </Button>
                   <Button
                     type="button"
@@ -144,7 +146,7 @@ export function ApprovalQueue({
                     disabled={Boolean(busy)}
                     onClick={() => run(rejectClientAction, client.id)}
                   >
-                    Reject
+                    {t.admin.reject}
                   </Button>
                 </div>
               </div>

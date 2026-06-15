@@ -13,19 +13,12 @@ import type {
   RequestStatus,
   Service,
 } from "@/domain/types";
+import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
 
 import { ProposalComposer } from "./proposal-form";
 
 type FilterKey = "actionable" | "pending" | "proposed" | "confirmed" | "all";
-
-const filters: { key: FilterKey; label: string }[] = [
-  { key: "actionable", label: "Needs action" },
-  { key: "pending", label: "New" },
-  { key: "proposed", label: "Awaiting client" },
-  { key: "confirmed", label: "Confirmed" },
-  { key: "all", label: "All" },
-];
 
 function matches(status: RequestStatus, filter: FilterKey) {
   switch (filter) {
@@ -57,7 +50,16 @@ export function RequestQueue({
   services: Service[];
   blockedDates: ReadonlySet<string>;
 }) {
+  const t = useT();
   const [filter, setFilter] = useState<FilterKey>("actionable");
+
+  const filters: { key: FilterKey; label: string }[] = [
+    { key: "actionable", label: t.admin.filterActionable },
+    { key: "pending", label: t.admin.filterNew },
+    { key: "proposed", label: t.admin.filterAwaiting },
+    { key: "confirmed", label: t.admin.filterConfirmed },
+    { key: "all", label: t.admin.filterAll },
+  ];
 
   const counts = useMemo(() => {
     const tally = (key: FilterKey) =>
@@ -82,11 +84,11 @@ export function RequestQueue({
   return (
     <Card className="flex h-full flex-col rounded-2xl p-5">
       <SectionHeader
-        eyebrow="Scheduling"
-        title="Appointment requests"
+        eyebrow={t.admin.requestsEyebrow}
+        title={t.admin.appointmentRequests}
         action={
           <StatusPill tone={counts.actionable > 0 ? "info" : "neutral"}>
-            {counts.actionable} to handle
+            {t.admin.toHandle(counts.actionable)}
           </StatusPill>
         }
       />
@@ -124,7 +126,7 @@ export function RequestQueue({
 
       <div className="mt-4 space-y-3">
         {visible.length === 0 ? (
-          <EmptyState title="Nothing here right now" description="Requests will appear as clients book." />
+          <EmptyState title={t.admin.nothingHere} description={t.admin.nothingHereDescription} />
         ) : (
           visible.map((request) => (
             <ProposalComposer

@@ -5,18 +5,33 @@ import { StatCard } from "@/components/shared/stat-card";
 import { StatusPill } from "@/components/shared/status-pill";
 import { formatFullDay, serviceById, todayIso } from "@/domain/schedule";
 import type {
+  ApprovalStatus,
   Appointment,
   BookingRequest,
   ClientProfile,
   Proposal,
   Service,
 } from "@/domain/types";
+import { localeFor } from "@/i18n/config";
+import type { Dict } from "@/i18n/dictionaries";
+import { getDict, getLang } from "@/i18n/server";
 
-import { requestStatusMeta } from "@/components/client/status-meta";
+import { statusMeta } from "@/components/client/status-meta";
 
 const statusTone = { approved: "success", pending: "warning", rejected: "danger" } as const;
 
-export function ClientDetail({
+function approvalLabel(t: Dict, status: ApprovalStatus) {
+  switch (status) {
+    case "approved":
+      return t.statuses.approved;
+    case "pending":
+      return t.statuses.approvalPending;
+    case "rejected":
+      return t.statuses.rejected;
+  }
+}
+
+export async function ClientDetail({
   client,
   requests,
   proposals,
@@ -29,6 +44,9 @@ export function ClientDetail({
   appointments: Appointment[];
   services: Service[];
 }) {
+  const t = await getDict();
+  const locale = localeFor(await getLang());
+  const requestStatusMeta = statusMeta(t);
   const today = todayIso();
   const upcoming = appointments.filter((a) => a.date >= today).length;
   const totalSpend = appointments.reduce(
@@ -51,27 +69,27 @@ export function ClientDetail({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <StatusPill tone={statusTone[client.status]}>{client.status}</StatusPill>
+            <StatusPill tone={statusTone[client.status]}>{approvalLabel(t, client.status)}</StatusPill>
             <StatusPill tone={client.emailConfirmed ? "success" : "neutral"}>
-              {client.emailConfirmed ? "Email verified" : "Email unverified"}
+              {client.emailConfirmed ? t.admin.emailVerified : t.admin.emailUnverified}
             </StatusPill>
           </div>
         </div>
       </Card>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <StatCard label="Total visits" value={appointments.length} />
-        <StatCard label="Upcoming" value={upcoming} tone={upcoming > 0 ? "emerald" : "neutral"} />
-        <StatCard label="Requests" value={requests.length} />
-        <StatCard label="Lifetime value" value={`$${totalSpend}`} hint="Confirmed visits" />
+        <StatCard label={t.admin.detailTotalVisits} value={appointments.length} />
+        <StatCard label={t.admin.detailUpcoming} value={upcoming} tone={upcoming > 0 ? "emerald" : "neutral"} />
+        <StatCard label={t.admin.detailRequests} value={requests.length} />
+        <StatCard label={t.admin.detailLifetimeValue} value={`$${totalSpend}`} hint={t.admin.detailConfirmedVisits} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="rounded-2xl p-5">
-          <SectionHeader title="Appointments" />
+          <SectionHeader title={t.admin.detailAppointments} />
           <div className="mt-4 space-y-2">
             {appointments.length === 0 ? (
-              <EmptyState title="No appointments yet" />
+              <EmptyState title={t.admin.noAppointmentsYet} />
             ) : (
               [...appointments]
                 .sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1))
@@ -84,7 +102,7 @@ export function ClientDetail({
                       {serviceById(appointment.serviceId, services).name}
                     </p>
                     <p className="text-sm tabular-nums text-stone-500 dark:text-stone-400">
-                      {formatFullDay(appointment.date)} · {appointment.time}
+                      {formatFullDay(appointment.date, locale)} · {appointment.time}
                     </p>
                   </div>
                 ))
@@ -93,10 +111,10 @@ export function ClientDetail({
         </Card>
 
         <Card className="rounded-2xl p-5">
-          <SectionHeader title="Request history" />
+          <SectionHeader title={t.admin.detailRequestHistory} />
           <div className="mt-4 space-y-2">
             {requests.length === 0 ? (
-              <EmptyState title="No requests yet" />
+              <EmptyState title={t.client.noRequestsYet} />
             ) : (
               [...requests]
                 .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
@@ -116,9 +134,9 @@ export function ClientDetail({
                       </div>
                       <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                         {proposal
-                          ? `Proposed ${formatFullDay(proposal.date)} at ${proposal.time}`
+                          ? t.client.proposedAt(formatFullDay(proposal.date, locale), proposal.time)
                           : request.preferences
-                              .map((preference) => formatFullDay(preference.date))
+                              .map((preference) => formatFullDay(preference.date, locale))
                               .join(", ")}
                       </p>
                     </div>

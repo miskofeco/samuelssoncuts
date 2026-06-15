@@ -19,6 +19,9 @@ import type {
   Proposal,
   Service,
 } from "@/domain/types";
+import { localeFor } from "@/i18n/config";
+import type { Dict } from "@/i18n/dictionaries";
+import { useLang, useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
 
 export type CalendarItem = {
@@ -55,6 +58,8 @@ export function AdminCalendar({
   services: Service[];
   blockedDates: Set<string>;
 }) {
+  const t = useT();
+  const locale = localeFor(useLang());
   const [view, setView] = useState<"week" | "month">("week");
   const [draft, setDraft] = useState<{ date?: string; time?: string } | null>(null);
   const [selected, setSelected] = useState<CalendarItem | null>(null);
@@ -72,7 +77,7 @@ export function AdminCalendar({
       const client = clients.find((c) => c.id === appointment.clientId);
       push(appointment.date, {
         id: appointment.id,
-        title: client?.name ?? appointment.clientName ?? "Client",
+        title: client?.name ?? appointment.clientName ?? t.admin.clientFallback,
         service: service.name,
         servicePrice: service.price,
         time: appointment.time,
@@ -93,8 +98,8 @@ export function AdminCalendar({
       const service = request ? serviceById(request.serviceId, services) : undefined;
       push(proposal.date, {
         id: proposal.id,
-        title: client?.name ?? "Client",
-        service: service?.name ?? "Proposal",
+        title: client?.name ?? t.admin.clientFallback,
+        service: service?.name ?? t.admin.proposalFallback,
         servicePrice: service?.price ?? 0,
         time: proposal.time,
         date: proposal.date,
@@ -112,20 +117,20 @@ export function AdminCalendar({
       list.sort((a, b) => a.time.localeCompare(b.time));
     }
     return map;
-  }, [appointments, proposals, requests, clients, services]);
+  }, [appointments, proposals, requests, clients, services, t]);
 
   return (
     <Card className="rounded-2xl p-5">
       <SectionHeader
-        eyebrow="Planner"
-        title="Schedule"
+        eyebrow={t.admin.calendarEyebrow}
+        title={t.admin.schedule}
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <StatusPill tone="success">Confirmed</StatusPill>
-            <StatusPill tone="info">Proposed</StatusPill>
+            <StatusPill tone="success">{t.admin.confirmed}</StatusPill>
+            <StatusPill tone="info">{t.statuses.proposedShort}</StatusPill>
             <Button type="button" onClick={() => setDraft({})} className="gap-1.5">
               <span aria-hidden className="text-base leading-none">+</span>
-              Add booking
+              {t.admin.addBooking}
             </Button>
           </div>
         }
@@ -133,18 +138,20 @@ export function AdminCalendar({
 
       <div className="mt-4 max-w-xs">
         <SegmentedControl
-          ariaLabel="Calendar view"
+          ariaLabel={t.admin.calendarView}
           value={view}
           onChange={setView}
           options={[
-            { label: "Week", value: "week" },
-            { label: "Month", value: "month" },
+            { label: t.admin.week, value: "week" },
+            { label: t.admin.month, value: "month" },
           ]}
         />
       </div>
 
       {view === "week" ? (
         <WeekGrid
+          t={t}
+          locale={locale}
           itemsByDate={itemsByDate}
           onAddSlot={(date, time) => setDraft({ date, time })}
           onSelect={setSelected}
@@ -158,7 +165,7 @@ export function AdminCalendar({
               if (blocked) {
                 return (
                   <span className="mt-1 block rounded bg-stone-200 px-1 py-0.5 text-center text-[0.6rem] font-semibold uppercase text-stone-500 dark:bg-stone-700 dark:text-stone-300">
-                    Off
+                    {t.admin.off}
                   </span>
                 );
               }
@@ -179,7 +186,7 @@ export function AdminCalendar({
                     </span>
                   ))}
                   {items.length > 2 ? (
-                    <span className="text-[0.6rem] text-stone-400">+{items.length - 2} more</span>
+                    <span className="text-[0.6rem] text-stone-400">{t.admin.moreCount(items.length - 2)}</span>
                   ) : null}
                 </span>
               );
@@ -259,10 +266,14 @@ function CurrentTimeLine() {
 }
 
 function WeekGrid({
+  t,
+  locale,
   itemsByDate,
   onAddSlot,
   onSelect,
 }: {
+  t: Dict;
+  locale: string;
   itemsByDate: Map<string, CalendarItem[]>;
   onAddSlot: (date: string, time: string) => void;
   onSelect: (item: CalendarItem) => void;
@@ -305,7 +316,7 @@ function WeekGrid({
                       isToday ? "" : "text-black dark:text-white",
                     )}
                   >
-                    {formatDay(day)}
+                    {formatDay(day, locale)}
                   </p>
                 </div>
               );
@@ -333,6 +344,8 @@ function WeekGrid({
               {days.map((day) => (
                 <DayColumn
                   key={day}
+                  t={t}
+                  locale={locale}
                   day={day}
                   items={itemsByDate.get(day) ?? []}
                   isToday={day === today}
@@ -362,23 +375,23 @@ function WeekGrid({
               )}
             >
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-semibold text-black dark:text-white">{formatDay(day)}</h3>
+                <h3 className="font-semibold text-black dark:text-white">{formatDay(day, locale)}</h3>
                 <div className="flex items-center gap-2">
-                  {isToday ? <StatusPill tone="neutral">Today</StatusPill> : null}
+                  {isToday ? <StatusPill tone="neutral">{t.common.today}</StatusPill> : null}
                   <button
                     type="button"
                     onClick={() => onAddSlot(day, "09:00")}
                     className="flex h-8 items-center gap-1 rounded-lg border border-black/10 px-2.5 text-xs font-semibold text-stone-600 transition hover:border-black hover:text-black dark:border-white/15 dark:text-stone-300 dark:hover:border-white dark:hover:text-white"
                   >
                     <span aria-hidden className="text-sm leading-none">+</span>
-                    Add
+                    {t.admin.addShort}
                   </button>
                 </div>
               </div>
               <div className="mt-3 space-y-2">
                 {items.length === 0 ? (
                   <p className="rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-500 dark:bg-stone-800/60 dark:text-stone-400">
-                    No appointments.
+                    {t.admin.noAppointments}
                   </p>
                 ) : (
                   items.map((item) => (
@@ -395,12 +408,16 @@ function WeekGrid({
 }
 
 function DayColumn({
+  t,
+  locale,
   day,
   items,
   isToday,
   onAddSlot,
   onSelect,
 }: {
+  t: Dict;
+  locale: string;
   day: string;
   items: CalendarItem[];
   isToday: boolean;
@@ -423,7 +440,7 @@ function DayColumn({
           key={hour}
           type="button"
           onClick={() => onAddSlot(day, `${String(hour).padStart(2, "0")}:00`)}
-          title={`Add a booking on ${formatDay(day)} at ${String(hour).padStart(2, "0")}:00`}
+          title={t.admin.addBookingAt(formatDay(day, locale), `${String(hour).padStart(2, "0")}:00`)}
           style={{ height: HOUR_HEIGHT }}
           className="group block w-full border-t border-black/5 transition first:border-t-0 hover:bg-stone-100/70 dark:border-white/5 dark:hover:bg-stone-800"
         >
