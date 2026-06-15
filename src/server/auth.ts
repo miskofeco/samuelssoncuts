@@ -73,6 +73,12 @@ export async function requireApprovedClient() {
     redirect("/admin");
   }
 
+  // New sign-ups (esp. Google OAuth) must supply a phone number before anything
+  // else. Existing accounts already have one, so they're unaffected.
+  if (needsPhone(profile)) {
+    redirect("/complete-profile");
+  }
+
   if (profile.approval_status !== "approved") {
     redirect("/pending");
   }
@@ -80,9 +86,19 @@ export async function requireApprovedClient() {
   return profile;
 }
 
+// True when a non-admin account has no phone number yet. Admins are exempt so
+// the seeded admin is never forced through the completion step.
+export function needsPhone(profile: AuthProfile) {
+  return profile.role !== "admin" && !profile.phone?.trim();
+}
+
 export function dashboardPathFor(profile: AuthProfile) {
   if (profile.role === "admin" && profile.approval_status === "approved") {
     return "/admin";
+  }
+
+  if (needsPhone(profile)) {
+    return "/complete-profile";
   }
 
   if (profile.approval_status !== "approved") {

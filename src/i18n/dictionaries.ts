@@ -60,6 +60,10 @@ const en = {
     phonePlaceholder: "+421 ...",
     orDivider: "or",
     continueWithGoogle: "Continue with Google",
+    completeProfileTitle: "One more step",
+    completeProfileSubtitle:
+      "Add your phone number to finish setting up your account.",
+    completeProfileCta: "Save and continue",
   },
   setup: {
     eyebrow: "Setup required",
@@ -480,6 +484,7 @@ const en = {
     avatarUpdated: "Profile picture updated.",
     avatarRemoved: "Profile picture removed.",
     avatarUploadFailed: "Could not upload the image. Try again.",
+    phoneTaken: "An account with this phone number already exists.",
   },
   consent: {
     banner: {
@@ -627,6 +632,10 @@ const sk: Dict = {
     phonePlaceholder: "+421 ...",
     orDivider: "alebo",
     continueWithGoogle: "Pokračovať cez Google",
+    completeProfileTitle: "Ešte jeden krok",
+    completeProfileSubtitle:
+      "Pridajte svoje telefónne číslo na dokončenie nastavenia účtu.",
+    completeProfileCta: "Uložiť a pokračovať",
   },
   setup: {
     eyebrow: "Potrebné nastavenie",
@@ -1025,6 +1034,7 @@ const sk: Dict = {
     avatarUpdated: "Profilová fotka aktualizovaná.",
     avatarRemoved: "Profilová fotka odstránená.",
     avatarUploadFailed: "Obrázok sa nepodarilo nahrať. Skúste znova.",
+    phoneTaken: "Účet s týmto telefónnym číslom už existuje.",
   },
   consent: {
     banner: {

@@ -101,6 +101,26 @@ function formString(formData: FormData, key: string) {
   return typeof value === "string" ? value : "";
 }
 
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+// Whether a phone number is already used by some profile. Goes through the
+// `phone_taken` SECURITY DEFINER function because RLS forbids reading other
+// users' profile rows (so a plain select would always return empty for anon).
+// The unique index on profiles.phone is the real backstop; this just lets us
+// show a friendly message before attempting the write.
+async function isPhoneTaken(supabase: SupabaseClient, phone: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("phone_taken" as never, {
+    p_phone: phone.trim(),
+  } as never);
+  if (error) return false; // fail open — the DB unique index still protects us
+  return data === true;
+}
+
+// Postgres unique-violation surfaced through the phone index (race backstop).
+function isDuplicatePhoneError(message: string | undefined): boolean {
+  return Boolean(message && message.includes("profiles_phone_unique"));
+}
+
 function addMinutes(iso: string, minutes: number) {
   const date = new Date(iso);
   date.setMinutes(date.getMinutes() + minutes);
@@ -169,7 +189,14 @@ export async function registerAction(formData: FormData) {
     redirect(`/register?error=${encodeURIComponent(t.feedback.fillAllFields)}`);
   }
 
+  const phone = input.data.phone.trim();
   const supabase = await createClient();
+
+  // Reject a phone number that's already in use before creating the auth user.
+  if (await isPhoneTaken(supabase, phone)) {
+    redirect(`/register?error=${encodeURIComponent(t.feedback.phoneTaken)}`);
+  }
+
   const { error } = await supabase.auth.signUp({
     email: input.data.email,
     password: input.data.password,
@@ -177,13 +204,17 @@ export async function registerAction(formData: FormData) {
       emailRedirectTo: `${getSiteUrl()}/auth/callback`,
       data: {
         full_name: input.data.fullName,
-        phone: input.data.phone,
+        phone,
       },
     },
   });
 
   if (error) {
-    redirect(`/register?error=${encodeURIComponent(error.message)}`);
+    // Backstop for a race between the check above and the trigger insert.
+    const message = isDuplicatePhoneError(error.message)
+      ? t.feedback.phoneTaken
+      : error.message;
+    redirect(`/register?error=${encodeURIComponent(message)}`);
   }
 
   redirect(`/login?message=${encodeURIComponent(t.feedback.registrationCreated)}`);
@@ -842,14 +873,54 @@ export async function updateProfileAction(input: {
     return { ok: false, error: t.feedback.enterValidNamePhone };
   }
 
+  const phone = parsed.data.phone.trim();
   const supabase = await createClient();
   const { error } = await supabase
     .from("profiles")
-    .update({ full_name: parsed.data.fullName, phone: parsed.data.phone })
+    .update({ full_name: parsed.data.fullName, phone })
     .eq("id", profile.id);
 
   if (error) {
-    return { ok: false, error: error.message };
+    return {
+      ok: false,
+      error: isDuplicatePhoneError(error.message) ? t.feedback.phoneTaken : error.message,
+    };
+  }
+
+  revalidatePath("/client", "layout");
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: t.feedback.profileUpdated };
+}
+
+// Google OAuth users never type a phone number. After sign-in they are routed
+// to /complete-profile, which calls this to set a unique, populated phone before
+// they can use the app.
+export async function completePhoneAction(input: { phone: string }): Promise<ActionResult> {
+  const profile = await requireProfile();
+  const t = await getDict();
+  const parsed = z.object({ phone: z.string().trim().min(4).max(40) }).safeParse(input);
+
+  if (!parsed.success) {
+    return { ok: false, error: t.feedback.enterValidNamePhone };
+  }
+
+  const phone = parsed.data.phone.trim();
+  const supabase = await createClient();
+
+  if (await isPhoneTaken(supabase, phone)) {
+    return { ok: false, error: t.feedback.phoneTaken };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ phone })
+    .eq("id", profile.id);
+
+  if (error) {
+    return {
+      ok: false,
+      error: isDuplicatePhoneError(error.message) ? t.feedback.phoneTaken : error.message,
+    };
   }
 
   revalidatePath("/client", "layout");
