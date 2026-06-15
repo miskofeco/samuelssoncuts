@@ -7,8 +7,8 @@ import { signOutAction } from "@/app/actions";
 import { useConsent } from "@/components/consent/consent-provider";
 import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
+import { IconBadge } from "@/components/shared/icon-badge";
 import { Logo } from "@/components/shared/logo";
-import { StatusPill } from "@/components/shared/status-pill";
 import { useT } from "@/i18n/provider";
 import type { AuthProfile } from "@/server/auth";
 import { cn } from "@/lib/classnames";
@@ -86,13 +86,39 @@ export function Sidebar({
             </p>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <StatusPill>{profile.role}</StatusPill>
-          <StatusPill
-            tone={profile.approval_status === "approved" ? "success" : "warning"}
-          >
-            {profile.approval_status}
-          </StatusPill>
+        <div className="mt-3 flex items-center gap-2">
+          {profile.role === "admin" ? (
+            <IconBadge
+              tone="info"
+              icon={<ShieldIcon />}
+              label={t.account.roleAdminHint}
+            />
+          ) : (
+            <IconBadge
+              tone="neutral"
+              icon={<UserIcon />}
+              label={t.account.roleClientHint}
+            />
+          )}
+          {profile.approval_status === "approved" ? (
+            <IconBadge
+              tone="success"
+              icon={<VerifiedIcon />}
+              label={t.account.verifiedHint}
+            />
+          ) : profile.approval_status === "rejected" ? (
+            <IconBadge
+              tone="danger"
+              icon={<XIcon />}
+              label={t.account.rejectedHint}
+            />
+          ) : (
+            <IconBadge
+              tone="warning"
+              icon={<ClockIcon />}
+              label={t.account.approvalPendingHint}
+            />
+          )}
         </div>
         <button
           type="button"
@@ -112,5 +138,71 @@ export function Sidebar({
         </form>
       </div>
     </div>
+  );
+}
+
+const iconProps = {
+  width: 16,
+  height: 16,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  "aria-hidden": true,
+};
+
+// Barber/admin: shield. Client: person.
+function ShieldIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+// Approved: filled badge-check (the green "verified" mark). The fill comes from
+// the IconBadge success tone; we draw a solid disc with a white tick on top.
+function VerifiedIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M12 2l2.39 1.74 2.96-.01 1.07 2.76 2.4 1.73-.55 2.91.55 2.91-2.4 1.73-1.07 2.76-2.96-.01L12 22l-2.39-1.72-2.96.01-1.07-2.76-2.4-1.73L3.74 12l-.56-2.78 2.4-1.73L6.65 4.73l2.96.01L12 2z" />
+      <path
+        d="M9 12.5l2 2 4-4.5"
+        fill="none"
+        stroke="#fff"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg {...iconProps}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg {...iconProps}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M15 9l-6 6M9 9l6 6" />
+    </svg>
   );
 }

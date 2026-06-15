@@ -115,6 +115,17 @@ const en = {
     approvalPending: "pending",
     rejected: "rejected",
   },
+  account: {
+    roleAdmin: "Barber",
+    roleClient: "Client",
+    // Hover hints differ per role (admin/barber vs client).
+    roleAdminHint: "Barber account — full access to the schedule, requests and clients.",
+    roleClientHint: "Client account — book appointments and manage your visits.",
+    verified: "Verified",
+    verifiedHint: "Verified account — approved by the barber.",
+    approvalPendingHint: "Awaiting approval from the barber.",
+    rejectedHint: "Account not approved.",
+  },
   client: {
     workspaceEyebrow: "Client workspace",
     welcome: (name: string) => `Welcome back, ${name}`,
@@ -571,7 +582,7 @@ const sk: Dict = {
   },
   metadata: {
     title: "Samuelsson Cuts Rezervácie",
-    description: "Rezervačný a plánovací systém holičstva so schvaľovaním.",
+    description: "Rezervačný a plánovací systém Barbera so schvaľovaním.",
   },
   language: {
     label: "Jazyk",
@@ -591,7 +602,7 @@ const sk: Dict = {
     requestAccess: "Požiadať o prístup",
     loginSubtitle: "Prihláste sa a pokračujte do svojho plánovača.",
     registerSubtitle:
-      "Vytvorte si účet. Holič schvaľuje nových klientov pred sprístupnením rezervácií.",
+      "Vytvorte si účet. Barber schvaľuje nových klientov pred sprístupnením rezervácií.",
     needAccess: "Potrebujete prístup?",
     alreadyApproved: "Už ste schválený?",
     registerLink: "Registrovať sa",
@@ -615,11 +626,11 @@ const sk: Dict = {
   pending: {
     eyebrow: "Stav účtu",
     notApprovedTitle: "Účet nebol schválený",
-    waitingTitle: "Čaká sa na schválenie holičom",
+    waitingTitle: "Čaká sa na schválenie Barberom",
     rejected: (name: string) =>
-      `${name}, holič nemohol schváliť váš účet. Ak si myslíte, že ide o omyl, kontaktujte prevádzku.`,
+      `${name}, Barber nemohol schváliť váš účet. Ak si myslíte, že ide o omyl, kontaktujte prevádzku.`,
     waiting: (name: string) =>
-      `${name}, vaša registrácia je dokončená. Prístup k rezerváciám sa sprístupní po schválení účtu holičom — dostanete e-mail, keď bude pripravený.`,
+      `${name}, vaša registrácia je dokončená. Prístup k rezerváciám sa sprístupní po schválení účtu Barberom — dostanete e-mail, keď bude pripravený.`,
   },
   nav: {
     overview: "Prehľad",
@@ -655,6 +666,16 @@ const sk: Dict = {
     approvalPending: "čaká",
     rejected: "zamietnutý",
   },
+  account: {
+    roleAdmin: "Barber",
+    roleClient: "Klient",
+    roleAdminHint: "Účet Barbera — plný prístup k rozvrhu, žiadostiam a klientom.",
+    roleClientHint: "Klientsky účet — rezervujte si termíny a spravujte svoje návštevy.",
+    verified: "Overené",
+    verifiedHint: "Overený účet — schválený Barberom.",
+    approvalPendingHint: "Čaká sa na schválenie Barberom.",
+    rejectedHint: "Účet nebol schválený.",
+  },
   client: {
     workspaceEyebrow: "Klientska zóna",
     welcome: (name: string) => `Vitajte späť, ${name}`,
@@ -662,7 +683,7 @@ const sk: Dict = {
     bookEyebrow: "Rezervácia",
     bookTitle: "Rezervovať termín",
     bookDescription:
-      "Vyberte si službu a tri preferované dni. Holič navrhne vyhovujúci čas.",
+      "Vyberte si službu a tri preferované dni. Barber navrhne vyhovujúci čas.",
     reservationsEyebrow: "Rezervácie",
     reservationsTitle: "Moje rezervácie",
     reservationsDescription:
@@ -676,7 +697,7 @@ const sk: Dict = {
     profileEyebrow: "Účet",
     profileTitle: "Profil",
     profileDescription:
-      "Udržujte svoje kontaktné údaje aktuálne, aby vás holič mohol kontaktovať.",
+      "Udržujte svoje kontaktné údaje aktuálne, aby vás Barber mohol kontaktovať.",
     openRequests: "Otvorené žiadosti",
     openRequestsHint: "Čaká na termín",
     needsReply: "Potrebuje vašu reakciu",
@@ -698,7 +719,7 @@ const sk: Dict = {
     pickThreeDays: "Vyberte tri preferované dni",
     service: "Služba",
     notes: "Poznámky",
-    notesPlaceholder: "Niečo, čo by mal holič vedieť?",
+    notesPlaceholder: "Niečo, čo by mal Barber vedieť?",
     sendRequest: "Odoslať žiadosť",
     noServices: "Žiadne nakonfigurované služby",
     availabilityLabel: "Dostupnosť",
@@ -933,10 +954,10 @@ const sk: Dict = {
     couldNotStartSignIn: "Nepodarilo sa spustiť prihlásenie.",
     fillAllFields: "Vyplňte všetky polia správne. Heslo musí mať aspoň 8 znakov.",
     registrationCreated:
-      "Registrácia vytvorená. Ak je to potrebné, potvrďte e-mail a potom počkajte na schválenie holičom.",
+      "Registrácia vytvorená. Ak je to potrebné, potvrďte e-mail a potom počkajte na schválenie Barberom.",
     pickServiceAndDays: "Vyberte službu a tri preferované dni.",
     unableCreateRequest: "Nepodarilo sa vytvoriť žiadosť o rezerváciu.",
-    requestSent: "Žiadosť odoslaná. Holič navrhne čas.",
+    requestSent: "Žiadosť odoslaná. Barber navrhne čas.",
     emailNotConfirmed: "Tento klient si ešte nepotvrdil e-mail.",
     couldNotApprove: "Nepodarilo sa schváliť tohto klienta.",
     clientApproved: "Klient schválený.",
@@ -1066,7 +1087,7 @@ const sk: Dict = {
         "Nevyhnutné cookies používame na základe nášho oprávneného záujmu poskytovať funkčnú a bezpečnú službu. Všetky ostatné cookies používame len s vaším súhlasom (ktorý môžete kedykoľvek odvolať). V závislosti od miesta, kde žijete, môžete mať právo na prístup k svojim osobným údajom, ich opravu alebo vymazanie a právo podať sťažnosť miestnemu dozornému úradu pre ochranu údajov.",
       contactTitle: "Kontakt",
       contactBody:
-        "Ak máte otázky k týmto zásadám alebo k tomu, ako používame cookies, kontaktujte priamo holičstvo a radi vám pomôžeme.",
+        "Ak máte otázky k týmto zásadám alebo k tomu, ako používame cookies, kontaktujte priamo Barbera a radi vám pomôžeme.",
     },
   },
 };
