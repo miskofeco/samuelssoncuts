@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import type { AnimationEvent, ReactNode } from "react";
 
 import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
+
+const EXIT_ANIMATION_MS = 320;
 
 export function Modal({
   open,
@@ -22,10 +24,29 @@ export function Modal({
   className?: string;
 }) {
   const t = useT();
+  const [mounted, setMounted] = useState(open);
+
+  if (open && !mounted) {
+    setMounted(true);
+  }
+
   useEffect(() => {
-    if (!open) return;
+    if (open || !mounted) return;
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timeout = window.setTimeout(() => {
+      setMounted(false);
+    }, prefersReducedMotion ? 0 : EXIT_ANIMATION_MS);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [open, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (open && event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
@@ -33,22 +54,33 @@ export function Modal({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [open, onClose]);
+  }, [mounted, onClose, open]);
 
-  if (!open) return null;
+  if (!mounted) return null;
+
+  function handleAnimationEnd(event: AnimationEvent<HTMLDivElement>) {
+    if (!open && event.currentTarget === event.target) {
+      setMounted(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <div
-        className="ss-overlay-in absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
+        className={cn(
+          open ? "ss-overlay-in" : "ss-overlay-out",
+          "absolute inset-0 bg-black/40 backdrop-blur-sm",
+        )}
+        onClick={open ? onClose : undefined}
         aria-hidden
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        onAnimationEnd={handleAnimationEnd}
         className={cn(
+          open ? "ss-modal-panel-in" : "ss-modal-panel-out",
           "ss-modal-panel relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-t-2xl border border-black/10 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-stone-900 sm:max-w-lg sm:rounded-2xl",
           className,
         )}
