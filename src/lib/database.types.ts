@@ -18,6 +18,7 @@ export type Database = {
           email: string;
           phone: string | null;
           avatar_url: string | null;
+          calendar_token: string;
           email_confirmed_at: string | null;
           created_at: string;
           updated_at: string;
@@ -30,6 +31,7 @@ export type Database = {
           email: string;
           phone?: string | null;
           avatar_url?: string | null;
+          calendar_token?: string;
           email_confirmed_at?: string | null;
           created_at?: string;
           updated_at?: string;

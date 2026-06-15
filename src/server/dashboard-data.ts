@@ -525,3 +525,68 @@ export async function loadClientHistory(clientId: string): Promise<{
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// Calendar export (.ics). Reads the RAW timestamptz instants (not the lossy
+// domain date/time mapping) so the exported absolute times are exact. Confirmed
+// appointments only, within [fromIso, toIso). Joins done in JS to avoid the
+// embedded-select typing issues caused by the empty Relationships arrays.
+// ---------------------------------------------------------------------------
+
+export type ExportEvent = {
+  id: string;
+  start: Date;
+  end: Date;
+  serviceName: string;
+  customer: string;
+};
+
+export async function loadExportAppointments(
+  fromIso: string,
+  toIso: string,
+  // When set, only that client's appointments are returned (client self-export).
+  // Omitted for the admin, who exports the whole schedule. RLS still applies:
+  // clients can read all appointment rows but only their own profile, so the
+  // customer name resolves to their own name (fine — it's their calendar).
+  clientId?: string,
+): Promise<ExportEvent[]> {
+  const supabase = await createClient();
+  let appointmentsQuery = supabase
+    .from("appointments")
+    .select("*")
+    .eq("status", "confirmed")
+    .gte("starts_at", fromIso)
+    .lt("starts_at", toIso)
+    .order("starts_at");
+  if (clientId) {
+    appointmentsQuery = appointmentsQuery.eq("client_id", clientId);
+  }
+
+  const [appointmentsResult, servicesResult, profilesResult] = await Promise.all([
+    appointmentsQuery,
+    supabase.from("services").select("id, name"),
+    supabase.from("profiles").select("id, full_name"),
+  ]);
+
+  fail("appointments", appointmentsResult.error);
+  fail("services", servicesResult.error);
+  fail("profiles", profilesResult.error);
+
+  const serviceName = new Map(
+    (servicesResult.data ?? []).map((s) => [s.id, s.name]),
+  );
+  const clientName = new Map(
+    (profilesResult.data ?? []).map((p) => [p.id, p.full_name]),
+  );
+
+  return (appointmentsResult.data ?? []).map((row) => ({
+    id: row.id,
+    start: new Date(row.starts_at),
+    end: new Date(row.ends_at),
+    serviceName: serviceName.get(row.service_id) ?? "",
+    customer:
+      (row.client_id ? clientName.get(row.client_id) : undefined) ??
+      row.customer_name ??
+      "Walk-in",
+  }));
+}

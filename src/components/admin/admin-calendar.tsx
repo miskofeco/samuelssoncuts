@@ -10,6 +10,8 @@ import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
 import { addDays, formatDay, serviceById, todayIso } from "@/domain/schedule";
 
+import { CalendarExport } from "@/components/shared/calendar-export";
+
 import { AddBookingModal } from "./add-booking-modal";
 import { AppointmentDetailModal } from "./appointment-detail-modal";
 import type {
@@ -51,6 +53,7 @@ export function AdminCalendar({
   clients,
   services,
   blockedDates,
+  feedUrl,
 }: {
   appointments: Appointment[];
   proposals: Proposal[];
@@ -58,6 +61,7 @@ export function AdminCalendar({
   clients: ClientProfile[];
   services: Service[];
   blockedDates: Set<string>;
+  feedUrl?: string;
 }) {
   const t = useT();
   const locale = localeFor(useLang());
@@ -131,6 +135,7 @@ export function AdminCalendar({
           <div className="flex flex-wrap items-center gap-2">
             <StatusPill tone="success">{t.admin.confirmed}</StatusPill>
             <StatusPill tone="info">{t.statuses.proposedShort}</StatusPill>
+            <CalendarExport feedUrl={feedUrl} />
             <Button type="button" onClick={() => setDraft({})} className="gap-1.5">
               <span aria-hidden className="text-base leading-none">+</span>
               {t.admin.addBooking}
