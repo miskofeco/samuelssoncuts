@@ -173,6 +173,12 @@ export function AdminCalendar({
       ) : (
         <div className="mt-5">
           <MonthCalendar
+            onDayClick={(cell) => {
+              const items = itemsByDate.get(cell.date) ?? [];
+              if (blockedDates.has(cell.date) || items.length === 0) {
+                setDraft({ date: cell.date });
+              }
+            }}
             dayClassName={(cell) =>
               blockedDates.has(cell.date)
                 ? "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15"
@@ -188,12 +194,20 @@ export function AdminCalendar({
               const blocked = blockedDates.has(cell.date);
               if (blocked) {
                 return (
-                  <span
-                    aria-label={t.admin.off}
-                    className="mt-1 block h-2 rounded-full bg-red-200 px-0 py-0 text-center text-[0.6rem] font-semibold uppercase sm:h-auto sm:rounded sm:px-1 sm:py-0.5 dark:bg-red-500/30"
-                  >
-                    <span className="sr-only text-red-700 sm:not-sr-only dark:text-red-300">
-                      {t.admin.off}
+                  <span className="mt-1 flex flex-col gap-1">
+                    <span
+                      aria-label={t.admin.off}
+                      className="block h-2 rounded-full bg-red-200 px-0 py-0 text-center text-[0.6rem] font-semibold uppercase sm:h-auto sm:rounded sm:px-1 sm:py-0.5 dark:bg-red-500/30"
+                    >
+                      <span className="sr-only text-red-700 sm:not-sr-only dark:text-red-300">
+                        {t.admin.off}
+                      </span>
+                    </span>
+                    <span className="inline-flex h-4 w-4 items-center justify-center self-start rounded border border-red-200 bg-white/80 text-[0.7rem] font-semibold text-red-700 dark:border-red-500/30 dark:bg-stone-900/80 dark:text-red-200 sm:h-auto sm:w-auto sm:px-1 sm:py-0.5 sm:text-[0.6rem]">
+                      <span aria-hidden>+</span>
+                      <span className="sr-only sm:not-sr-only sm:ml-1">
+                        {t.admin.addShort}
+                      </span>
                     </span>
                   </span>
                 );
