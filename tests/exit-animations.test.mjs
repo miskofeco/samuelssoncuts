@@ -35,3 +35,12 @@ test("exit animation classes are defined for overlays, modals, and drawers", () 
     assert.match(css, new RegExp(`\\.${className}\\b`));
   }
 });
+
+test("modal keeps the close button visible on mobile and caps height to the visible viewport", () => {
+  assert.match(modal, /pt-\[max\(0\.75rem,env\(safe-area-inset-top\)\)\]/);
+  assert.match(modal, /pb-\[max\(0\.75rem,env\(safe-area-inset-bottom\)\)\]/);
+  assert.match(modal, /max-h-\[calc\(100dvh-env\(safe-area-inset-top\)-env\(safe-area-inset-bottom\)-1\.5rem\)\]/);
+  assert.match(modal, /overflow-hidden/);
+  assert.match(modal, /sticky top-0 z-10/);
+  assert.match(modal, /overflow-y-auto/);
+});
