@@ -22,16 +22,21 @@ export async function ClientOverview({
   proposals,
   appointments,
   services,
+  blockedRanges,
 }: {
   requests: BookingRequest[];
   proposals: Proposal[];
   appointments: Appointment[];
   services: Service[];
+  blockedRanges: Array<{ id: string; start: string; end: string; reason: string | null }>;
 }) {
   const t = await getDict();
   const locale = localeFor(await getLang());
   const meta = statusMeta(t);
   const today = todayIso();
+  const plannedBlocked = blockedRanges
+    .filter((range) => range.end >= today)
+    .sort((a, b) => (a.start < b.start ? -1 : 1));
   const upcoming = appointments
     .filter((appointment) => appointment.date >= today)
     .sort((a, b) => (a.date + a.time < b.date + b.time ? -1 : 1));
@@ -43,6 +48,53 @@ export async function ClientOverview({
 
   return (
     <div className="space-y-6">
+      {plannedBlocked.length > 0 ? (
+        <section className="rounded-2xl border border-orange-200 bg-orange-50 p-4 text-orange-950 shadow-sm dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-100">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+                {t.client.blockedNoticeEyebrow}
+              </p>
+              <h2 className="mt-1 text-lg font-semibold">
+                {t.client.blockedNoticeTitle}
+              </h2>
+              <p className="mt-1 text-sm text-orange-900/80 dark:text-orange-100/80">
+                {t.client.blockedNoticeDescription}
+              </p>
+            </div>
+            <ButtonLink
+              href="/client/book"
+              variant="secondary"
+              className="w-full shrink-0 sm:w-auto"
+            >
+              {t.client.bookTitle}
+            </ButtonLink>
+          </div>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+            {plannedBlocked.map((range) => {
+              const label =
+                range.start === range.end
+                  ? formatFullDay(range.start, locale)
+                  : `${formatFullDay(range.start, locale)} - ${formatFullDay(range.end, locale)}`;
+
+              return (
+                <li
+                  key={range.id}
+                  className="rounded-xl bg-white/70 px-3 py-2 text-sm font-semibold text-orange-950 dark:bg-black/15 dark:text-orange-100"
+                >
+                  {label}
+                  {range.reason ? (
+                    <span className="mt-0.5 block text-xs font-medium text-orange-900/70 dark:text-orange-100/70">
+                      {range.reason}
+                    </span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard label={t.client.openRequests} value={openRequests} hint={t.client.openRequestsHint} tone={openRequests > 0 ? "sky" : "neutral"} />
         <StatCard label={t.client.needsReply} value={awaitingResponse} hint={t.client.needsReplyHint} tone={awaitingResponse > 0 ? "amber" : "neutral"} />

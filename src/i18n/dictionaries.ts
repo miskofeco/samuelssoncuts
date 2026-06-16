@@ -152,6 +152,10 @@ const en = {
     profileTitle: "Profile",
     profileDescription:
       "Keep your contact details up to date so the barber can reach you.",
+    blockedNoticeEyebrow: "Upcoming closures",
+    blockedNoticeTitle: "Barber unavailable on these days",
+    blockedNoticeDescription:
+      "The shop is blocked on the dates below. Book an available appointment before or after those days.",
     // Overview stat cards
     openRequests: "Open requests",
     openRequestsHint: "Waiting for a time",
@@ -731,6 +735,10 @@ const sk: Dict = {
     profileTitle: "Profil",
     profileDescription:
       "Udržujte svoje kontaktné údaje aktuálne, aby vás Barber mohol kontaktovať.",
+    blockedNoticeEyebrow: "Plánované zatvorenie",
+    blockedNoticeTitle: "Barber nebude dostupný v týchto dňoch",
+    blockedNoticeDescription:
+      "V dátumoch nižšie je prevádzka blokovaná. Rezervujte si dostupný termín pred nimi alebo po nich.",
     openRequests: "Otvorené žiadosti",
     openRequestsHint: "Čaká na termín",
     needsReply: "Potrebuje vašu reakciu",

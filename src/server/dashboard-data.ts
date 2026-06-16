@@ -257,6 +257,7 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
   appointments: Appointment[];
   services: Service[];
   notifications: Notification[];
+  blockedRanges: Array<{ id: string; start: string; end: string; reason: string | null }>;
 }> {
   const supabase = await createClient();
   const [requestsResult, appointmentsResult, servicesResult, notificationsResult] =
@@ -285,6 +286,7 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
   fail("services", servicesResult.error);
   fail("notifications", notificationsResult.error);
 
+  const blocked = await loadBlockedDays();
   const rows = (requestsResult.data ?? []) as RequestRow[];
   return {
     requests: rows.map(mapRequestRow),
@@ -292,6 +294,7 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
     appointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
     services: (servicesResult.data ?? []).map(mapServiceRow),
     notifications: (notificationsResult.data ?? []).map(mapNotificationRow),
+    blockedRanges: blocked.ranges,
   };
 }
 

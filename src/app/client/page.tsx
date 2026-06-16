@@ -24,6 +24,7 @@ export default async function ClientHomePage() {
         proposals={data.proposals}
         appointments={data.appointments}
         services={data.services}
+        blockedRanges={data.blockedRanges}
       />
     </div>
   );
