@@ -20,6 +20,9 @@ function supabaseImagePattern() {
 }
 
 const nextConfig: NextConfig = {
+  // Use Vercel's per-deployment identifier so stale clients reload onto the
+  // new asset graph instead of requesting deleted chunk hashes after deploys.
+  deploymentId: process.env.VERCEL_DEPLOYMENT_ID ?? process.env.NEXT_DEPLOYMENT_ID,
   images: {
     remotePatterns: supabaseImagePattern(),
   },
