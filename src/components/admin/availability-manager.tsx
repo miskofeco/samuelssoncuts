@@ -94,8 +94,13 @@ export function AvailabilityManager({
           <MonthCalendar
             renderDay={(cell) =>
               blockedDates.has(cell.date) ? (
-                <span className="mt-1 block rounded bg-red-100 px-1 py-0.5 text-center text-[0.6rem] font-semibold uppercase text-red-700 dark:bg-red-500/20 dark:text-red-300">
-                  {t.admin.off}
+                <span
+                  aria-label={t.admin.off}
+                  className="mt-1 block h-2 rounded-full bg-red-100 px-0 py-0 text-center text-[0.6rem] font-semibold uppercase sm:h-auto sm:rounded sm:px-1 sm:py-0.5 dark:bg-red-500/20"
+                >
+                  <span className="sr-only sm:not-sr-only text-red-700 dark:text-red-300">
+                    {t.admin.off}
+                  </span>
                 </span>
               ) : null
             }

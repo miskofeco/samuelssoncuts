@@ -172,8 +172,13 @@ export function AdminCalendar({
               const blocked = blockedDates.has(cell.date);
               if (blocked) {
                 return (
-                  <span className="mt-1 block rounded bg-stone-200 px-1 py-0.5 text-center text-[0.6rem] font-semibold uppercase text-stone-500 dark:bg-stone-700 dark:text-stone-300">
-                    {t.admin.off}
+                  <span
+                    aria-label={t.admin.off}
+                    className="mt-1 block h-2 rounded-full bg-stone-200 px-0 py-0 text-center text-[0.6rem] font-semibold uppercase sm:h-auto sm:rounded sm:px-1 sm:py-0.5 dark:bg-stone-700"
+                  >
+                    <span className="sr-only text-stone-500 sm:not-sr-only dark:text-stone-300">
+                      {t.admin.off}
+                    </span>
                   </span>
                 );
               }
@@ -183,18 +188,21 @@ export function AdminCalendar({
                   {items.slice(0, 2).map((item) => (
                     <span
                       key={item.id}
+                      aria-label={`${item.time} ${item.title}`}
                       className={cn(
-                        "truncate rounded px-1 py-0.5 text-[0.6rem] font-semibold",
+                        "block h-2 rounded-full px-0 py-0 sm:h-auto sm:rounded sm:px-1 sm:py-0.5 sm:text-[0.6rem] sm:font-semibold sm:truncate",
                         item.type === "Confirmed"
                           ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300"
                           : "bg-sky-100 text-sky-900 dark:bg-sky-500/20 dark:text-sky-300",
                       )}
                     >
-                      {item.time} {item.title}
+                      <span className="sr-only sm:not-sr-only">
+                        {item.time} {item.title}
+                      </span>
                     </span>
                   ))}
                   {items.length > 2 ? (
-                    <span className="text-[0.6rem] text-stone-400">{t.admin.moreCount(items.length - 2)}</span>
+                    <span className="hidden sm:block text-[0.6rem] text-stone-400">{t.admin.moreCount(items.length - 2)}</span>
                   ) : null}
                 </span>
               );
