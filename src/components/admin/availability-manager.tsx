@@ -92,11 +92,21 @@ export function AvailabilityManager({
 
         <div className="mt-6">
           <MonthCalendar
+            dayClassName={(cell) =>
+              blockedDates.has(cell.date)
+                ? "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15"
+                : ""
+            }
+            dayNumberClassName={(cell) =>
+              blockedDates.has(cell.date)
+                ? "text-red-900 dark:text-red-100"
+                : ""
+            }
             renderDay={(cell) =>
               blockedDates.has(cell.date) ? (
                 <span
                   aria-label={t.admin.off}
-                  className="mt-1 block h-2 rounded-full bg-red-100 px-0 py-0 text-center text-[0.6rem] font-semibold uppercase sm:h-auto sm:rounded sm:px-1 sm:py-0.5 dark:bg-red-500/20"
+                  className="mt-1 block h-2 rounded-full bg-red-200 px-0 py-0 text-center text-[0.6rem] font-semibold uppercase sm:h-auto sm:rounded sm:px-1 sm:py-0.5 dark:bg-red-500/30"
                 >
                   <span className="sr-only sm:not-sr-only text-red-700 dark:text-red-300">
                     {t.admin.off}

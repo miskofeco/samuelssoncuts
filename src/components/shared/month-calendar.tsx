@@ -18,6 +18,8 @@ import { cn } from "@/lib/classnames";
 export function MonthCalendar({
   initialMonth,
   renderDay,
+  dayClassName,
+  dayNumberClassName,
   onDayClick,
   className,
   footer,
@@ -26,6 +28,8 @@ export function MonthCalendar({
   initialMonth?: string;
   /** Custom content rendered inside each in-month day cell (below the date number). */
   renderDay?: (cell: MonthCell) => ReactNode;
+  dayClassName?: (cell: MonthCell) => string;
+  dayNumberClassName?: (cell: MonthCell) => string;
   onDayClick?: (cell: MonthCell) => void;
   className?: string;
   footer?: ReactNode;
@@ -79,6 +83,7 @@ export function MonthCalendar({
               cell.inMonth
                 ? "border-black/10 bg-white dark:border-white/10 dark:bg-stone-900"
                 : "border-transparent bg-transparent opacity-40",
+              cell.inMonth && dayClassName?.(cell),
               onDayClick && cell.inMonth && "hover:border-black dark:hover:border-white",
               cell.isToday && "ring-2 ring-black dark:ring-white",
             )}
@@ -87,6 +92,7 @@ export function MonthCalendar({
               className={cn(
                 "text-xs font-semibold tabular-nums",
                 cell.inMonth ? "text-stone-700 dark:text-stone-300" : "text-stone-400",
+                cell.inMonth && dayNumberClassName?.(cell),
               )}
             >
               {Number(cell.date.slice(8, 10))}

@@ -34,7 +34,7 @@ export type CalendarItem = {
   time: string;
   date: string;
   durationMinutes: number;
-  type: "Confirmed" | "Proposed";
+  type: "Confirmed" | "Barber" | "Proposed";
   // Identifiers for actions (reschedule / cancel).
   appointmentId?: string;
   proposalId?: string;
@@ -88,7 +88,7 @@ export function AdminCalendar({
         time: appointment.time,
         date: appointment.date,
         durationMinutes: service.duration,
-        type: "Confirmed",
+        type: appointment.requestId ? "Confirmed" : "Barber",
         appointmentId: appointment.id,
         requestId: appointment.requestId,
         clientId: appointment.clientId,
@@ -134,7 +134,12 @@ export function AdminCalendar({
         action={
           <div className="flex flex-wrap items-center gap-2">
             <StatusPill tone="success">{t.admin.confirmed}</StatusPill>
-            <StatusPill tone="info">{t.statuses.proposedShort}</StatusPill>
+            <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-500/15 dark:text-blue-300">
+              {t.admin.addBooking}
+            </span>
+            <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-800 dark:bg-orange-500/15 dark:text-orange-300">
+              {t.statuses.proposedShort}
+            </span>
             <CalendarExport feedUrl={feedUrl} />
             <Button type="button" onClick={() => setDraft({})} className="gap-1.5">
               <span aria-hidden className="text-base leading-none">+</span>
@@ -161,12 +166,23 @@ export function AdminCalendar({
           t={t}
           locale={locale}
           itemsByDate={itemsByDate}
+          blockedDates={blockedDates}
           onAddSlot={(date, time) => setDraft({ date, time })}
           onSelect={setSelected}
         />
       ) : (
         <div className="mt-5">
           <MonthCalendar
+            dayClassName={(cell) =>
+              blockedDates.has(cell.date)
+                ? "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15"
+                : ""
+            }
+            dayNumberClassName={(cell) =>
+              blockedDates.has(cell.date)
+                ? "text-red-900 dark:text-red-100"
+                : ""
+            }
             renderDay={(cell) => {
               const items = itemsByDate.get(cell.date) ?? [];
               const blocked = blockedDates.has(cell.date);
@@ -174,9 +190,9 @@ export function AdminCalendar({
                 return (
                   <span
                     aria-label={t.admin.off}
-                    className="mt-1 block h-2 rounded-full bg-stone-200 px-0 py-0 text-center text-[0.6rem] font-semibold uppercase sm:h-auto sm:rounded sm:px-1 sm:py-0.5 dark:bg-stone-700"
+                    className="mt-1 block h-2 rounded-full bg-red-200 px-0 py-0 text-center text-[0.6rem] font-semibold uppercase sm:h-auto sm:rounded sm:px-1 sm:py-0.5 dark:bg-red-500/30"
                   >
-                    <span className="sr-only text-stone-500 sm:not-sr-only dark:text-stone-300">
+                    <span className="sr-only text-red-700 sm:not-sr-only dark:text-red-300">
                       {t.admin.off}
                     </span>
                   </span>
@@ -191,9 +207,7 @@ export function AdminCalendar({
                       aria-label={`${item.time} ${item.title}`}
                       className={cn(
                         "block h-2 rounded-full px-0 py-0 sm:h-auto sm:rounded sm:px-1 sm:py-0.5 sm:text-[0.6rem] sm:font-semibold sm:truncate",
-                        item.type === "Confirmed"
-                          ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300"
-                          : "bg-sky-100 text-sky-900 dark:bg-sky-500/20 dark:text-sky-300",
+                        monthItemToneClasses(item.type),
                       )}
                     >
                       <span className="sr-only sm:not-sr-only">
@@ -285,12 +299,14 @@ function WeekGrid({
   t,
   locale,
   itemsByDate,
+  blockedDates,
   onAddSlot,
   onSelect,
 }: {
   t: Dict;
   locale: string;
   itemsByDate: Map<string, CalendarItem[]>;
+  blockedDates: Set<string>;
   onAddSlot: (date: string, time: string) => void;
   onSelect: (item: CalendarItem) => void;
 }) {
@@ -316,20 +332,27 @@ function WeekGrid({
             <div className="bg-white dark:bg-stone-900" />
             {days.map((day) => {
               const isToday = day === today;
+              const isBlocked = blockedDates.has(day);
               return (
                 <div
                   key={day}
                   className={cn(
                     "px-2 py-3 text-center",
-                    isToday
-                      ? "bg-stone-900 text-white dark:bg-white dark:text-black"
-                      : "bg-white dark:bg-stone-900",
+                    isBlocked
+                      ? "bg-red-50 text-red-900 dark:bg-red-500/15 dark:text-red-100"
+                      : isToday
+                        ? "bg-stone-900 text-white dark:bg-white dark:text-black"
+                        : "bg-white dark:bg-stone-900",
                   )}
                 >
                   <p
                     className={cn(
                       "text-sm font-semibold",
-                      isToday ? "" : "text-black dark:text-white",
+                      isBlocked
+                        ? "text-red-900 dark:text-red-100"
+                        : isToday
+                          ? ""
+                          : "text-black dark:text-white",
                     )}
                   >
                     {formatDay(day, locale)}
@@ -365,6 +388,7 @@ function WeekGrid({
                   day={day}
                   items={itemsByDate.get(day) ?? []}
                   isToday={day === today}
+                  isBlocked={blockedDates.has(day)}
                   onAddSlot={onAddSlot}
                   onSelect={onSelect}
                 />
@@ -382,17 +406,30 @@ function WeekGrid({
         {days.map((day) => {
           const items = itemsByDate.get(day) ?? [];
           const isToday = day === today;
+          const isBlocked = blockedDates.has(day);
           return (
             <div
               key={day}
               className={cn(
                 "rounded-xl border bg-white p-3 dark:bg-stone-900",
-                isToday ? "border-stone-900 dark:border-white" : "border-black/10 dark:border-white/10",
+                isBlocked
+                  ? "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15"
+                  : isToday
+                    ? "border-stone-900 dark:border-white"
+                    : "border-black/10 dark:border-white/10",
               )}
             >
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-semibold text-black dark:text-white">{formatDay(day, locale)}</h3>
+                <h3
+                  className={cn(
+                    "font-semibold text-black dark:text-white",
+                    isBlocked && "text-red-900 dark:text-red-100",
+                  )}
+                >
+                  {formatDay(day, locale)}
+                </h3>
                 <div className="flex items-center gap-2">
+                  {isBlocked ? <StatusPill tone="danger">{t.admin.off}</StatusPill> : null}
                   {isToday ? <StatusPill tone="neutral">{t.common.today}</StatusPill> : null}
                   <button
                     type="button"
@@ -406,8 +443,14 @@ function WeekGrid({
               </div>
               <div className="mt-3 space-y-2">
                 {items.length === 0 ? (
-                  <p className="rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-500 dark:bg-stone-800/60 dark:text-stone-400">
-                    {t.admin.noAppointments}
+                  <p
+                    className={cn(
+                      "rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-500 dark:bg-stone-800/60 dark:text-stone-400",
+                      isBlocked &&
+                        "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200",
+                    )}
+                  >
+                    {isBlocked ? t.admin.off : t.admin.noAppointments}
                   </p>
                 ) : (
                   items.map((item) => (
@@ -429,6 +472,7 @@ function DayColumn({
   day,
   items,
   isToday,
+  isBlocked,
   onAddSlot,
   onSelect,
 }: {
@@ -437,6 +481,7 @@ function DayColumn({
   day: string;
   items: CalendarItem[];
   isToday: boolean;
+  isBlocked: boolean;
   onAddSlot: (date: string, time: string) => void;
   onSelect: (item: CalendarItem) => void;
 }) {
@@ -446,7 +491,11 @@ function DayColumn({
     <div
       className={cn(
         "relative",
-        isToday ? "bg-stone-50 dark:bg-stone-800/50" : "bg-white dark:bg-stone-900",
+        isBlocked
+          ? "bg-red-50 dark:bg-red-500/15"
+          : isToday
+            ? "bg-stone-50 dark:bg-stone-800/50"
+            : "bg-white dark:bg-stone-900",
       )}
       style={{ height: GRID_HOURS * HOUR_HEIGHT }}
     >
@@ -458,7 +507,12 @@ function DayColumn({
           onClick={() => onAddSlot(day, `${String(hour).padStart(2, "0")}:00`)}
           title={t.admin.addBookingAt(formatDay(day, locale), `${String(hour).padStart(2, "0")}:00`)}
           style={{ height: HOUR_HEIGHT }}
-          className="group block w-full border-t border-black/5 transition first:border-t-0 hover:bg-stone-100/70 dark:border-white/5 dark:hover:bg-stone-800"
+          className={cn(
+            "group block w-full border-t transition first:border-t-0",
+            isBlocked
+              ? "border-red-200/70 hover:bg-red-100/70 dark:border-red-500/20 dark:hover:bg-red-500/20"
+              : "border-black/5 hover:bg-stone-100/70 dark:border-white/5 dark:hover:bg-stone-800",
+          )}
         >
           <span className="flex h-full items-center justify-center text-lg text-stone-300 opacity-0 transition group-hover:opacity-100 dark:text-stone-600">
             +
@@ -481,6 +535,28 @@ function DayColumn({
       })}
     </div>
   );
+}
+
+function monthItemToneClasses(type: CalendarItem["type"]) {
+  switch (type) {
+    case "Confirmed":
+      return "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300";
+    case "Barber":
+      return "bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300";
+    case "Proposed":
+      return "bg-orange-100 text-orange-900 dark:bg-orange-500/20 dark:text-orange-300";
+  }
+}
+
+function chipItemToneClasses(type: CalendarItem["type"]) {
+  switch (type) {
+    case "Confirmed":
+      return "border-emerald-500 bg-emerald-100 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100";
+    case "Barber":
+      return "border-blue-500 bg-blue-100 text-blue-950 dark:bg-blue-500/20 dark:text-blue-100";
+    case "Proposed":
+      return "border-orange-500 bg-orange-100 text-orange-950 dark:bg-orange-500/20 dark:text-orange-100";
+  }
 }
 
 function CalendarChip({
@@ -516,9 +592,7 @@ function CalendarChip({
         style={style}
         className={cn(
           "absolute inset-x-1 z-10 flex flex-col overflow-hidden rounded-lg border-l-2 px-1.5 py-0.5 text-left text-[0.6rem] leading-[1.15] transition hover:brightness-95",
-          item.type === "Confirmed"
-            ? "border-emerald-500 bg-emerald-100 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100"
-            : "border-sky-500 bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-100",
+          chipItemToneClasses(item.type),
         )}
       >
         <span className="truncate font-semibold tabular-nums">
@@ -561,9 +635,7 @@ function MobileChip({
       onClick={() => onSelect(item)}
       className={cn(
         "block w-full rounded-lg border-l-2 px-3 py-2 text-left text-sm transition hover:brightness-95",
-        item.type === "Confirmed"
-          ? "border-emerald-500 bg-emerald-100 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100"
-          : "border-sky-500 bg-sky-100 text-sky-950 dark:bg-sky-500/20 dark:text-sky-100",
+        chipItemToneClasses(item.type),
       )}
     >
       <p className="font-semibold tabular-nums">
