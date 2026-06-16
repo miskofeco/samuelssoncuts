@@ -65,7 +65,7 @@ export function Modal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-0 sm:items-center sm:p-4">
       <div
         className={cn(
           open ? "ss-overlay-in" : "ss-overlay-out",
@@ -106,7 +106,7 @@ export function Modal({
               </svg>
             </button>
           </div>
-          <div className="px-5 pt-4 pb-5">{children}</div>
+          <div className="px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">{children}</div>
         </div>
       </div>
     </div>
