@@ -44,10 +44,13 @@ test("week calendar marks blocked days red on desktop and mobile", () => {
   assert.match(adminCalendar, /isBlocked\s*\?\s*t\.admin\.off\s*:\s*t\.admin\.noAppointments/);
 });
 
-test("month view still allows adding bookings on blocked days", () => {
+test("blocked days do not allow adding bookings in week or month views", () => {
+  assert.match(adminCalendar, /disabled=\{isBlocked\}/);
+  assert.match(adminCalendar, /title=\{isBlocked \? undefined : t\.admin\.addBookingAt/);
+  assert.match(adminCalendar, /isBlocked \? null : \(/);
+  assert.match(adminCalendar, /onClick=\{\(\) => onAddSlot\(day, "09:00"\)\}/);
   assert.match(adminCalendar, /onDayClick=\{\(cell\) => \{/);
-  assert.match(adminCalendar, /blockedDates\.has\(cell\.date\) \|\| items\.length === 0/);
+  assert.match(adminCalendar, /if \(items\.length === 0 && !blockedDates\.has\(cell\.date\)\) \{/);
   assert.match(adminCalendar, /setDraft\(\{ date: cell\.date \}\)/);
   assert.match(adminCalendar, /if \(blocked\) \{/);
-  assert.match(adminCalendar, /t\.admin\.addShort/);
 });
