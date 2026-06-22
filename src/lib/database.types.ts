@@ -133,6 +133,10 @@ export type Database = {
           note: string | null;
           status: "pending" | "proposed" | "confirmed" | "declined" | "cancelled";
           selected_proposal_id: string | null;
+          requested_start: string | null;
+          requested_end: string | null;
+          price_cents: number | null;
+          surcharge: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -143,6 +147,10 @@ export type Database = {
           note?: string | null;
           status?: "pending" | "proposed" | "confirmed" | "declined" | "cancelled";
           selected_proposal_id?: string | null;
+          requested_start?: string | null;
+          requested_end?: string | null;
+          price_cents?: number | null;
+          surcharge?: boolean;
           created_at?: string;
           updated_at?: string;
         };

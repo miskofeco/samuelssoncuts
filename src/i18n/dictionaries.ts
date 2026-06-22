@@ -182,6 +182,22 @@ const en = {
     notesPlaceholder: "Anything the barber should know?",
     sendRequest: "Send request",
     noServices: "No services configured",
+    // Exact-slot picker
+    pickDate: "Pick a date",
+    pickTime: "Pick a time",
+    chooseServiceFirst: "Choose a service to see available times.",
+    chooseDateFirst: "Pick a date to see available times.",
+    noSlotsThatDay: "No free times that day.",
+    bestPrice: "Best price",
+    plus10: "+10%",
+    surchargeWarning:
+      "This time leaves a gap in the day, so it costs 10% more. Times marked “Best price” keep the standard rate.",
+    requestedBadge: "Requested",
+    requestedHint: "Another client has requested this time — you can still book it.",
+    awaitingConfirmation: "Awaiting barber confirmation",
+    chosenTime: "Chosen time",
+    priceLabel: "Price",
+    youPay: (price: string) => `You pay ${price}`,
     // Preference picker
     availabilityLabel: "Availability",
     selected: "Selected",
@@ -342,6 +358,11 @@ const en = {
       "This frees the current slot and sends the client a new time to confirm.",
     rescheduleProposedDescription: "Send the client a new proposed time.",
     proposeNewTime: "Propose new time",
+    confirm: "Confirm",
+    confirmRequest: "Confirm this time",
+    chosenTime: "Requested time",
+    surcharge: "+10% (gap)",
+    orProposeAnother: "Or propose another time",
     rescheduleNotePlaceholder:
       "Sorry, I need to move this — does the new time work?",
     cancelConfirmBase: "Cancel this appointment? This frees the slot",
@@ -502,6 +523,12 @@ const en = {
     avatarRemoved: "Profile picture removed.",
     avatarUploadFailed: "Could not upload the image. Try again.",
     phoneTaken: "An account with this phone number already exists.",
+    bookingRequestPlaced: "Booking requested. The barber will confirm it shortly.",
+    slotOutsideHours: "That time is outside opening hours.",
+    slotNoLongerFree: "That slot was just taken. Please pick another time.",
+    requestConfirmed: "Appointment confirmed.",
+    confirmedAndDeclinedOthers:
+      "Appointment confirmed. Other requests for that time were declined.",
   },
   consent: {
     banner: {
@@ -763,6 +790,22 @@ const sk: Dict = {
     notesPlaceholder: "Niečo, čo by mal Barber vedieť?",
     sendRequest: "Odoslať žiadosť",
     noServices: "Žiadne nakonfigurované služby",
+    // Výber presného času
+    pickDate: "Vyberte dátum",
+    pickTime: "Vyberte čas",
+    chooseServiceFirst: "Vyberte službu pre zobrazenie dostupných časov.",
+    chooseDateFirst: "Vyberte dátum pre zobrazenie dostupných časov.",
+    noSlotsThatDay: "V tento deň nie sú voľné časy.",
+    bestPrice: "Najlepšia cena",
+    plus10: "+10 %",
+    surchargeWarning:
+      "Tento čas necháva v dni medzeru, preto stojí o 10 % viac. Časy označené „Najlepšia cena“ majú štandardnú sadzbu.",
+    requestedBadge: "Požiadané",
+    requestedHint: "Iný klient požiadal o tento čas — stále si ho môžete rezervovať.",
+    awaitingConfirmation: "Čaká na potvrdenie Barberom",
+    chosenTime: "Vybraný čas",
+    priceLabel: "Cena",
+    youPay: (price: string) => `Zaplatíte ${price}`,
     availabilityLabel: "Dostupnosť",
     selected: "Vybrané",
     limited: "Obmedzené",
@@ -915,6 +958,11 @@ const sk: Dict = {
       "Toto uvoľní aktuálny termín a pošle klientovi nový čas na potvrdenie.",
     rescheduleProposedDescription: "Pošlite klientovi nový navrhnutý čas.",
     proposeNewTime: "Navrhnúť nový čas",
+    confirm: "Potvrdiť",
+    confirmRequest: "Potvrdiť tento čas",
+    chosenTime: "Požadovaný čas",
+    surcharge: "+10 % (medzera)",
+    orProposeAnother: "Alebo navrhnite iný čas",
     rescheduleNotePlaceholder:
       "Prepáčte, potrebujem to presunúť — vyhovuje vám nový čas?",
     cancelConfirmBase: "Zrušiť tento termín? Toto uvoľní časový úsek",
@@ -1069,6 +1117,12 @@ const sk: Dict = {
     avatarRemoved: "Profilová fotka odstránená.",
     avatarUploadFailed: "Obrázok sa nepodarilo nahrať. Skúste znova.",
     phoneTaken: "Účet s týmto telefónnym číslom už existuje.",
+    bookingRequestPlaced: "Rezervácia odoslaná. Barber ju čoskoro potvrdí.",
+    slotOutsideHours: "Tento čas je mimo otváracích hodín.",
+    slotNoLongerFree: "Tento termín bol práve obsadený. Vyberte si iný čas.",
+    requestConfirmed: "Termín potvrdený.",
+    confirmedAndDeclinedOthers:
+      "Termín potvrdený. Ostatné žiadosti o tento čas boli zamietnuté.",
   },
   consent: {
     banner: {

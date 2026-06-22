@@ -105,16 +105,31 @@ function ReservationCard({
         <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {request.preferences.map((preference) => (
-          <span
-            key={preference.id}
-            className="rounded-lg bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300"
-          >
-            {formatFullDay(preference.date, locale)} · {t.windows[preference.window]}
-          </span>
-        ))}
-      </div>
+      {/* New flow: the client picked an exact slot, awaiting barber confirmation. */}
+      {request.requestedDate && request.requestedTime ? (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+            {t.client.awaitingConfirmation}
+          </p>
+          <p className="mt-0.5 font-semibold text-amber-950 dark:text-amber-200">
+            {formatFullDay(request.requestedDate, locale)} · {request.requestedTime}
+            {typeof request.priceCents === "number"
+              ? ` · ${Math.round(request.priceCents / 100)} €`
+              : ""}
+          </p>
+        </div>
+      ) : request.preferences.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {request.preferences.map((preference) => (
+            <span
+              key={preference.id}
+              className="rounded-lg bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+            >
+              {formatFullDay(preference.date, locale)} · {t.windows[preference.window]}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       {request.note ? (
         <p className="mt-3 rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-600 dark:bg-stone-800/60 dark:text-stone-300">

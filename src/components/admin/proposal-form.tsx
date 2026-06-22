@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 
-import { proposeTimeFromAdminAction } from "@/app/actions";
+import { confirmRequestAction, proposeTimeFromAdminAction } from "@/app/actions";
 import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
 import { Feedback } from "@/components/shared/feedback";
@@ -139,7 +139,18 @@ export function ProposalComposer({
     });
   }
 
+  function confirm() {
+    setFeedback(null);
+    startTransition(async () => {
+      const result = await confirmRequestAction(request.id);
+      setFeedback(result);
+      if (result.ok) setOpen(false);
+    });
+  }
+
   const conflict = takenAt(date, time);
+  // The client picked an exact slot (new flow) and it's awaiting confirmation.
+  const hasChosenSlot = Boolean(request.requestedDate && request.requestedTime);
 
   return (
     <article
@@ -204,45 +215,83 @@ export function ProposalComposer({
         </div>
       ) : null}
 
+      {/* Chosen-slot summary + one-click confirm (new exact-slot flow) */}
+      {request.status === "pending" && hasChosenSlot ? (
+        <div className="border-t border-black/5 px-4 py-3 dark:border-white/5">
+          <div className="flex flex-col gap-3 rounded-lg bg-amber-50 px-3 py-3 dark:bg-amber-500/10 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+                {t.admin.chosenTime}
+              </p>
+              <p className="mt-0.5 font-semibold text-amber-950 dark:text-amber-200">
+                {formatDay(request.requestedDate as string, locale)} · {request.requestedTime}
+                {typeof request.priceCents === "number"
+                  ? ` · ${Math.round(request.priceCents / 100)} €`
+                  : ""}
+                {request.surcharge ? (
+                  <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-[0.65rem] font-semibold text-amber-900 dark:bg-amber-500/30 dark:text-amber-200">
+                    {t.admin.surcharge}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+            <Button type="button" onClick={confirm} disabled={pending}>
+              {pending ? t.common.working : t.admin.confirmRequest}
+            </Button>
+          </div>
+          <Feedback result={feedback} className="mt-3" />
+        </div>
+      ) : null}
+
       {open ? (
         <div className="border-t border-black/5 px-4 pb-4 pt-3 dark:border-white/5">
-          {/* Client preferences */}
+          {/* Client note */}
           {request.note ? (
             <p className="mb-3 rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-600 dark:bg-stone-800/60 dark:text-stone-300">
               “{request.note}”
             </p>
           ) : null}
 
-          <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-            {t.admin.clientPreferences}
-          </p>
-          <div className="mt-2 grid gap-2 sm:grid-cols-3">
-            {request.preferences.map((preference) => {
-              const active = preference.date === date && windowFilter === preference.window;
-              return (
-                <button
-                  key={preference.id}
-                  type="button"
-                  onClick={() => choosePreference(preference.date, preference.window)}
-                  className={cn(
-                    "rounded-lg border px-3 py-2 text-left text-sm transition",
-                    active
-                      ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-                      : "border-black/10 bg-white text-stone-700 hover:border-black dark:border-white/15 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-white",
-                  )}
-                >
-                  <span className="block text-xs font-semibold opacity-70">
-                    {t.client.choice(preference.rank)}
-                  </span>
-                  <span className="block font-semibold">{formatDay(preference.date, locale)}</span>
-                  <span className="block text-xs opacity-80">{t.windows[preference.window]}</span>
-                </button>
-              );
-            })}
-          </div>
+          {/* Legacy 3-window preferences (only old requests have these) */}
+          {request.preferences.length > 0 ? (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                {t.admin.clientPreferences}
+              </p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {request.preferences.map((preference) => {
+                  const active = preference.date === date && windowFilter === preference.window;
+                  return (
+                    <button
+                      key={preference.id}
+                      type="button"
+                      onClick={() => choosePreference(preference.date, preference.window)}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-left text-sm transition",
+                        active
+                          ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
+                          : "border-black/10 bg-white text-stone-700 hover:border-black dark:border-white/15 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-white",
+                      )}
+                    >
+                      <span className="block text-xs font-semibold opacity-70">
+                        {t.client.choice(preference.rank)}
+                      </span>
+                      <span className="block font-semibold">{formatDay(preference.date, locale)}</span>
+                      <span className="block text-xs opacity-80">{t.windows[preference.window]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
 
           {canPropose ? (
             <>
+              {hasChosenSlot ? (
+                <p className="mb-1 mt-4 text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                  {t.admin.orProposeAnother}
+                </p>
+              ) : null}
               <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
                 {/* Availability calendar */}
                 <AvailabilityCalendar

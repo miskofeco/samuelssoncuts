@@ -1,6 +1,5 @@
 import { RequestForm } from "@/components/client/request-form";
 import { PageHeader } from "@/components/shared/page-header";
-import type { AppState } from "@/domain/types";
 import { getDict } from "@/i18n/server";
 import { requireApprovedClient } from "@/server/auth";
 import { loadBookingData } from "@/server/dashboard-data";
@@ -12,16 +11,6 @@ export default async function BookPage() {
   const data = await loadBookingData();
   const t = await getDict();
 
-  // PreferencePicker reads availability from an AppState-shaped object.
-  const state: AppState = {
-    services: data.services,
-    clients: [],
-    requests: [],
-    proposals: data.proposals,
-    appointments: data.appointments,
-    notifications: [],
-  };
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -29,7 +18,12 @@ export default async function BookPage() {
         title={t.client.bookTitle}
         description={t.client.bookDescription}
       />
-      <RequestForm state={state} blockedDates={data.blockedDates} />
+      <RequestForm
+        services={data.services}
+        appointments={data.appointments}
+        pendingRequests={data.pendingRequests}
+        blockedDates={data.blockedDates}
+      />
     </div>
   );
 }

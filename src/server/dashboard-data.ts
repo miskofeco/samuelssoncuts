@@ -81,6 +81,10 @@ export function mapRequestRow(row: RequestRow): BookingRequest {
     status: row.status === "cancelled" ? "declined" : row.status,
     createdAt: row.created_at,
     proposalId: row.selected_proposal_id ?? undefined,
+    requestedDate: row.requested_start ? dateFromIso(row.requested_start) : undefined,
+    requestedTime: row.requested_start ? timeFromIso(row.requested_start) : undefined,
+    priceCents: row.price_cents ?? undefined,
+    surcharge: row.surcharge ?? undefined,
     preferences: (row.booking_preferences ?? [])
       .slice()
       .sort((a, b) => a.rank - b.rank)
@@ -298,12 +302,15 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
   };
 }
 
-/** Services + blocked days for the booking picker. */
+/** Services + blocked days + booked/pending context for the booking picker. */
 export async function loadBookingData(): Promise<{
   services: Service[];
   blockedDates: Set<string>;
   appointments: Appointment[];
   proposals: Proposal[];
+  // Other clients' pending (unconfirmed) exact-slot requests — shown as a soft
+  // "Requested" badge in the picker (still selectable, don't block).
+  pendingRequests: BookingRequest[];
 }> {
   const supabase = await createClient();
   const [servicesResult, appointmentsResult, requestsResult, blocked] =
@@ -322,11 +329,15 @@ export async function loadBookingData(): Promise<{
   fail("booking_requests", requestsResult.error);
 
   const rows = (requestsResult.data ?? []) as RequestRow[];
+  const requests = rows.map(mapRequestRow);
   return {
     services: (servicesResult.data ?? []).map(mapServiceRow),
     blockedDates: blocked.dates,
     appointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
     proposals: proposalsFromRequests(rows),
+    pendingRequests: requests.filter(
+      (r) => r.status === "pending" && Boolean(r.requestedDate),
+    ),
   };
 }
 

@@ -8,8 +8,16 @@ import { z } from "zod";
 import { getSiteUrl } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { CONSENT_VERSION } from "@/lib/consent/config";
+import {
+  CLOSE_MINUTES,
+  OPEN_MINUTES,
+  contiguousBlockEnd,
+  isPreferredStart,
+  minutesOf,
+  priceForSlot,
+} from "@/domain/schedule";
 import { dashboardPathFor, getCurrentProfile, requireAdmin, requireApprovedClient, requireProfile } from "@/server/auth";
-import type { ActionResult, Preference } from "@/domain/types";
+import type { ActionResult } from "@/domain/types";
 import { getDict } from "@/i18n/server";
 
 const signInSchema = z.object({
@@ -32,16 +40,12 @@ const registerSchema = signInSchema.extend({
   phone: z.string().min(4).max(40),
 });
 
-const preferenceSchema = z.object({
-  rank: z.number().int().min(1).max(3),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  window: z.enum(["Morning", "Midday", "Afternoon", "Evening"]),
-});
-
+// New flow: the client picks an exact date + time for the chosen service.
 const createRequestSchema = z.object({
   serviceId: z.uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  time: z.string().regex(/^\d{2}:\d{2}$/),
   note: z.string().max(1000).optional(),
-  preferences: z.array(preferenceSchema).length(3),
 });
 
 const proposeSchema = z.object({
@@ -129,6 +133,15 @@ function addMinutes(iso: string, minutes: number) {
 
 function startsAt(date: string, time: string) {
   return new Date(`${date}T${time}:00`).toISOString();
+}
+
+// "HH:MM" (24h, local) from an ISO timestamp — used to compute durations/blocks.
+function timeFromIso(iso: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));
 }
 
 export async function signInAction(formData: FormData) {
@@ -273,53 +286,100 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
 
   const supabase = await createClient();
 
-  const { data: request, error: requestError } = await supabase
-    .from("booking_requests")
-    .insert({
-      client_id: profile.id,
-      service_id: parsed.data.serviceId,
-      note: parsed.data.note ?? null,
-    })
-    .select("id")
+  // Load the service (duration + base price). Price is computed server-side and
+  // never trusted from the client.
+  const { data: service, error: serviceError } = await supabase
+    .from("services")
+    .select("duration_minutes, price_cents")
+    .eq("id", parsed.data.serviceId)
     .single();
 
-  if (requestError || !request) {
-    return { ok: false, error: requestError?.message ?? t.feedback.unableCreateRequest };
+  if (serviceError || !service) {
+    return { ok: false, error: serviceError?.message ?? t.feedback.serviceNotFound };
   }
 
-  const { error: preferencesError } = await supabase
-    .from("booking_preferences")
-    .insert(
-      parsed.data.preferences.map((preference) => ({
-        request_id: request.id,
-        rank: preference.rank,
-        preferred_date: preference.date,
-        day_window: preference.window,
-      })),
-    );
+  const startMin = minutesOf(parsed.data.time);
+  const start = startsAt(parsed.data.date, parsed.data.time);
+  const end = addMinutes(start, service.duration_minutes);
 
-  if (preferencesError) {
-    return { ok: false, error: preferencesError.message };
+  // Must be in the future and fit inside working hours.
+  if (new Date(start).getTime() < Date.now()) {
+    return { ok: false, error: t.feedback.chooseFutureTime };
+  }
+  if (startMin < OPEN_MINUTES || startMin + service.duration_minutes > CLOSE_MINUTES) {
+    return { ok: false, error: t.feedback.slotOutsideHours };
+  }
+
+  // The slot must not overlap a CONFIRMED appointment that day (pending requests
+  // from other clients are allowed to coexist).
+  const dayStart = startsAt(parsed.data.date, "00:00");
+  const dayEnd = addMinutes(dayStart, 24 * 60);
+  const { data: dayAppts } = await supabase
+    .from("appointments")
+    .select("starts_at, ends_at")
+    .eq("status", "confirmed")
+    .gte("starts_at", dayStart)
+    .lt("starts_at", dayEnd);
+
+  const reqStartMs = new Date(start).getTime();
+  const reqEndMs = new Date(end).getTime();
+  const overlapsConfirmed = (dayAppts ?? []).some((a) => {
+    const s = new Date(a.starts_at).getTime();
+    const e = new Date(a.ends_at).getTime();
+    return reqStartMs < e && s < reqEndMs;
+  });
+  if (overlapsConfirmed) {
+    return { ok: false, error: t.feedback.slotNoLongerFree };
+  }
+
+  // Gap pricing: base only if the slot opens the day or extends the gapless
+  // block anchored at opening; otherwise +10%.
+  const confirmedForDay = (dayAppts ?? []).map((a) => ({
+    date: parsed.data.date,
+    time: timeFromIso(a.starts_at),
+    durationMinutes: Math.round(
+      (new Date(a.ends_at).getTime() - new Date(a.starts_at).getTime()) / 60000,
+    ),
+  }));
+  const blockEnd = contiguousBlockEnd(parsed.data.date, confirmedForDay, OPEN_MINUTES);
+  const preferred = isPreferredStart(startMin, blockEnd);
+  const basePrice = Math.round(service.price_cents / 100);
+  const priceCents = priceForSlot(basePrice, preferred) * 100;
+
+  const { error: requestError } = await supabase.from("booking_requests").insert({
+    client_id: profile.id,
+    service_id: parsed.data.serviceId,
+    note: parsed.data.note ?? null,
+    status: "pending",
+    requested_start: start,
+    requested_end: end,
+    price_cents: priceCents,
+    surcharge: !preferred,
+  });
+
+  if (requestError) {
+    return { ok: false, error: requestError.message };
   }
 
   await supabase.from("notifications").insert({
     user_id: profile.id,
     channel: "email",
     recipient: "barber@samuelssoncuts.com",
-    subject: `${profile.full_name} requested an appointment`,
+    subject: `${profile.full_name} requested ${parsed.data.date} at ${parsed.data.time}`,
   });
 
   revalidatePath("/client", "layout");
   revalidatePath("/admin", "layout");
-  return { ok: true, message: t.feedback.requestSent };
+  return { ok: true, message: t.feedback.bookingRequestPlaced };
 }
 
 export async function createRequestFromClientAction(
   serviceId: string,
-  preferences: Preference[],
+  date: string,
+  time: string,
   note: string,
 ): Promise<ActionResult> {
-  return createBookingRequestAction({ serviceId, preferences, note });
+  return createBookingRequestAction({ serviceId, date, time, note });
 }
 
 export async function approveClientAction(clientId: string): Promise<ActionResult> {
@@ -498,6 +558,102 @@ export async function proposeTimeFromAdminAction(
   note: string,
 ): Promise<ActionResult> {
   return proposeAppointmentAction({ requestId, date, time, note });
+}
+
+// Barber confirms a client's exact-slot request as-is → a confirmed appointment.
+// Other pending requests for the SAME slot are auto-declined and those clients
+// notified (the slot is now taken).
+export async function confirmRequestAction(requestId: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const t = await getDict();
+  const supabase = await createClient();
+
+  const { data: request, error: requestError } = await supabase
+    .from("booking_requests")
+    .select("id, client_id, service_id, status, requested_start, requested_end")
+    .eq("id", requestId)
+    .single();
+
+  if (requestError || !request) {
+    return { ok: false, error: requestError?.message ?? t.feedback.requestNotFound };
+  }
+  if (request.status !== "pending" || !request.requested_start || !request.requested_end) {
+    return { ok: false, error: t.feedback.requestNotFound };
+  }
+
+  // Race guard: the slot must still be free among confirmed appointments.
+  const { data: clash } = await supabase
+    .from("appointments")
+    .select("id")
+    .eq("barber_id", admin.id)
+    .eq("starts_at", request.requested_start)
+    .eq("status", "confirmed")
+    .maybeSingle();
+
+  if (clash) {
+    return { ok: false, error: t.feedback.slotNoLongerFree };
+  }
+
+  const { error: appointmentError } = await supabase.from("appointments").insert({
+    request_id: request.id,
+    client_id: request.client_id,
+    barber_id: admin.id,
+    service_id: request.service_id,
+    starts_at: request.requested_start,
+    ends_at: request.requested_end,
+  });
+
+  if (appointmentError) {
+    return { ok: false, error: t.feedback.slotNoLongerFree };
+  }
+
+  await supabase
+    .from("booking_requests")
+    .update({ status: "confirmed" })
+    .eq("id", request.id);
+
+  // Auto-decline other pending requests for the exact same slot + notify them.
+  const { data: siblings } = await supabase
+    .from("booking_requests")
+    .select("id, client_id")
+    .eq("status", "pending")
+    .eq("requested_start", request.requested_start)
+    .neq("id", request.id);
+
+  if (siblings && siblings.length > 0) {
+    await supabase
+      .from("booking_requests")
+      .update({ status: "declined" })
+      .eq("status", "pending")
+      .eq("requested_start", request.requested_start)
+      .neq("id", request.id);
+
+    await supabase.from("notifications").insert(
+      siblings.map((s) => ({
+        user_id: s.client_id,
+        channel: "email" as const,
+        recipient: "client",
+        subject: "Your requested time was just booked — please pick another",
+      })),
+    );
+  }
+
+  await supabase.from("notifications").insert({
+    user_id: request.client_id,
+    channel: "email",
+    recipient: "client",
+    subject: "Your appointment is confirmed",
+  });
+
+  revalidatePath("/admin", "layout");
+  revalidatePath("/client", "layout");
+  return {
+    ok: true,
+    message:
+      siblings && siblings.length > 0
+        ? t.feedback.confirmedAndDeclinedOthers
+        : t.feedback.requestConfirmed,
+  };
 }
 
 // Move a confirmed appointment: free its slot now and send the client a fresh

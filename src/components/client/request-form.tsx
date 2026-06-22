@@ -8,74 +8,44 @@ import { Button } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
 import { Feedback } from "@/components/shared/feedback";
 import { SelectField, TextAreaField } from "@/components/shared/form";
-import { addDays } from "@/domain/schedule";
-import type {
-  ActionResult,
-  AppState,
-  DayWindow,
-  Preference,
-} from "@/domain/types";
+import { serviceById } from "@/domain/schedule";
+import type { ActionResult, Appointment, BookingRequest, Service } from "@/domain/types";
 import { useT } from "@/i18n/provider";
 
-import { PreferencePicker } from "./preference-picker";
-
-// First N future days that are not blocked — used to seed sensible defaults.
-function firstOpenDays(blockedDates: ReadonlySet<string>, count: number) {
-  const days: string[] = [];
-  for (let offset = 1; days.length < count && offset < 120; offset += 1) {
-    const date = addDays(offset);
-    if (!blockedDates.has(date)) days.push(date);
-  }
-  return days;
-}
+import { SlotPicker, type SlotChoice } from "./slot-picker";
 
 export function RequestForm({
-  state,
+  services,
+  appointments,
+  pendingRequests,
   blockedDates,
 }: {
-  state: AppState;
+  services: Service[];
+  appointments: Appointment[];
+  pendingRequests: BookingRequest[];
   blockedDates: ReadonlySet<string>;
 }) {
   const t = useT();
-  const [serviceId, setServiceId] = useState(state.services[0]?.id ?? "");
+  const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
+  const [date, setDate] = useState<string | null>(null);
+  const [slot, setSlot] = useState<SlotChoice | null>(null);
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
-  const [preferences, setPreferences] = useState<Preference[]>(() => {
-    const [d1, d2, d3] = firstOpenDays(blockedDates, 3);
-    const windows: DayWindow[] = ["Afternoon", "Morning", "Evening"];
-    return [d1, d2, d3].map((date, index) => ({
-      id: `p${index + 1}`,
-      rank: index + 1,
-      date: date ?? addDays(index + 1),
-      window: windows[index],
-    }));
-  });
 
-  function updatePreferenceDate(rank: number, date: string) {
-    if (blockedDates.has(date)) return;
-    setPreferences((current) =>
-      current.map((preference) =>
-        preference.rank === rank ? { ...preference, date } : preference,
-      ),
-    );
-  }
-
-  function updatePreferenceWindow(rank: number, window: DayWindow) {
-    setPreferences((current) =>
-      current.map((preference) =>
-        preference.rank === rank ? { ...preference, window } : preference,
-      ),
-    );
-  }
+  const service = serviceById(serviceId, services);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!date || !slot) return;
     setFeedback(null);
     startTransition(async () => {
-      const result = await createRequestFromClientAction(serviceId, preferences, note);
+      const result = await createRequestFromClientAction(serviceId, date, slot.time, note);
       setFeedback(result);
-      if (result.ok) setNote("");
+      if (result.ok) {
+        setNote("");
+        setSlot(null);
+      }
     });
   }
 
@@ -84,16 +54,19 @@ export function RequestForm({
       <form onSubmit={onSubmit}>
         <SectionHeader
           eyebrow={t.client.newAppointment}
-          title={t.client.pickThreeDays}
+          title={t.client.pickTime}
           action={
             <SelectField
               aria-label={t.client.service}
               label={t.client.service}
               value={serviceId}
-              onChange={(event) => setServiceId(event.target.value)}
+              onChange={(event) => {
+                setServiceId(event.target.value);
+                setSlot(null);
+              }}
               className="min-w-55"
             >
-              {state.services.map((service) => (
+              {services.map((service) => (
                 <option key={service.id} value={service.id}>
                   {service.name} — {service.duration} min · {service.price} €
                 </option>
@@ -102,15 +75,35 @@ export function RequestForm({
           }
         />
 
-        <div className="mt-4">
-          <PreferencePicker
-            preferences={preferences}
-            state={state}
-            blockedDates={blockedDates}
-            updatePreferenceDate={updatePreferenceDate}
-            updatePreferenceWindow={updatePreferenceWindow}
-          />
-        </div>
+        {serviceId ? (
+          <div className="mt-4">
+            <SlotPicker
+              service={service}
+              services={services}
+              date={date}
+              onDateChange={(next) => {
+                setDate(next);
+                setSlot(null);
+              }}
+              selectedTime={slot?.time ?? null}
+              onSelectTime={setSlot}
+              appointments={appointments}
+              pendingRequests={pendingRequests}
+              blockedDates={blockedDates}
+            />
+
+            {/* Surcharge warning when the chosen slot leaves a gap. */}
+            {slot?.surcharge ? (
+              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-300">
+                {t.client.surchargeWarning}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
+            {t.client.chooseServiceFirst}
+          </p>
+        )}
 
         <TextAreaField
           label={t.client.notes}
@@ -122,17 +115,26 @@ export function RequestForm({
 
         <Feedback result={feedback} className="mt-4" />
 
-        <Button
-          type="submit"
-          disabled={!serviceId || pending}
-          className="mt-4 w-full sm:w-auto"
-        >
-          {pending
-            ? t.common.sending
-            : serviceId
-              ? t.client.sendRequest
-              : t.client.noServices}
-        </Button>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {slot ? (
+            <p className="text-sm font-medium text-black dark:text-white">
+              {t.client.youPay(`${slot.price} €`)}
+            </p>
+          ) : (
+            <span />
+          )}
+          <Button
+            type="submit"
+            disabled={!serviceId || !date || !slot || pending}
+            className="w-full sm:w-auto"
+          >
+            {pending
+              ? t.common.sending
+              : serviceId
+                ? t.client.sendRequest
+                : t.client.noServices}
+          </Button>
+        </div>
       </form>
     </Card>
   );

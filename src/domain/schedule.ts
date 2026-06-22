@@ -25,8 +25,12 @@ function buildSlots(startMinutes: number, endMinutes: number, stepMinutes: numbe
   return slots;
 }
 
-const OPEN_MINUTES = 7 * 60; // 07:00
+export const OPEN_MINUTES = 7 * 60; // 07:00
 const LAST_BOOK_MINUTES = 20 * 60; // 20:00 — last bookable start
+export const CLOSE_MINUTES = 21 * 60; // 21:00 — shop closes (a visit may run to here)
+
+// 10% surcharge for a slot that leaves a gap (doesn't extend the opening block).
+export const GAP_SURCHARGE = 0.1;
 
 export const workingHours = buildSlots(OPEN_MINUTES, LAST_BOOK_MINUTES, 30);
 
@@ -216,4 +220,97 @@ export function getAvailabilityTone(day: AvailabilityDay) {
 
 export function isSameDate(a: string, b: string) {
   return a === b;
+}
+
+// ---------------------------------------------------------------------------
+// Exact-slot booking + gap pricing.
+//
+// A client picks an exact start time sized to the service duration. Pricing rule
+// ("must extend one tight block"): the slot is BASE price only if it starts at
+// opening or directly continues the gapless run of confirmed appointments
+// anchored at opening; otherwise it leaves a gap and costs +10%.
+// ---------------------------------------------------------------------------
+
+export function minutesOf(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+export function timeOfMinutes(total: number): string {
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+// Candidate start times (stepped, default 15 min) whose end fits before close.
+export function slotsForService(durationMin: number, step = 15): string[] {
+  const slots: string[] = [];
+  for (let start = OPEN_MINUTES; start <= LAST_BOOK_MINUTES; start += step) {
+    if (start + durationMin <= CLOSE_MINUTES) slots.push(timeOfMinutes(start));
+  }
+  return slots;
+}
+
+// Half-open interval overlap [startA, startA+durA) ∩ [startB, startB+durB).
+export function overlaps(startA: number, durA: number, startB: number, durB: number): boolean {
+  return startA < startB + durB && startB < startA + durA;
+}
+
+type SlotAppt = { date: string; time: string; durationMinutes: number };
+
+// A slot is taken only by CONFIRMED appointments that overlap it. Pending
+// requests never block (concurrency is intentional until the barber confirms).
+export function isSlotFree(
+  date: string,
+  startMin: number,
+  durationMin: number,
+  confirmed: SlotAppt[],
+): boolean {
+  return !confirmed.some(
+    (a) => a.date === date && overlaps(startMin, durationMin, minutesOf(a.time), a.durationMinutes),
+  );
+}
+
+// The single base-price "anchor" minute for the day under the "must extend one
+// tight block" rule: a new booking must stack directly onto the end of the
+// day's existing bookings (no gap). On an empty day that anchor is the opening
+// time; otherwise it's the END of the latest confirmed appointment. So with one
+// confirmed 09:00–09:30 visit the only base slot is 09:30 — booking 07:00 or
+// 08:30 would leave a gap and costs more.
+export function contiguousBlockEnd(
+  date: string,
+  confirmed: SlotAppt[],
+  openingMin = OPEN_MINUTES,
+): number {
+  const ends = confirmed
+    .filter((a) => a.date === date)
+    .map((a) => minutesOf(a.time) + a.durationMinutes);
+  return ends.length === 0 ? openingMin : Math.max(...ends);
+}
+
+// Base price iff the slot starts exactly at the day's anchor (opening on an
+// empty day, else flush after the last confirmed appointment). Any other start
+// leaves a gap and is surcharged.
+export function isPreferredStart(startMin: number, blockEndMin: number): boolean {
+  return startMin === blockEndMin;
+}
+
+// Whole-euro price; +10% (rounded) when the slot isn't preferred.
+export function priceForSlot(basePrice: number, preferred: boolean): number {
+  return preferred ? basePrice : Math.round(basePrice * (1 + GAP_SURCHARGE));
+}
+
+export type SlotStatus = "taken" | "requested" | "free";
+
+// "taken" = overlaps a confirmed appointment (hidden/disabled in the picker),
+// "requested" = some other client has a pending (unconfirmed) request at this
+// exact start (soft badge, still selectable), else "free".
+export function slotStatusFor(
+  date: string,
+  startMin: number,
+  durationMin: number,
+  confirmed: SlotAppt[],
+  pendingStarts: ReadonlySet<string>,
+): SlotStatus {
+  if (!isSlotFree(date, startMin, durationMin, confirmed)) return "taken";
+  if (pendingStarts.has(`${date}T${timeOfMinutes(startMin)}`)) return "requested";
+  return "free";
 }

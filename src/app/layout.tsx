@@ -26,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title: dict.metadata.title,
     description: dict.metadata.description,
     icons: {
-      icon: "/icon-light.png",
+      icon: "/favicon.png",
     },
   };
 }

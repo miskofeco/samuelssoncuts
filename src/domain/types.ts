@@ -45,10 +45,17 @@ export type BookingRequest = {
   clientId: string;
   serviceId: string;
   note: string;
+  // Legacy 3-window preferences (kept optional for old rows; new flow is empty).
   preferences: Preference[];
   status: RequestStatus;
   createdAt: string;
   proposalId?: string;
+  // Exact slot the client picked (new flow). yyyy-mm-dd + HH:MM, plus the price
+  // computed at booking time and whether the +10% gap surcharge applied.
+  requestedDate?: string;
+  requestedTime?: string;
+  priceCents?: number;
+  surcharge?: boolean;
 };
 
 export type Proposal = {
