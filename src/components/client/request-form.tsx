@@ -2,15 +2,22 @@
 
 import type { FormEvent } from "react";
 import { useState, useTransition } from "react";
+import Image from "next/image";
 
 import { createRequestFromClientAction } from "@/app/actions";
 import { Button } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
 import { Feedback } from "@/components/shared/feedback";
-import { SelectField, TextAreaField } from "@/components/shared/form";
-import { serviceById } from "@/domain/schedule";
+import { TextAreaField } from "@/components/shared/form";
+import {
+  defaultClientServiceId,
+  defaultServiceImage,
+  orderClientServices,
+  serviceById,
+} from "@/domain/schedule";
 import type { ActionResult, Appointment, BookingRequest, Service } from "@/domain/types";
 import { useT } from "@/i18n/provider";
+import { cn } from "@/lib/classnames";
 
 import { SlotPicker, type SlotChoice } from "./slot-picker";
 
@@ -26,7 +33,8 @@ export function RequestForm({
   blockedDates: ReadonlySet<string>;
 }) {
   const t = useT();
-  const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
+  const orderedServices = orderClientServices(services);
+  const [serviceId, setServiceId] = useState(defaultClientServiceId(services));
   const [date, setDate] = useState<string | null>(null);
   const [slot, setSlot] = useState<SlotChoice | null>(null);
   const [note, setNote] = useState("");
@@ -54,26 +62,58 @@ export function RequestForm({
       <form onSubmit={onSubmit}>
         <SectionHeader
           eyebrow={t.client.newAppointment}
-          title={t.client.pickTime}
-          action={
-            <SelectField
-              aria-label={t.client.service}
-              label={t.client.service}
-              value={serviceId}
-              onChange={(event) => {
-                setServiceId(event.target.value);
-                setSlot(null);
-              }}
-              className="min-w-55"
-            >
-              {services.map((service) => (
-                <option key={service.id} value={service.id}>
-                  {service.name} — {service.duration} min · {service.price} €
-                </option>
-              ))}
-            </SelectField>
-          }
+          title={t.client.chooseService}
         />
+
+        {orderedServices.length > 0 ? (
+          <div className="mt-4 grid gap-2 lg:grid-cols-3">
+            {orderedServices.map((service) => {
+              const selected = service.id === serviceId;
+              const imageSrc = defaultServiceImage(service);
+              return (
+                <button
+                  key={service.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setServiceId(service.id);
+                    setSlot(null);
+                  }}
+                  className={cn(
+                    "flex flex-col overflow-hidden rounded-xl border bg-white text-left transition hover:border-emerald-500 md:flex-row dark:bg-stone-900",
+                    selected
+                      ? "border-emerald-500 ring-2 ring-emerald-500 dark:border-emerald-400 dark:ring-emerald-400"
+                      : "border-black/10 dark:border-white/10",
+                  )}
+                >
+                  <span className="relative block h-36 w-full md:h-auto md:min-h-32 md:w-32 md:shrink-0 lg:w-28">
+                    <Image
+                      src={imageSrc}
+                      alt=""
+                      fill
+                      sizes="(max-width: 768px) 100vw, 128px"
+                      unoptimized={imageSrc.startsWith("http")}
+                      className="object-cover"
+                    />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col p-3">
+                    <span className="block truncate text-sm font-semibold text-black dark:text-white">
+                      {service.name}
+                    </span>
+                    {service.description ? (
+                      <span className="mt-1 line-clamp-2 text-xs leading-snug text-stone-500 dark:text-stone-400">
+                        {service.description}
+                      </span>
+                    ) : null}
+                    <span className="mt-1 block text-xs text-stone-500 dark:text-stone-400">
+                      {service.duration} min · {service.price} €
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
         {serviceId ? (
           <div className="mt-4">

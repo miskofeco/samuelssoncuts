@@ -1,9 +1,30 @@
 import type { AppState, AvailabilityDay, DayWindow, Service } from "./types";
 
 export const services: Service[] = [
-  { id: "cut", name: "Signature cut", duration: 45, price: 32 },
-  { id: "beard", name: "Beard shape", duration: 30, price: 20 },
-  { id: "combo", name: "Cut + beard", duration: 75, price: 48 },
+  {
+    id: "cut",
+    name: "Signature cut",
+    description: "Detailed haircut with consultation and styling.",
+    duration: 45,
+    price: 32,
+    imageUrl: "/signature.jpg",
+  },
+  {
+    id: "beard",
+    name: "Beard shape",
+    description: "Beard trim, shape, and hot towel finish.",
+    duration: 30,
+    price: 20,
+    imageUrl: "/beard-shape.jpg",
+  },
+  {
+    id: "combo",
+    name: "Cut + beard",
+    description: "Full haircut and beard service.",
+    duration: 75,
+    price: 48,
+    imageUrl: "/beard-plus-cut.jpg",
+  },
 ];
 
 export const dayWindows: DayWindow[] = [
@@ -70,6 +91,7 @@ export function windowForTime(time: string): DayWindow {
 }
 
 export const dayCapacity = 7;
+export const CLIENT_BOOKING_WINDOW_DAYS = 14;
 
 export function addDays(days: number) {
   const date = new Date();
@@ -156,6 +178,39 @@ export function serviceById(id: string, serviceList: Service[] = services) {
   return serviceList.find((service) => service.id === id) ?? serviceList[0] ?? services[0];
 }
 
+export function defaultServiceImage(service: Pick<Service, "name" | "imageUrl">) {
+  if (service.imageUrl?.trim()) return service.imageUrl.trim();
+
+  const normalized = service.name.toLowerCase();
+  if (normalized.includes("beard") && (normalized.includes("cut") || normalized.includes("+"))) {
+    return "/beard-plus-cut.jpg";
+  }
+  if (normalized.includes("beard")) return "/beard-shape.jpg";
+  return "/signature.jpg";
+}
+
+export function defaultClientServiceId(serviceList: Service[]) {
+  return (
+    serviceList.find((service) => service.name.toLowerCase().includes("signature"))?.id ??
+    serviceList[0]?.id ??
+    ""
+  );
+}
+
+export function orderClientServices(serviceList: Service[]) {
+  const rank = (service: Service) => {
+    const normalized = service.name.toLowerCase();
+    if (normalized.includes("signature")) return 0;
+    if (normalized.includes("beard") && (normalized.includes("cut") || normalized.includes("+"))) return 2;
+    if (normalized.includes("beard")) return 1;
+    return 3;
+  };
+  return serviceList
+    .map((service, index) => ({ service, index }))
+    .sort((a, b) => rank(a.service) - rank(b.service) || a.index - b.index)
+    .map(({ service }) => service);
+}
+
 export function createCalendarDays(startOffset = 0, length = 21) {
   return Array.from({ length }, (_, index) => addDays(startOffset + index));
 }
@@ -177,6 +232,25 @@ export function eachDate(start: string, end: string) {
 
 export function todayIso() {
   return addDays(0);
+}
+
+export function latestClientBookingDate() {
+  return addDays(CLIENT_BOOKING_WINDOW_DAYS);
+}
+
+export function isDateInClientBookingWindow(date: string) {
+  return date >= todayIso() && date <= latestClientBookingDate();
+}
+
+export function isStartInFuture(iso: string) {
+  return new Date(iso).getTime() > Date.now();
+}
+
+export function isStartInClientBookingWindow(iso: string) {
+  const start = new Date(iso).getTime();
+  const now = Date.now();
+  const latest = now + CLIENT_BOOKING_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  return start > now && start <= latest;
 }
 
 export function getAvailability(
@@ -269,12 +343,41 @@ export function isSlotFree(
   );
 }
 
-// The single base-price "anchor" minute for the day under the "must extend one
-// tight block" rule: a new booking must stack directly onto the end of the
-// day's existing bookings (no gap). On an empty day that anchor is the opening
-// time; otherwise it's the END of the latest confirmed appointment. So with one
-// confirmed 09:00–09:30 visit the only base slot is 09:30 — booking 07:00 or
-// 08:30 would leave a gap and costs more.
+// Client-facing candidates: regular hourly starts, plus dynamic starts around
+// existing confirmed bookings so gaps like 09:30 after a 09:00-09:30 visit are
+// offered without returning to a noisy all-15-minute grid.
+export function clientSlotsForService(
+  date: string,
+  durationMin: number,
+  confirmed: SlotAppt[],
+): string[] {
+  const starts = new Set<number>();
+
+  for (let start = OPEN_MINUTES; start <= LAST_BOOK_MINUTES; start += 60) {
+    starts.add(start);
+  }
+
+  for (const booking of confirmed) {
+    if (booking.date !== date) continue;
+    const bookingStart = minutesOf(booking.time);
+    const bookingEnd = bookingStart + booking.durationMinutes;
+    starts.add(bookingStart - durationMin);
+    starts.add(bookingEnd);
+  }
+
+  return [...starts]
+    .filter(
+      (start) =>
+        start >= OPEN_MINUTES &&
+        start <= LAST_BOOK_MINUTES &&
+        start + durationMin <= CLOSE_MINUTES &&
+        isSlotFree(date, start, durationMin, confirmed),
+    )
+    .sort((a, b) => a - b)
+    .map(timeOfMinutes);
+}
+
+// The base-price anchor for the day when there are no confirmed bookings yet.
 export function contiguousBlockEnd(
   date: string,
   confirmed: SlotAppt[],
@@ -291,6 +394,24 @@ export function contiguousBlockEnd(
 // leaves a gap and is surcharged.
 export function isPreferredStart(startMin: number, blockEndMin: number): boolean {
   return startMin === blockEndMin;
+}
+
+// Client best-price starts minimize gaps: opening on an empty day, or any slot
+// that touches a confirmed booking directly before or directly after it.
+export function isPreferredClientStart(
+  date: string,
+  startMin: number,
+  durationMin: number,
+  confirmed: SlotAppt[],
+): boolean {
+  const dayBookings = confirmed.filter((booking) => booking.date === date);
+  if (dayBookings.length === 0) return startMin === OPEN_MINUTES;
+
+  return dayBookings.some((booking) => {
+    const bookingStart = minutesOf(booking.time);
+    const bookingEnd = bookingStart + booking.durationMinutes;
+    return startMin + durationMin === bookingStart || startMin === bookingEnd;
+  });
 }
 
 // Whole-euro price; +10% (rounded) when the slot isn't preferred.

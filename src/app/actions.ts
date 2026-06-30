@@ -11,8 +11,10 @@ import { CONSENT_VERSION } from "@/lib/consent/config";
 import {
   CLOSE_MINUTES,
   OPEN_MINUTES,
-  contiguousBlockEnd,
-  isPreferredStart,
+  clientSlotsForService,
+  isPreferredClientStart,
+  isStartInClientBookingWindow,
+  isStartInFuture,
   minutesOf,
   priceForSlot,
 } from "@/domain/schedule";
@@ -92,6 +94,7 @@ const serviceSchema = z.object({
   description: z.string().max(1000).optional(),
   durationMinutes: z.number().int().min(5).max(600),
   priceCents: z.number().int().min(0).max(1_000_000),
+  imageUrl: z.string().max(500).optional(),
 });
 
 const blockDateSchema = z.object({
@@ -302,9 +305,12 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
   const start = startsAt(parsed.data.date, parsed.data.time);
   const end = addMinutes(start, service.duration_minutes);
 
-  // Must be in the future and fit inside working hours.
-  if (new Date(start).getTime() < Date.now()) {
+  // Must be in the future, inside the client booking window, and fit inside working hours.
+  if (!isStartInFuture(start)) {
     return { ok: false, error: t.feedback.chooseFutureTime };
+  }
+  if (!isStartInClientBookingWindow(start)) {
+    return { ok: false, error: t.feedback.chooseWithinTwoWeeks };
   }
   if (startMin < OPEN_MINUTES || startMin + service.duration_minutes > CLOSE_MINUTES) {
     return { ok: false, error: t.feedback.slotOutsideHours };
@@ -341,8 +347,15 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
       (new Date(a.ends_at).getTime() - new Date(a.starts_at).getTime()) / 60000,
     ),
   }));
-  const blockEnd = contiguousBlockEnd(parsed.data.date, confirmedForDay, OPEN_MINUTES);
-  const preferred = isPreferredStart(startMin, blockEnd);
+  if (!clientSlotsForService(parsed.data.date, service.duration_minutes, confirmedForDay).includes(parsed.data.time)) {
+    return { ok: false, error: t.feedback.pickGeneratedSlot };
+  }
+  const preferred = isPreferredClientStart(
+    parsed.data.date,
+    startMin,
+    service.duration_minutes,
+    confirmedForDay,
+  );
   const basePrice = Math.round(service.price_cents / 100);
   const priceCents = priceForSlot(basePrice, preferred) * 100;
 
@@ -462,7 +475,7 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
   const supabase = await createClient();
   const start = startsAt(parsed.data.date, parsed.data.time);
 
-  if (new Date(start).getTime() < Date.now()) {
+  if (!isStartInFuture(start)) {
     return { ok: false, error: t.feedback.chooseFutureTime };
   }
 
@@ -580,6 +593,9 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
   if (request.status !== "pending" || !request.requested_start || !request.requested_end) {
     return { ok: false, error: t.feedback.requestNotFound };
   }
+  if (!isStartInFuture(request.requested_start)) {
+    return { ok: false, error: t.feedback.chooseFutureTime };
+  }
 
   // Race guard: the slot must still be free among confirmed appointments.
   const { data: clash } = await supabase
@@ -687,7 +703,7 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
   }
 
   const start = startsAt(parsed.data.date, parsed.data.time);
-  if (new Date(start).getTime() < Date.now()) {
+  if (!isStartInFuture(start)) {
     return { ok: false, error: t.feedback.chooseFutureTime };
   }
 
@@ -703,14 +719,19 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
 
   const end = addMinutes(start, service.duration_minutes);
 
-  // Conflict-check the new slot against *other* confirmed appointments.
+  // Conflict-check the new slot against *other* confirmed appointments, using a
+  // half-open interval overlap [start, end): an existing booking clashes when it
+  // starts before our end AND ends after our start. (Exact-start alone misses
+  // partial overlaps like 16:00–17:15 vs a new 17:00 start.)
   const { data: clash } = await supabase
     .from("appointments")
     .select("id")
     .eq("barber_id", admin.id)
-    .eq("starts_at", start)
     .eq("status", "confirmed")
     .neq("id", appointment.id)
+    .lt("starts_at", end)
+    .gt("ends_at", start)
+    .limit(1)
     .maybeSingle();
 
   if (clash) {
@@ -861,7 +882,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
   const supabase = await createClient();
   const start = startsAt(parsed.data.date, parsed.data.time);
 
-  if (new Date(start).getTime() < Date.now()) {
+  if (!isStartInFuture(start)) {
     return { ok: false, error: t.feedback.chooseFutureTime };
   }
 
@@ -890,13 +911,19 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
 
   const end = addMinutes(start, service.duration_minutes);
 
-  // Pre-check the slot; the appointments_unique_start index is the hard backstop.
+  // Pre-check the slot for any OVERLAP with confirmed appointments (half-open
+  // interval [start, end)): a booking clashes when it starts before our end AND
+  // ends after our start. The appointments_unique_start index is the hard
+  // backstop for the exact-start race, but only overlap-checking here stops a new
+  // booking from landing partway inside an existing one (e.g. 17:00 over 16:00–17:15).
   const { data: existing } = await supabase
     .from("appointments")
     .select("id")
     .eq("barber_id", admin.id)
-    .eq("starts_at", start)
     .eq("status", "confirmed")
+    .lt("starts_at", end)
+    .gt("ends_at", start)
+    .limit(1)
     .maybeSingle();
 
   if (existing) {
@@ -942,6 +969,12 @@ export async function respondToProposalAction(
 
   if (proposal.status !== "sent") {
     return { ok: false, error: t.feedback.proposalClosed };
+  }
+  if (!isStartInFuture(proposal.starts_at)) {
+    return { ok: false, error: t.feedback.chooseFutureTime };
+  }
+  if (!isStartInClientBookingWindow(proposal.starts_at)) {
+    return { ok: false, error: t.feedback.chooseWithinTwoWeeks };
   }
 
   const { data: request, error: requestError } = await supabase
@@ -1175,6 +1208,7 @@ export async function createServiceAction(input: {
   description?: string;
   durationMinutes: number;
   priceCents: number;
+  imageUrl?: string;
 }): Promise<ActionResult> {
   await requireAdmin();
   const t = await getDict();
@@ -1190,6 +1224,7 @@ export async function createServiceAction(input: {
     description: parsed.data.description ?? null,
     duration_minutes: parsed.data.durationMinutes,
     price_cents: parsed.data.priceCents,
+    image_url: parsed.data.imageUrl?.trim() || null,
   });
 
   if (error) {
@@ -1207,6 +1242,7 @@ export async function updateServiceAction(
     description?: string;
     durationMinutes: number;
     priceCents: number;
+    imageUrl?: string;
   },
 ): Promise<ActionResult> {
   await requireAdmin();
@@ -1225,6 +1261,7 @@ export async function updateServiceAction(
       description: parsed.data.description ?? null,
       duration_minutes: parsed.data.durationMinutes,
       price_cents: parsed.data.priceCents,
+      image_url: parsed.data.imageUrl?.trim() || null,
     })
     .eq("id", serviceId);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import {
   cancelAppointmentAdminAction,
@@ -15,20 +15,52 @@ import { Feedback } from "@/components/shared/feedback";
 import { Modal } from "@/components/shared/modal";
 import { StatusPill } from "@/components/shared/status-pill";
 import { addMinutesToTime } from "@/components/admin/admin-calendar";
-import type { CalendarItem } from "@/components/admin/admin-calendar";
-import { formatFullDay, workingHoursQuarterly } from "@/domain/schedule";
+import type { BookedSlot, CalendarItem } from "@/components/admin/admin-calendar";
+import { formatFullDay, minutesOf, overlaps, slotsForService, todayIso } from "@/domain/schedule";
 import type { ActionResult } from "@/domain/types";
 import { localeFor } from "@/i18n/config";
+import type { Dict } from "@/i18n/dictionaries";
 import { useLang, useT } from "@/i18n/provider";
 
 type Mode = "view" | "reschedule" | "cancel";
 
+// Reschedule time options for a service duration, disabling slots that overlap
+// any *other* booking on `date` (the appointment being moved is excluded).
+function rescheduleOptions(
+  durationMinutes: number,
+  bookedToday: BookedSlot[],
+  excludeId: string | undefined,
+  t: Dict,
+  date?: string,
+) {
+  const now = new Date();
+  const today = todayIso();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return slotsForService(durationMinutes).map((time) => {
+    const startMin = minutesOf(time);
+    const clash = bookedToday.some(
+      (slot) =>
+        slot.id !== excludeId &&
+        overlaps(startMin, durationMinutes, minutesOf(slot.time), slot.durationMinutes),
+    );
+    const past = Boolean(date && (date < today || (date === today && startMin <= nowMinutes)));
+    return {
+      value: time,
+      label: time,
+      disabled: clash || past,
+      hint: past ? t.feedback.chooseFutureTime : clash ? t.admin.slotTakenHint : undefined,
+    };
+  });
+}
+
 export function AppointmentDetailModal({
   item,
   onClose,
+  bookedByDate,
 }: {
   item: CalendarItem | null;
   onClose: () => void;
+  bookedByDate: Map<string, BookedSlot[]>;
 }) {
   const t = useT();
   return (
@@ -38,12 +70,22 @@ export function AppointmentDetailModal({
       title={t.admin.appointment}
       description={t.admin.appointmentDescription}
     >
-      {item ? <DetailBody key={item.id} item={item} onClose={onClose} /> : null}
+      {item ? (
+        <DetailBody key={item.id} item={item} onClose={onClose} bookedByDate={bookedByDate} />
+      ) : null}
     </Modal>
   );
 }
 
-function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void }) {
+function DetailBody({
+  item,
+  onClose,
+  bookedByDate,
+}: {
+  item: CalendarItem;
+  onClose: () => void;
+  bookedByDate: Map<string, BookedSlot[]>;
+}) {
   const t = useT();
   const locale = localeFor(useLang());
   const [mode, setMode] = useState<Mode>("view");
@@ -52,10 +94,26 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
+  const today = todayIso();
 
   const isWalkIn = !item.clientId;
   const isConfirmed = item.type === "Confirmed";
   const endTime = addMinutesToTime(item.time, item.durationMinutes);
+
+  const timeOptions = useMemo(
+    () =>
+      rescheduleOptions(
+        item.durationMinutes,
+        date ? bookedByDate.get(date) ?? [] : [],
+        item.id,
+        t,
+        date,
+      ),
+    [item.durationMinutes, item.id, date, bookedByDate, t],
+  );
+  const selectedOption = timeOptions.find((option) => option.value === time);
+  const timeInvalid = !selectedOption || selectedOption.disabled;
+  const dateInvalid = Boolean(date && date < today);
 
   function run(action: () => Promise<ActionResult>) {
     setFeedback(null);
@@ -181,6 +239,7 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
               <input
                 type="date"
                 value={date}
+                min={today}
                 onChange={(event) => setDate(event.target.value)}
                 className="mt-2 h-11 w-full rounded-md border border-black/10 bg-white px-3 text-sm text-black outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white dark:[color-scheme:dark]"
               />
@@ -190,9 +249,14 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
               placeholder={t.admin.typeTime}
               value={time}
               onChange={setTime}
-              options={workingHoursQuarterly.map((hour) => ({ value: hour, label: hour }))}
+              options={timeOptions}
             />
           </div>
+          {dateInvalid ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">{t.feedback.chooseFutureTime}</p>
+          ) : timeInvalid ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">{t.admin.slotOverlapError}</p>
+          ) : null}
           <label className="block">
             <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
               {`${t.admin.messageToClient} ${t.common.optional}`}
@@ -211,7 +275,11 @@ function DetailBody({ item, onClose }: { item: CalendarItem; onClose: () => void
             <Button type="button" variant="secondary" onClick={() => setMode("view")}>
               {t.common.back}
             </Button>
-            <Button type="button" onClick={submitReschedule} disabled={pending || !date || !time}>
+            <Button
+              type="button"
+              onClick={submitReschedule}
+              disabled={pending || !date || !time || dateInvalid || timeInvalid}
+            >
               {pending ? t.common.sending : t.admin.proposeNewTime}
             </Button>
           </div>

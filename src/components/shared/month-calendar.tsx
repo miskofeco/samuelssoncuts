@@ -26,7 +26,7 @@ export function MonthCalendar({
 }: {
   /** "yyyy-mm"; defaults to the current month. */
   initialMonth?: string;
-  /** Custom content rendered inside each in-month day cell (below the date number). */
+  /** Custom content rendered inside each day cell (below the date number). */
   renderDay?: (cell: MonthCell) => ReactNode;
   dayClassName?: (cell: MonthCell) => string;
   dayNumberClassName?: (cell: MonthCell) => string;
@@ -82,9 +82,9 @@ export function MonthCalendar({
               "flex min-h-[68px] flex-col rounded-lg border p-1.5 text-left align-top transition",
               cell.inMonth
                 ? "border-black/10 bg-white dark:border-white/10 dark:bg-stone-900"
-                : "border-transparent bg-transparent opacity-40",
-              cell.inMonth && dayClassName?.(cell),
-              onDayClick && cell.inMonth && "hover:border-black dark:hover:border-white",
+                : "border-black/5 bg-white/70 dark:border-white/5 dark:bg-stone-900/45",
+              dayClassName?.(cell),
+              onDayClick && "hover:border-black dark:hover:border-white",
               cell.isToday && "ring-2 ring-black dark:ring-white",
             )}
           >
@@ -92,12 +92,12 @@ export function MonthCalendar({
               className={cn(
                 "text-xs font-semibold tabular-nums",
                 cell.inMonth ? "text-stone-700 dark:text-stone-300" : "text-stone-400",
-                cell.inMonth && dayNumberClassName?.(cell),
+                dayNumberClassName?.(cell),
               )}
             >
               {Number(cell.date.slice(8, 10))}
             </span>
-            {cell.inMonth && renderDay ? (
+            {renderDay ? (
               <span className="mt-1 flex-1">{renderDay(cell)}</span>
             ) : null}
           </button>

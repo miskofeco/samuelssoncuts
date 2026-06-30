@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 
 import {
   createServiceAction,
@@ -13,6 +14,7 @@ import { Feedback } from "@/components/shared/feedback";
 import { Field, TextAreaField } from "@/components/shared/form";
 import { Modal } from "@/components/shared/modal";
 import { StatusPill } from "@/components/shared/status-pill";
+import { defaultServiceImage } from "@/domain/schedule";
 import type { ActionResult } from "@/domain/types";
 import { useT } from "@/i18n/provider";
 
@@ -21,6 +23,7 @@ type ServiceItem = {
   name: string;
   duration: number;
   price: number;
+  imageUrl?: string | null;
   active: boolean;
   description: string | null;
 };
@@ -31,9 +34,16 @@ type Draft = {
   description: string;
   duration: string;
   price: string;
+  imageUrl: string;
 };
 
-const emptyDraft: Draft = { name: "", description: "", duration: "45", price: "32" };
+const emptyDraft: Draft = {
+  name: "",
+  description: "",
+  duration: "45",
+  price: "32",
+  imageUrl: "",
+};
 
 export function ServiceManager({ services }: { services: ServiceItem[] }) {
   const t = useT();
@@ -54,6 +64,7 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
       description: service.description ?? "",
       duration: String(service.duration),
       price: String(service.price),
+      imageUrl: service.imageUrl ?? "",
     });
   }
 
@@ -64,6 +75,7 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
       description: draft.description || undefined,
       durationMinutes: Number(draft.duration),
       priceCents: Math.round(Number(draft.price) * 100),
+      imageUrl: draft.imageUrl || undefined,
     };
     startTransition(async () => {
       const result = draft.id
@@ -78,6 +90,10 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
     startTransition(async () => {
       setFeedback(await toggleServiceActiveAction(service.id, !service.active));
     });
+  }
+
+  function imageIsExternal(src: string) {
+    return src.startsWith("http");
   }
 
   return (
@@ -96,7 +112,17 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
             key={service.id}
             className="flex items-center justify-between gap-3 rounded-xl border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-stone-900"
           >
-            <div className="min-w-0">
+            <span className="relative h-14 w-16 shrink-0 overflow-hidden rounded-lg">
+              <Image
+                src={defaultServiceImage(service)}
+                alt=""
+                fill
+                sizes="64px"
+                unoptimized={imageIsExternal(defaultServiceImage(service))}
+                className="object-cover"
+              />
+            </span>
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <p className="truncate font-semibold text-black dark:text-white">
                   {service.name}
@@ -141,6 +167,32 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
               value={draft.description}
               onChange={(event) => setDraft({ ...draft, description: event.target.value })}
             />
+            <div className="grid gap-3 sm:grid-cols-[96px_minmax(0,1fr)] sm:items-end">
+              {(() => {
+                const imageSrc = defaultServiceImage({
+                  name: draft.name || emptyDraft.name,
+                  imageUrl: draft.imageUrl,
+                });
+                return (
+                  <span className="relative h-20 w-24 overflow-hidden rounded-lg">
+                    <Image
+                      src={imageSrc}
+                      alt=""
+                      fill
+                      sizes="96px"
+                      unoptimized={imageIsExternal(imageSrc)}
+                      className="object-cover"
+                    />
+                  </span>
+                );
+              })()}
+              <Field
+                label={t.admin.serviceImage}
+                value={draft.imageUrl}
+                placeholder="/signature.jpg"
+                onChange={(event) => setDraft({ ...draft, imageUrl: event.target.value })}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <Field
                 type="number"

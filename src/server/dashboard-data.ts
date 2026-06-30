@@ -53,8 +53,10 @@ export function mapServiceRow(row: ServiceRow): Service {
   return {
     id: row.id,
     name: row.name,
+    description: row.description,
     duration: row.duration_minutes,
     price: Math.round(row.price_cents / 100),
+    imageUrl: row.image_url,
   };
 }
 
@@ -167,6 +169,7 @@ export async function loadAllServices(): Promise<
     ...mapServiceRow(row),
     active: row.active,
     description: row.description,
+    imageUrl: row.image_url,
   }));
 }
 

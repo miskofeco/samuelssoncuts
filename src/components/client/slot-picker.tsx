@@ -4,13 +4,15 @@ import { useMemo } from "react";
 
 import { MonthCalendar } from "@/components/shared/month-calendar";
 import {
-  contiguousBlockEnd,
-  isPreferredStart,
+  clientSlotsForService,
+  isStartInClientBookingWindow,
+  isStartInFuture,
+  isPreferredClientStart,
+  latestClientBookingDate,
   minutesOf,
   priceForSlot,
   serviceById,
   slotStatusFor,
-  slotsForService,
   todayIso,
 } from "@/domain/schedule";
 import type { Appointment, BookingRequest, Service } from "@/domain/types";
@@ -51,6 +53,7 @@ export function SlotPicker({
 }) {
   const t = useT();
   const today = todayIso();
+  const latestDate = latestClientBookingDate();
 
   // Confirmed appointments shaped for the slot helpers (with resolved duration).
   const confirmed = useMemo(
@@ -76,13 +79,12 @@ export function SlotPicker({
 
   // All slots for the chosen date with status + price.
   const slots = useMemo(() => {
-    if (!date) return [];
-    const blockEnd = contiguousBlockEnd(date, confirmed);
-    return slotsForService(service.duration)
+    if (!date || date < today || date > latestDate) return [];
+    return clientSlotsForService(date, service.duration, confirmed)
       .map((time) => {
         const startMin = minutesOf(time);
         const status = slotStatusFor(date, startMin, service.duration, confirmed, pendingStarts);
-        const preferred = isPreferredStart(startMin, blockEnd);
+        const preferred = isPreferredClientStart(date, startMin, service.duration, confirmed);
         return {
           time,
           status,
@@ -91,8 +93,11 @@ export function SlotPicker({
         };
       })
       // Hide slots taken by a confirmed appointment.
-      .filter((s) => s.status !== "taken");
-  }, [date, confirmed, pendingStarts, service.duration, service.price]);
+      .filter((s) => {
+        const start = new Date(`${date}T${s.time}:00`).toISOString();
+        return s.status !== "taken" && isStartInFuture(start) && isStartInClientBookingWindow(start);
+      });
+  }, [date, today, latestDate, confirmed, pendingStarts, service.duration, service.price]);
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -101,17 +106,29 @@ export function SlotPicker({
         <p className="mb-2 text-sm font-semibold text-black dark:text-white">{t.client.pickDate}</p>
         <MonthCalendar
           onDayClick={(cell) => {
-            if (!cell.inMonth || cell.date < today || blockedDates.has(cell.date)) return;
+            if (
+              cell.date < today ||
+              cell.date > latestDate ||
+              blockedDates.has(cell.date)
+            ) return;
             onDateChange(cell.date);
           }}
           dayClassName={(cell) => {
-            if (blockedDates.has(cell.date)) {
-              return "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15 opacity-60";
+            const outOfWindow = cell.date < today || cell.date > latestDate;
+            if (outOfWindow) {
+              return "cursor-not-allowed border-dashed !border-stone-400 !bg-stone-200 text-stone-500 dark:!border-stone-700 dark:!bg-stone-800 dark:text-stone-500";
             }
-            if (cell.date < today) return "opacity-40";
-            if (cell.date === date) return "border-black ring-2 ring-black dark:border-white dark:ring-white";
+            if (blockedDates.has(cell.date)) {
+              return "cursor-not-allowed border-red-200 bg-red-50 opacity-70 dark:border-red-500/30 dark:bg-red-500/15";
+            }
+            if (cell.date === date) return "!border-emerald-500 ring-2 ring-emerald-500 dark:!border-emerald-400 dark:ring-emerald-400";
             return "";
           }}
+          dayNumberClassName={(cell) =>
+            cell.date < today || cell.date > latestDate
+              ? "text-stone-400 dark:text-stone-500"
+              : ""
+          }
         />
       </div>
 
@@ -152,8 +169,12 @@ export function SlotPicker({
                     className={cn(
                       "flex flex-col items-center rounded-lg border px-1 py-1.5 text-center transition",
                       active
-                        ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-                        : "border-black/10 bg-white hover:border-black dark:border-white/10 dark:bg-stone-900 dark:hover:border-white",
+                        ? slot.preferred
+                          ? "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-400 dark:bg-emerald-500 dark:text-white"
+                          : "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
+                        : slot.preferred
+                          ? "border-emerald-500 bg-emerald-50 text-emerald-950 hover:border-emerald-600 hover:bg-emerald-100 dark:border-emerald-500/70 dark:bg-emerald-500/10 dark:text-emerald-100 dark:hover:border-emerald-400 dark:hover:bg-emerald-500/15"
+                          : "border-black/10 bg-white hover:border-black dark:border-white/10 dark:bg-stone-900 dark:hover:border-white",
                     )}
                   >
                     <span className="text-sm font-semibold tabular-nums">{slot.time}</span>

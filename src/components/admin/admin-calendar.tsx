@@ -8,7 +8,16 @@ import { Card, SectionHeader } from "@/components/shared/card";
 import { MonthCalendar } from "@/components/shared/month-calendar";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
-import { addDays, formatDay, serviceById, todayIso } from "@/domain/schedule";
+import {
+  addDays,
+  CLOSE_MINUTES,
+  formatDay,
+  minutesOf,
+  OPEN_MINUTES,
+  serviceById,
+  timeOfMinutes,
+  todayIso,
+} from "@/domain/schedule";
 
 import { CalendarExport } from "@/components/shared/calendar-export";
 
@@ -46,6 +55,15 @@ export type CalendarItem = {
   note?: string;
 };
 
+// Slim slot record threaded into the booking/reschedule modals so their time
+// pickers can grey out times that overlap an existing booking. `id` lets the
+// reschedule picker exclude the appointment being moved.
+export type BookedSlot = {
+  id: string;
+  time: string;
+  durationMinutes: number;
+};
+
 export function AdminCalendar({
   appointments,
   proposals,
@@ -68,6 +86,7 @@ export function AdminCalendar({
   const [view, setView] = useState<"week" | "month">("week");
   const [draft, setDraft] = useState<{ date?: string; time?: string } | null>(null);
   const [selected, setSelected] = useState<CalendarItem | null>(null);
+  const today = todayIso();
 
   const itemsByDate = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
@@ -126,6 +145,19 @@ export function AdminCalendar({
     return map;
   }, [appointments, proposals, requests, clients, services, t]);
 
+  // Confirmed bookings per date (proposals don't block — they're concurrent
+  // until confirmed), threaded into the modals to disable overlapping slots.
+  const bookedByDate = useMemo(() => {
+    const map = new Map<string, BookedSlot[]>();
+    for (const [date, list] of itemsByDate) {
+      const slots = list
+        .filter((item) => item.type !== "Proposed")
+        .map((item) => ({ id: item.id, time: item.time, durationMinutes: item.durationMinutes }));
+      if (slots.length > 0) map.set(date, slots);
+    }
+    return map;
+  }, [itemsByDate]);
+
   return (
     <Card className="rounded-2xl p-5">
       <SectionHeader
@@ -175,18 +207,22 @@ export function AdminCalendar({
           <MonthCalendar
             onDayClick={(cell) => {
               const items = itemsByDate.get(cell.date) ?? [];
-              if (items.length === 0 && !blockedDates.has(cell.date)) {
+              if (items.length === 0 && !blockedDates.has(cell.date) && cell.date >= today) {
                 setDraft({ date: cell.date });
               }
             }}
             dayClassName={(cell) =>
-              blockedDates.has(cell.date)
-                ? "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15"
+              cell.date < today
+                ? "cursor-not-allowed border-dashed !border-stone-400 !bg-stone-200 dark:!border-stone-700 dark:!bg-stone-800"
+                : blockedDates.has(cell.date)
+                  ? "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15"
                 : ""
             }
             dayNumberClassName={(cell) =>
-              blockedDates.has(cell.date)
-                ? "text-red-900 dark:text-red-100"
+              cell.date < today
+                ? "text-stone-400 dark:text-stone-500"
+                : blockedDates.has(cell.date)
+                  ? "text-red-900 dark:text-red-100"
                 : ""
             }
             renderDay={(cell) => {
@@ -206,24 +242,21 @@ export function AdminCalendar({
               }
               if (items.length === 0) return null;
               return (
-                <span className="mt-1 flex flex-col gap-0.5">
-                  {items.slice(0, 2).map((item) => (
+                <span className="mt-1 flex flex-row flex-wrap gap-1">
+                  {items.map((item) => (
                     <span
                       key={item.id}
                       aria-label={`${item.time} ${item.title}`}
                       className={cn(
-                        "block h-2 rounded-full px-0 py-0 sm:h-auto sm:rounded sm:px-1 sm:py-0.5 sm:text-[0.6rem] sm:font-semibold sm:truncate",
-                        monthItemToneClasses(item.type),
+                        "block h-2 w-2 rounded-full",
+                        monthDotToneClasses(item.type),
                       )}
                     >
-                      <span className="sr-only sm:not-sr-only">
+                      <span className="sr-only">
                         {item.time} {item.title}
                       </span>
                     </span>
                   ))}
-                  {items.length > 2 ? (
-                    <span className="hidden sm:block text-[0.6rem] text-stone-400">{t.admin.moreCount(items.length - 2)}</span>
-                  ) : null}
                 </span>
               );
             }}
@@ -238,9 +271,14 @@ export function AdminCalendar({
         services={services}
         initialDate={draft?.date}
         initialTime={draft?.time}
+        bookedByDate={bookedByDate}
       />
 
-      <AppointmentDetailModal item={selected} onClose={() => setSelected(null)} />
+      <AppointmentDetailModal
+        item={selected}
+        onClose={() => setSelected(null)}
+        bookedByDate={bookedByDate}
+      />
     </Card>
   );
 }
@@ -440,7 +478,7 @@ function WeekGrid({
                   {isBlocked ? null : (
                     <button
                       type="button"
-                      onClick={() => onAddSlot(day, "09:00")}
+                      onClick={() => onAddSlot(day, firstFreeSlot(items, isToday))}
                       className="flex h-8 items-center gap-1 rounded-lg border border-black/10 px-2.5 text-xs font-semibold text-stone-600 transition hover:border-black hover:text-black dark:border-white/15 dark:text-stone-300 dark:hover:border-white dark:hover:text-white"
                     >
                       <span aria-hidden className="text-sm leading-none">+</span>
@@ -474,6 +512,43 @@ function WeekGrid({
   );
 }
 
+// Snap a within-grid pixel offset to the nearest SNAP_MINUTES boundary, returned
+// as absolute minutes-of-day. Clamped to the bookable window.
+const SNAP_MINUTES = 15;
+function snapOffsetToMinutes(offsetY: number, pixelsPerHour = HOUR_HEIGHT) {
+  const rawMinutes = (offsetY / pixelsPerHour) * 60 + START_HOUR * 60;
+  const snapped = Math.round(rawMinutes / SNAP_MINUTES) * SNAP_MINUTES;
+  return Math.min(Math.max(snapped, OPEN_MINUTES), CLOSE_MINUTES - SNAP_MINUTES);
+}
+
+function snapPointerToMinutes(clientY: number, rect: Pick<DOMRect, "top" | "height">) {
+  const renderedHourHeight = rect.height > 0 ? rect.height / GRID_HOURS : HOUR_HEIGHT;
+  return snapOffsetToMinutes(clientY - rect.top, renderedHourHeight);
+}
+
+// First bookable minute on a day: opening, or "now" rounded up if it's today.
+function earliestMinute(isToday: boolean) {
+  if (!isToday) return OPEN_MINUTES;
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  return Math.ceil(Math.max(OPEN_MINUTES, nowMin) / SNAP_MINUTES) * SNAP_MINUTES;
+}
+
+// First 15-min slot from `earliest` that doesn't fall inside an existing booking,
+// or the earliest slot if the whole day is somehow busy. Used to seed the mobile
+// "+ Add" button so it lands on a sensible free time rather than a fixed 09:00.
+function firstFreeSlot(items: CalendarItem[], isToday: boolean) {
+  const busy = items.map((item) => ({
+    start: minutesOf(item.time),
+    end: minutesOf(item.time) + item.durationMinutes,
+  }));
+  const start = earliestMinute(isToday);
+  for (let minute = start; minute <= CLOSE_MINUTES - SNAP_MINUTES; minute += SNAP_MINUTES) {
+    if (!busy.some((b) => minute >= b.start && minute < b.end)) return timeOfMinutes(minute);
+  }
+  return timeOfMinutes(Math.min(start, CLOSE_MINUTES - SNAP_MINUTES));
+}
+
 function DayColumn({
   t,
   locale,
@@ -495,6 +570,42 @@ function DayColumn({
 }) {
   const hours = Array.from({ length: GRID_HOURS }, (_, index) => START_HOUR + index);
 
+  // Busy intervals (confirmed + barber + proposed) used to block click-to-add
+  // landing inside an existing booking. Minutes-of-day half-open [start, end).
+  const busy = items.map((item) => ({
+    start: minutesOf(item.time),
+    end: minutesOf(item.time) + item.durationMinutes,
+  }));
+
+  // First bookable minute on `day` — opening, or rounded-up "now" if it's today.
+  const earliest = earliestMinute(isToday);
+
+  // Hover affordance: the snapped minute the cursor is over (null when away).
+  const [hoverMin, setHoverMin] = useState<number | null>(null);
+
+  function minuteIsBusy(minute: number) {
+    return busy.some((b) => minute >= b.start && minute < b.end);
+  }
+
+  function handleMove(event: React.MouseEvent<HTMLDivElement>) {
+    if (isBlocked) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setHoverMin(snapPointerToMinutes(event.clientY, rect));
+  }
+
+  function handleClick(event: React.MouseEvent<HTMLDivElement>) {
+    if (isBlocked) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const minute = snapPointerToMinutes(event.clientY, rect);
+    // No-op when the click lands inside an existing booking (the chip's own
+    // onClick handles selection) or before the earliest bookable time.
+    if (minuteIsBusy(minute) || minute < earliest) return;
+    onAddSlot(day, timeOfMinutes(minute));
+  }
+
+  const showHoverAdd =
+    !isBlocked && hoverMin !== null && !minuteIsBusy(hoverMin) && hoverMin >= earliest;
+
   return (
     <div
       className={cn(
@@ -507,27 +618,57 @@ function DayColumn({
       )}
       style={{ height: GRID_HOURS * HOUR_HEIGHT }}
     >
-      {/* Hour cells — background gridlines + click-to-add target */}
-      {hours.map((hour) => (
-        <button
+      {/* Hour gridlines (non-interactive background) */}
+      {hours.map((hour, index) => (
+        <div
           key={hour}
-          type="button"
-          disabled={isBlocked}
-          onClick={isBlocked ? undefined : () => onAddSlot(day, `${String(hour).padStart(2, "0")}:00`)}
-          title={isBlocked ? undefined : t.admin.addBookingAt(formatDay(day, locale), `${String(hour).padStart(2, "0")}:00`)}
           style={{ height: HOUR_HEIGHT }}
           className={cn(
-            "group block w-full border-t transition first:border-t-0",
-            isBlocked
-              ? "border-red-200/70 hover:bg-red-100/70 dark:border-red-500/20 dark:hover:bg-red-500/20"
-              : "border-black/5 hover:bg-stone-100/70 dark:border-white/5 dark:hover:bg-stone-800",
+            "border-t",
+            index === 0 && "border-t-0",
+            isBlocked ? "border-red-200/70 dark:border-red-500/20" : "border-black/5 dark:border-white/5",
           )}
-        >
-          <span className="flex h-full items-center justify-center text-lg text-stone-300 opacity-0 transition group-hover:opacity-100 dark:text-stone-600">
-            +
-          </span>
-        </button>
+        />
       ))}
+
+      {/* Past-time veil on today's column (above gridlines, below bookings/click) */}
+      {isToday && earliest > OPEN_MINUTES && earliest <= CLOSE_MINUTES ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 bg-stone-100/50 dark:bg-black/30"
+          style={{ height: ((Math.min(earliest, CLOSE_MINUTES) - OPEN_MINUTES) / 60) * HOUR_HEIGHT }}
+        />
+      ) : null}
+
+      {/* Click-to-add surface — snaps to the cursor's 15-min slot. Sits beneath
+          the booking chips (z-10) so clicks on bookings select rather than add. */}
+      {!isBlocked ? (
+        <div
+          className="absolute inset-0 cursor-pointer"
+          onMouseMove={handleMove}
+          onMouseLeave={() => setHoverMin(null)}
+          onClick={handleClick}
+          title={
+            hoverMin !== null
+              ? t.admin.addBookingAt(formatDay(day, locale), timeOfMinutes(hoverMin))
+              : undefined
+          }
+        >
+          {showHoverAdd ? (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-x-1 flex items-center gap-1 rounded-md border border-dashed border-stone-300 bg-white/70 px-1.5 text-[0.6rem] font-semibold text-stone-500 dark:border-stone-600 dark:bg-stone-800/70 dark:text-stone-300"
+              style={{
+                top: ((hoverMin - START_HOUR * 60) / 60) * HOUR_HEIGHT,
+                height: (SNAP_MINUTES / 60) * HOUR_HEIGHT,
+              }}
+            >
+              <span className="text-sm leading-none">+</span>
+              {timeOfMinutes(hoverMin)}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Bookings positioned by start time, sized by duration */}
       {items.map((item) => {
@@ -546,25 +687,33 @@ function DayColumn({
   );
 }
 
-function monthItemToneClasses(type: CalendarItem["type"]) {
+// Mobile month view shows a tiny color-coded dot — too small for an inset bar,
+// so the accent color fills it. Overridden to a neutral surface at sm+.
+function monthDotToneClasses(type: CalendarItem["type"]) {
   switch (type) {
     case "Confirmed":
-      return "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300";
+      return "bg-emerald-500 dark:bg-emerald-500";
     case "Barber":
-      return "bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300";
+      return "bg-blue-500 dark:bg-blue-500";
     case "Proposed":
-      return "bg-orange-100 text-orange-900 dark:bg-orange-500/20 dark:text-orange-300";
+      return "bg-orange-500 dark:bg-orange-500";
   }
 }
 
-function chipItemToneClasses(type: CalendarItem["type"]) {
+// Neutral event block — grey surface with a subtle border. The event type is
+// conveyed only by the inset accent bar (see accentToneClasses), not a full tint.
+const neutralChipClasses =
+  "border border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-800/60 dark:text-stone-200 dark:hover:bg-stone-700/60";
+
+// Color of the vertical accent bar, matching the legend for each event type.
+function accentToneClasses(type: CalendarItem["type"]) {
   switch (type) {
     case "Confirmed":
-      return "border-emerald-500 bg-emerald-100 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100";
+      return "bg-emerald-500";
     case "Barber":
-      return "border-blue-500 bg-blue-100 text-blue-950 dark:bg-blue-500/20 dark:text-blue-100";
+      return "bg-blue-500";
     case "Proposed":
-      return "border-orange-500 bg-orange-100 text-orange-950 dark:bg-orange-500/20 dark:text-orange-100";
+      return "bg-orange-500";
   }
 }
 
@@ -600,15 +749,28 @@ function CalendarChip({
         onMouseLeave={() => setTip(null)}
         style={style}
         className={cn(
-          "absolute inset-x-1 z-10 flex flex-col overflow-hidden rounded-lg border-l-2 px-1.5 py-0.5 text-left text-[0.6rem] leading-[1.15] transition hover:brightness-95",
-          chipItemToneClasses(item.type),
+          "absolute inset-x-1 z-10 flex overflow-hidden rounded-md py-0.5 pl-3.5 pr-1.5 text-left leading-tight transition",
+          neutralChipClasses,
         )}
       >
-        <span className="truncate font-semibold tabular-nums">
-          {item.time}–{endTime}
+        <span
+          aria-hidden
+          className={cn(
+            "absolute inset-y-1 left-1 w-1 rounded-full",
+            accentToneClasses(item.type),
+          )}
+        />
+        <span className="flex min-w-0 flex-col gap-px">
+          {showName ? (
+            <span className="truncate text-xs font-semibold leading-tight">{item.title}</span>
+          ) : null}
+          <span className="truncate text-[0.65rem] leading-tight tabular-nums opacity-60">
+            {item.time}–{endTime}
+          </span>
+          {showService ? (
+            <span className="truncate text-[0.65rem] leading-tight opacity-60">{item.service}</span>
+          ) : null}
         </span>
-        {showName ? <span className="truncate font-medium">{item.title}</span> : null}
-        {showService ? <span className="truncate opacity-70">{item.service}</span> : null}
       </button>
 
       {tip
@@ -643,14 +805,27 @@ function MobileChip({
       type="button"
       onClick={() => onSelect(item)}
       className={cn(
-        "block w-full rounded-lg border-l-2 px-3 py-2 text-left text-sm transition hover:brightness-95",
-        chipItemToneClasses(item.type),
+        "relative flex w-full rounded-lg py-2 pl-5 pr-3 text-left transition",
+        neutralChipClasses,
       )}
     >
-      <p className="font-semibold tabular-nums">
-        {item.time}–{endTime} · {item.title}
-      </p>
-      <p className="truncate opacity-80">{item.service}</p>
+      <span
+        aria-hidden
+        className={cn(
+          "absolute inset-y-2 left-2 w-1 rounded-full",
+          accentToneClasses(item.type),
+        )}
+      />
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold">{item.title}</span>
+        <span className="mt-0.5 block truncate text-xs opacity-60">
+          <span className="tabular-nums">
+            {item.time}–{endTime}
+          </span>
+          {" · "}
+          {item.service}
+        </span>
+      </span>
     </button>
   );
 }

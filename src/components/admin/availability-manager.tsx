@@ -27,6 +27,7 @@ export function AvailabilityManager({
 }) {
   const t = useT();
   const locale = localeFor(useLang());
+  const today = addDays(0);
   const [start, setStart] = useState(addDays(1));
   const [end, setEnd] = useState(addDays(1));
   const [reason, setReason] = useState("");
@@ -93,13 +94,17 @@ export function AvailabilityManager({
         <div className="mt-6">
           <MonthCalendar
             dayClassName={(cell) =>
-              blockedDates.has(cell.date)
-                ? "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15"
+              cell.date < today
+                ? "cursor-not-allowed border-dashed !border-stone-400 !bg-stone-200 dark:!border-stone-700 dark:!bg-stone-800"
+                : blockedDates.has(cell.date)
+                  ? "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15"
                 : ""
             }
             dayNumberClassName={(cell) =>
-              blockedDates.has(cell.date)
-                ? "text-red-900 dark:text-red-100"
+              cell.date < today
+                ? "text-stone-400 dark:text-stone-500"
+                : blockedDates.has(cell.date)
+                  ? "text-red-900 dark:text-red-100"
                 : ""
             }
             renderDay={(cell) =>

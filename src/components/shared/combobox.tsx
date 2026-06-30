@@ -7,6 +7,11 @@ import { cn } from "@/lib/classnames";
 export type ComboboxOption = {
   value: string;
   label: string;
+  // When set, the option is shown muted, can't be chosen, and is skipped by
+  // keyboard navigation. Used to grey out time slots that are taken / don't fit.
+  disabled?: boolean;
+  // Optional trailing hint (e.g. "taken") rendered after the label.
+  hint?: string;
 };
 
 const controlClass =
@@ -59,21 +64,33 @@ export function Combobox({
   }, [open, selectedLabel]);
 
   function choose(option: ComboboxOption) {
+    if (option.disabled) return;
     onChange(option.value);
     setQuery(option.label);
     setOpen(false);
+  }
+
+  // Next selectable index in `direction` (+1/-1), skipping disabled options.
+  function nextEnabled(from: number, direction: 1 | -1) {
+    let index = from;
+    for (let step = 0; step < filtered.length; step += 1) {
+      index += direction;
+      if (index < 0 || index >= filtered.length) return from;
+      if (!filtered[index]?.disabled) return index;
+    }
+    return from;
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "ArrowDown") {
       event.preventDefault();
       if (!open) setOpen(true);
-      setActiveIndex((index) => Math.min(index + 1, filtered.length - 1));
+      setActiveIndex((index) => nextEnabled(index, 1));
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setActiveIndex((index) => Math.max(index - 1, 0));
+      setActiveIndex((index) => nextEnabled(index, -1));
     } else if (event.key === "Enter") {
-      if (open && filtered[activeIndex]) {
+      if (open && filtered[activeIndex] && !filtered[activeIndex].disabled) {
         event.preventDefault();
         choose(filtered[activeIndex]);
       }
@@ -129,26 +146,36 @@ export function Combobox({
               filtered.map((option, index) => {
                 const active = index === activeIndex;
                 const selected = option.value === value;
+                const disabled = option.disabled ?? false;
                 return (
-                  <li key={option.value} role="option" aria-selected={selected}>
+                  <li key={option.value} role="option" aria-selected={selected} aria-disabled={disabled}>
                     <button
                       type="button"
+                      disabled={disabled}
                       // onMouseDown (not onClick) so it fires before the input blur.
                       onMouseDown={(event) => {
                         event.preventDefault();
                         choose(option);
                       }}
-                      onMouseEnter={() => setActiveIndex(index)}
+                      onMouseEnter={() => {
+                        if (!disabled) setActiveIndex(index);
+                      }}
                       className={cn(
                         "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition",
-                        active
-                          ? "bg-stone-100 text-black dark:bg-stone-800 dark:text-white"
-                          : "text-stone-700 dark:text-stone-300",
-                        selected && "font-semibold",
+                        disabled
+                          ? "cursor-not-allowed text-stone-300 dark:text-stone-600"
+                          : active
+                            ? "bg-stone-100 text-black dark:bg-stone-800 dark:text-white"
+                            : "text-stone-700 dark:text-stone-300",
+                        selected && !disabled && "font-semibold",
                       )}
                     >
                       <span className="truncate">{option.label}</span>
-                      {selected ? (
+                      {option.hint ? (
+                        <span className={cn("shrink-0 text-xs", disabled ? "" : "text-stone-400 dark:text-stone-500")}>
+                          {option.hint}
+                        </span>
+                      ) : selected ? (
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                           <path d="M20 6 9 17l-5-5" />
                         </svg>

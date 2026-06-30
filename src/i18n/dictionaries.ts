@@ -176,6 +176,7 @@ const en = {
     proposedOn: (day: string) => `Proposed ${day}`,
     // Request form
     newAppointment: "New appointment",
+    chooseService: "Choose a service",
     pickThreeDays: "Pick three preferred days",
     service: "Service",
     notes: "Notes",
@@ -330,6 +331,11 @@ const en = {
     off: "Off",
     noAppointments: "No appointments.",
     addBookingAt: (day: string, time: string) => `Add a booking on ${day} at ${time}`,
+    // Time-slot picker (overlap-aware)
+    slotTakenHint: "taken",
+    slotOverlapError: "This time overlaps an existing booking. Pick another.",
+    slotFitError: "This service doesn't fit before closing at the chosen time.",
+    dayFull: "No free slots left this day for this service.",
     // Add-booking modal
     addBookingTitle: "Add booking",
     addBookingDescription:
@@ -379,6 +385,7 @@ const en = {
     serviceDescription: "Description",
     serviceDuration: "Duration (min)",
     servicePrice: "Price (€)",
+    serviceImage: "Photo path or URL",
     edit: "Edit",
     hide: "Hide",
     show: "Show",
@@ -479,6 +486,8 @@ const en = {
     couldNotUpdateClient: "Could not update this client.",
     pickValidDateTime: "Pick a valid date and time before sending.",
     chooseFutureTime: "Choose a time in the future.",
+    chooseWithinTwoWeeks: "Choose a time within the next 2 weeks.",
+    pickGeneratedSlot: "Pick one of the available times shown in the calendar.",
     requestNotFound: "Booking request not found.",
     alreadyConfirmed: "This request is already confirmed.",
     serviceNotFound: "Service not found.",
@@ -784,6 +793,7 @@ const sk: Dict = {
     awaitingProposal: "Čaká na návrh",
     proposedOn: (day: string) => `Navrhnuté ${day}`,
     newAppointment: "Nový termín",
+    chooseService: "Vyberte službu",
     pickThreeDays: "Vyberte tri preferované dni",
     service: "Služba",
     notes: "Poznámky",
@@ -931,6 +941,11 @@ const sk: Dict = {
     off: "Zatvorené",
     noAppointments: "Žiadne termíny.",
     addBookingAt: (day: string, time: string) => `Pridať rezerváciu na ${day} o ${time}`,
+    // Výber časového okna (zohľadňuje prekrytie)
+    slotTakenHint: "obsadené",
+    slotOverlapError: "Tento čas sa prekrýva s existujúcou rezerváciou. Vyberte iný.",
+    slotFitError: "Táto služba sa pri zvolenom čase nezmestí pred zatvorením.",
+    dayFull: "Pre túto službu už v tento deň nie sú voľné termíny.",
     addBookingTitle: "Pridať rezerváciu",
     addBookingDescription:
       "Rezervujte existujúceho klienta alebo náhodného zákazníka. Termín sa rezervuje okamžite.",
@@ -978,6 +993,7 @@ const sk: Dict = {
     serviceDescription: "Popis",
     serviceDuration: "Trvanie (min)",
     servicePrice: "Cena (€)",
+    serviceImage: "Cesta alebo URL fotky",
     edit: "Upraviť",
     hide: "Skryť",
     show: "Zobraziť",
@@ -1073,6 +1089,8 @@ const sk: Dict = {
     couldNotUpdateClient: "Nepodarilo sa aktualizovať tohto klienta.",
     pickValidDateTime: "Pred odoslaním vyberte platný dátum a čas.",
     chooseFutureTime: "Vyberte čas v budúcnosti.",
+    chooseWithinTwoWeeks: "Vyberte čas v najbližších 2 týždňoch.",
+    pickGeneratedSlot: "Vyberte jeden z dostupných časov zobrazených v kalendári.",
     requestNotFound: "Žiadosť o rezerváciu sa nenašla.",
     alreadyConfirmed: "Táto žiadosť je už potvrdená.",
     serviceNotFound: "Služba sa nenašla.",

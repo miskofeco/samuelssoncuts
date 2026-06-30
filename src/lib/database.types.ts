@@ -46,6 +46,7 @@ export type Database = {
           description: string | null;
           duration_minutes: number;
           price_cents: number;
+          image_url: string | null;
           active: boolean;
           created_at: string;
         };
@@ -55,6 +56,7 @@ export type Database = {
           description?: string | null;
           duration_minutes: number;
           price_cents: number;
+          image_url?: string | null;
           active?: boolean;
           created_at?: string;
         };
