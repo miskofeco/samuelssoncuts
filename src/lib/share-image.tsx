@@ -41,7 +41,7 @@ export async function createShareImageResponse() {
             inset: 0,
             display: "flex",
             background:
-              "radial-gradient(circle at 74% 20%, rgba(250,250,249,0.11), transparent 25%), radial-gradient(circle at 18% 86%, rgba(168,162,158,0.1), transparent 32%), linear-gradient(135deg, #050505 0%, #0c0a09 46%, #161312 100%)",
+              "radial-gradient(circle at 74% 20%, rgba(250,250,249,0.12), transparent 25%), radial-gradient(circle at 18% 86%, rgba(168,162,158,0.11), transparent 32%), linear-gradient(135deg, #050505 0%, #0c0a09 48%, #161312 100%)",
           }}
         />
         <div
@@ -49,9 +49,9 @@ export async function createShareImageResponse() {
             position: "absolute",
             inset: 0,
             display: "flex",
-            opacity: 0.18,
+            opacity: 0.24,
             background:
-              "repeating-linear-gradient(135deg, transparent 0px, transparent 22px, rgba(250,250,249,0.14) 22px, rgba(250,250,249,0.14) 23px, transparent 23px, transparent 46px)",
+              "repeating-linear-gradient(135deg, transparent 0px, transparent 30px, rgba(250,250,249,0.12) 30px, rgba(250,250,249,0.12) 31px, transparent 31px, transparent 62px)",
           }}
         />
         <div
@@ -59,7 +59,7 @@ export async function createShareImageResponse() {
             position: "absolute",
             inset: 0,
             display: "flex",
-            opacity: 0.16,
+            opacity: 0.12,
             background:
               "linear-gradient(rgba(250,250,249,0.16) 1px, transparent 1px), linear-gradient(90deg, rgba(250,250,249,0.14) 1px, transparent 1px)",
             backgroundSize: "96px 96px",
@@ -68,42 +68,12 @@ export async function createShareImageResponse() {
         <div
           style={{
             position: "absolute",
-            left: 64,
-            right: 64,
-            top: 56,
-            bottom: 56,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 420,
             display: "flex",
-            border: "1px solid rgba(250,250,249,0.14)",
-            borderRadius: 28,
-            background: "rgba(22,19,18,0.74)",
-            boxShadow: "0 36px 120px rgba(0,0,0,0.55)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            left: 64,
-            right: 64,
-            top: 56,
-            bottom: 56,
-            display: "flex",
-            borderRadius: 28,
-            opacity: 0.42,
-            background:
-              "repeating-linear-gradient(135deg, transparent 0px, transparent 30px, rgba(250,250,249,0.08) 30px, rgba(250,250,249,0.08) 31px, transparent 31px, transparent 62px)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            right: 64,
-            top: 56,
-            bottom: 56,
-            width: 310,
-            display: "flex",
-            borderBottomRightRadius: 28,
-            borderTopRightRadius: 28,
-            opacity: 0.36,
+            opacity: 0.44,
             background:
               "repeating-linear-gradient(135deg, rgba(250,250,249,0.12) 0px, rgba(250,250,249,0.12) 8px, transparent 8px, transparent 30px)",
           }}
@@ -111,8 +81,8 @@ export async function createShareImageResponse() {
         <div
           style={{
             position: "absolute",
-            right: 104,
-            top: 96,
+            right: 72,
+            top: 64,
             display: "flex",
             gap: 10,
           }}
@@ -146,7 +116,7 @@ export async function createShareImageResponse() {
             justifyContent: "space-between",
             width: "100%",
             height: "100%",
-            padding: "86px 104px 82px",
+            padding: "62px 78px 66px",
           }}
         >
           {/* ImageResponse renders plain HTML, so the real PNG wordmark is embedded directly. */}
@@ -215,8 +185,8 @@ export async function createShareImageResponse() {
         <div
           style={{
             position: "absolute",
-            right: 104,
-            bottom: 86,
+            right: 78,
+            bottom: 66,
             display: "flex",
             alignItems: "center",
             gap: 12,
