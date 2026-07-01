@@ -32,6 +32,7 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
   }
   const { error } = await resend.emails.send({
     from: getEmailFrom(),
+    replyTo: getBarberEmail(),
     to: payload.to,
     subject: payload.subject,
     react: payload.react,

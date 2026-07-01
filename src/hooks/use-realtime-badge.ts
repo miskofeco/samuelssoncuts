@@ -4,35 +4,59 @@ import { useEffect, useReducer, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-type Action = { type: "increment" } | { type: "reset" };
+type State = { count: number; loaded: boolean };
+type Action =
+  | { type: "loaded"; count: number }
+  | { type: "increment" }
+  | { type: "reset" };
 
-function reducer(count: number, action: Action) {
-  if (action.type === "reset") return 0;
-  return count + 1;
+function reducer(state: State, action: Action): State {
+  if (action.type === "reset") return { count: 0, loaded: true };
+  if (action.type === "loaded") return { count: action.count, loaded: true };
+  return { ...state, count: state.count + 1 };
 }
 
-export function useRealtimeBadge(table: string, resetOnPath: string): number {
+export function useRealtimeBadge(
+  table: string,
+  resetOnPath: string,
+  filterColumn?: string,
+  filterValue?: string,
+): number {
   const pathname = usePathname();
-  const onPage = pathname === resetOnPath || pathname.startsWith(`${resetOnPath}/`);
+  const onPage =
+    pathname === resetOnPath || pathname.startsWith(`${resetOnPath}/`);
+  const [state, dispatch] = useReducer(reducer, { count: 0, loaded: false });
 
-  const [count, dispatch] = useReducer(reducer, 0);
-
-  // Reset when landing on the target page.
+  // Reset to 0 when navigating to the target page.
   useEffect(() => {
     if (onPage) dispatch({ type: "reset" });
   }, [onPage]);
 
-  // Subscribe once per table — stable dep, never recreated on navigation.
-  // Use a ref so the callback can read the latest `onPage` without being
-  // listed as a dep (which would cause the subscribe/unsubscribe cycle that
-  // triggers the Supabase "cannot add callbacks after subscribe()" error).
+  // Ref so the realtime callback can read the latest onPage without being a dep.
   const onPageRef = useRef(onPage);
   useEffect(() => {
     onPageRef.current = onPage;
   });
 
+  // Fetch initial count + subscribe for inserts — stable dep, never recreated.
   useEffect(() => {
     const supabase = createClient();
+
+    // Initial count query.
+    let query = supabase
+      .from(table)
+      .select("*", { count: "exact", head: true });
+    if (filterColumn && filterValue) {
+      query = query.eq(filterColumn, filterValue);
+    }
+    query.then(({ count }) => {
+      // Only set the loaded count if we haven't already reset (i.e. not on the page).
+      if (!onPageRef.current) {
+        dispatch({ type: "loaded", count: count ?? 0 });
+      }
+    });
+
+    // Realtime subscription for new inserts.
     const channel = supabase
       .channel(`badge:${table}`)
       .on(
@@ -47,7 +71,7 @@ export function useRealtimeBadge(table: string, resetOnPath: string): number {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [table]); // stable — never triggers re-subscribe
+  }, [table, filterColumn, filterValue]); // stable — filterColumn/Value never change
 
-  return onPage ? 0 : count;
+  return onPage ? 0 : state.count;
 }

@@ -23,12 +23,6 @@ function isActive(pathname: string, href: string) {
 }
 
 // Live badge counts for admin — new booking requests and new client registrations.
-function AdminBadges() {
-  const requests = useRealtimeBadge("booking_requests", "/admin/requests");
-  const approvals = useRealtimeBadge("profiles", "/admin/approvals");
-  return { requests, approvals };
-}
-
 export function Sidebar({
   sections,
   profile,
@@ -36,15 +30,45 @@ export function Sidebar({
   sections: NavSection[];
   profile: AuthProfile;
 }) {
+  const isAdmin = profile.role === "admin";
+
+  return isAdmin ? (
+    <SidebarWithBadges sections={sections} profile={profile} />
+  ) : (
+    <SidebarInner sections={sections} profile={profile} requests={0} approvals={0} />
+  );
+}
+
+function SidebarWithBadges({
+  sections,
+  profile,
+}: {
+  sections: NavSection[];
+  profile: AuthProfile;
+}) {
+  const requests = useRealtimeBadge("booking_requests", "/admin/requests", "status", "pending");
+  const approvals = useRealtimeBadge("profiles", "/admin/approvals", "approval_status", "pending");
+  return <SidebarInner sections={sections} profile={profile} requests={requests} approvals={approvals} />;
+}
+
+function SidebarInner({
+  sections,
+  profile,
+  requests,
+  approvals,
+}: {
+  sections: NavSection[];
+  profile: AuthProfile;
+  requests: number;
+  approvals: number;
+}) {
   const pathname = usePathname();
   const t = useT();
   const { openPreferences } = useConsent();
-  const isAdmin = profile.role === "admin";
-  const badges = isAdmin ? AdminBadges() : { requests: 0, approvals: 0 };
 
   function badgeFor(href: string): number {
-    if (href === "/admin/requests") return badges.requests;
-    if (href === "/admin/approvals") return badges.approvals;
+    if (href === "/admin/requests") return requests;
+    if (href === "/admin/approvals") return approvals;
     return 0;
   }
 
