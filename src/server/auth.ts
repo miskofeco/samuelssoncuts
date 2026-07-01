@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 export type AuthProfile = {
   id: string;
   role: "client" | "admin";
-  approval_status: "pending" | "approved" | "rejected";
+  approval_status: "pending" | "approved" | "rejected" | "blocked";
   full_name: string;
   email: string;
   phone: string | null;

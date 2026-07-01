@@ -16,16 +16,15 @@ const statusTone: Record<ApprovalStatus, "success" | "warning" | "danger"> = {
   approved: "success",
   pending: "warning",
   rejected: "danger",
+  blocked: "danger",
 };
 
 function statusLabel(t: Dict, status: ApprovalStatus) {
   switch (status) {
-    case "approved":
-      return t.statuses.approved;
-    case "pending":
-      return t.statuses.approvalPending;
-    case "rejected":
-      return t.statuses.rejected;
+    case "approved": return t.statuses.approved;
+    case "pending":  return t.statuses.approvalPending;
+    case "rejected": return t.statuses.rejected;
+    case "blocked":  return t.statuses.blocked;
   }
 }
 
@@ -48,7 +47,7 @@ export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
             client.email.toLowerCase().includes(term),
         )
       : people;
-    const order: Record<ApprovalStatus, number> = { pending: 0, approved: 1, rejected: 2 };
+    const order: Record<ApprovalStatus, number> = { pending: 0, approved: 1, rejected: 2, blocked: 3 };
     return [...filtered].sort(
       (a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name),
     );

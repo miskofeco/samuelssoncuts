@@ -13,12 +13,20 @@ import { useT } from "@/i18n/provider";
 import type { AuthProfile } from "@/server/auth";
 import { cn } from "@/lib/classnames";
 
+import { useRealtimeBadge } from "@/hooks/use-realtime-badge";
 import type { NavSection } from "./nav-items";
 
 function isActive(pathname: string, href: string) {
   // Exact match for index routes, prefix match for sub-sections.
   if (href === "/admin" || href === "/client") return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+// Live badge counts for admin — new booking requests and new client registrations.
+function AdminBadges() {
+  const requests = useRealtimeBadge("booking_requests", "/admin/requests");
+  const approvals = useRealtimeBadge("profiles", "/admin/approvals");
+  return { requests, approvals };
 }
 
 export function Sidebar({
@@ -31,6 +39,14 @@ export function Sidebar({
   const pathname = usePathname();
   const t = useT();
   const { openPreferences } = useConsent();
+  const isAdmin = profile.role === "admin";
+  const badges = isAdmin ? AdminBadges() : { requests: 0, approvals: 0 };
+
+  function badgeFor(href: string): number {
+    if (href === "/admin/requests") return badges.requests;
+    if (href === "/admin/approvals") return badges.approvals;
+    return 0;
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -65,7 +81,12 @@ export function Sidebar({
                     <span className={cn(active ? "" : "text-stone-400 dark:text-stone-500")}>
                       {item.icon}
                     </span>
-                    {t.nav[item.key]}
+                    <span className="flex-1">{t.nav[item.key]}</span>
+                    {badgeFor(item.href) > 0 ? (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[0.6rem] font-bold text-white">
+                        {badgeFor(item.href) > 99 ? "99+" : badgeFor(item.href)}
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}
@@ -106,11 +127,11 @@ export function Sidebar({
               icon={<VerifiedIcon />}
               label={t.account.verifiedHint}
             />
-          ) : profile.approval_status === "rejected" ? (
+          ) : profile.approval_status === "rejected" || profile.approval_status === "blocked" ? (
             <IconBadge
               tone="danger"
               icon={<XIcon />}
-              label={t.account.rejectedHint}
+              label={profile.approval_status === "blocked" ? t.account.blockedHint : t.account.rejectedHint}
             />
           ) : (
             <IconBadge

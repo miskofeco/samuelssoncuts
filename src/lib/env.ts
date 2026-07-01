@@ -29,3 +29,23 @@ export function requireSupabaseEnv(): SupabaseEnv {
 export function getSiteUrl() {
   return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 }
+
+// ─── Email ────────────────────────────────────────────────────────────────────
+
+export function getResendApiKey(): string | null {
+  return process.env.RESEND_API_KEY ?? null;
+}
+
+export function getEmailFrom(): string {
+  return process.env.RESEND_FROM_ADDRESS ?? "Samuelsson Cuts <noreply@samuelssoncuts.com>";
+}
+
+export function getBarberEmail(): string {
+  return process.env.BARBER_EMAIL ?? "barber@samuelssoncuts.com";
+}
+
+// ─── Cron ─────────────────────────────────────────────────────────────────────
+
+export function getCronSecret(): string | null {
+  return process.env.CRON_SECRET ?? null;
+}

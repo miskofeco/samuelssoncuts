@@ -2,6 +2,7 @@ import { eachDate } from "@/domain/schedule";
 import type {
   Appointment,
   BookingRequest,
+  BusinessHoursDay,
   ClientProfile,
   Notification,
   Proposal,
@@ -121,6 +122,7 @@ export function mapAppointmentRow(row: AppointmentRow): Appointment {
     serviceId: row.service_id,
     date: dateFromIso(row.starts_at),
     time: timeFromIso(row.starts_at),
+    outcome: (row as Record<string, unknown>).outcome as Appointment["outcome"],
   };
 }
 
@@ -607,3 +609,46 @@ export async function loadExportAppointments(
       "Walk-in",
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Business hours
+// ---------------------------------------------------------------------------
+
+const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+// Default 7-day schedule (07:00–21:00, closed Sunday) used when the admin
+// hasn't configured custom hours yet.
+const DEFAULT_HOURS: BusinessHoursDay[] = Array.from({ length: 7 }, (_, w) => ({
+  weekday: w,
+  opensAt: "07:00",
+  closesAt: "21:00",
+  closed: w === 0, // Sunday closed by default
+}));
+
+export async function loadBusinessHours(barberId: string): Promise<BusinessHoursDay[]> {
+  const supabase = await createClient();
+  type BHRow = { weekday: number; opens_at: string; closes_at: string; closed: boolean };
+
+  const { data, error } = await supabase
+    .from("business_hours")
+    .select("weekday, opens_at, closes_at, closed")
+    .eq("barber_id", barberId)
+    .order("weekday") as unknown as { data: BHRow[] | null; error: unknown };
+
+  if (error || !data || data.length === 0) return DEFAULT_HOURS;
+
+  // Fill in any missing weekdays with defaults.
+  return DEFAULT_HOURS.map((def) => {
+    const row = data.find((r) => r.weekday === def.weekday);
+    if (!row) return def;
+    return {
+      weekday: row.weekday,
+      opensAt: row.opens_at.slice(0, 5),
+      closesAt: row.closes_at.slice(0, 5),
+      closed: row.closed ?? false,
+    };
+  });
+}
+
+export { WEEKDAY_NAMES };
+

@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 
 import { ClientDetail } from "@/components/admin/client-detail";
 import { PageHeader } from "@/components/shared/page-header";
-import { getDict } from "@/i18n/server";
+import { localeFor } from "@/i18n/config";
+import { getDict, getLang } from "@/i18n/server";
 import { requireAdmin } from "@/server/auth";
 import { loadClientHistory } from "@/server/dashboard-data";
 
@@ -16,8 +17,11 @@ export default async function AdminClientDetailPage({
 }) {
   await requireAdmin();
   const { clientId } = await params;
-  const data = await loadClientHistory(clientId);
-  const t = await getDict();
+  const [data, t, lang] = await Promise.all([
+    loadClientHistory(clientId),
+    getDict(),
+    getLang(),
+  ]);
 
   if (!data.client) {
     notFound();
@@ -39,6 +43,7 @@ export default async function AdminClientDetailPage({
         proposals={data.proposals}
         appointments={data.appointments}
         services={data.services}
+        locale={localeFor(lang)}
       />
     </div>
   );

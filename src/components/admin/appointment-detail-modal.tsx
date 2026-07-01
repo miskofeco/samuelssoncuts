@@ -5,6 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 import {
   cancelAppointmentAdminAction,
   cancelRequestAction,
+  markAppointmentOutcomeAction,
   proposeAppointmentAction,
   rescheduleAppointmentAction,
 } from "@/app/actions";
@@ -204,6 +205,42 @@ function DetailBody({
       {mode === "view" ? (
         <>
           <Feedback result={feedback && !feedback.ok ? feedback : null} />
+
+          {/* Outcome section — only for past confirmed appointments */}
+          {isConfirmed && item.date < today ? (
+            item.outcome ? (
+              <div className="flex items-center gap-2">
+                <StatusPill tone={item.outcome === "completed" ? "success" : "danger"}>
+                  {item.outcome === "completed" ? t.admin.outcomeCompleted : t.admin.outcomeNoShow}
+                </StatusPill>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={pending}
+                  onClick={() =>
+                    run(() => markAppointmentOutcomeAction(item.appointmentId!, "completed"))
+                  }
+                >
+                  {t.admin.markCompleted}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={pending}
+                  onClick={() =>
+                    run(() => markAppointmentOutcomeAction(item.appointmentId!, "no_show"))
+                  }
+                  className="text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10"
+                >
+                  {t.admin.markNoShow}
+                </Button>
+              </div>
+            )
+          ) : null}
+
           <div className="flex flex-wrap justify-end gap-2">
             {isWalkIn && isConfirmed ? (
               <p className="mr-auto self-center text-xs text-stone-500 dark:text-stone-400">

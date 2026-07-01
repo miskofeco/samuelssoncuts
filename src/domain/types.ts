@@ -1,6 +1,6 @@
 export type Role = "client" | "admin";
 
-export type ApprovalStatus = "pending" | "approved" | "rejected";
+export type ApprovalStatus = "pending" | "approved" | "rejected" | "blocked";
 
 export type RequestStatus = "pending" | "proposed" | "confirmed" | "declined";
 
@@ -69,6 +69,8 @@ export type Proposal = {
   status: ProposalStatus;
 };
 
+export type AppointmentOutcome = "completed" | "no_show" | "cancelled";
+
 export type Appointment = {
   id: string;
   requestId: string | null;
@@ -78,6 +80,7 @@ export type Appointment = {
   serviceId: string;
   date: string;
   time: string;
+  outcome?: AppointmentOutcome | null;
 };
 
 export type Notification = {
@@ -95,6 +98,14 @@ export type AppState = {
   proposals: Proposal[];
   appointments: Appointment[];
   notifications: Notification[];
+};
+
+// 0 = Sunday … 6 = Saturday (matches JS Date.getDay()).
+export type BusinessHoursDay = {
+  weekday: number;
+  opensAt: string;   // "HH:MM"
+  closesAt: string;  // "HH:MM"
+  closed: boolean;
 };
 
 export type AvailabilityDay = {

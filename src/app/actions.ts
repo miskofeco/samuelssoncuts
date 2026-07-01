@@ -6,6 +6,17 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { getSiteUrl } from "@/lib/env";
+import { getBarberEmail, sendEmail } from "@/lib/email";
+import { AccountApprovedEmail } from "@/emails/account-approved";
+import { AccountBlockedEmail } from "@/emails/account-blocked";
+import { AccountRejectedEmail } from "@/emails/account-rejected";
+import { AppointmentCancelledEmail } from "@/emails/appointment-cancelled";
+import { AppointmentConfirmedEmail } from "@/emails/appointment-confirmed";
+import { AppointmentProposedEmail } from "@/emails/appointment-proposed";
+import { AppointmentRescheduledEmail } from "@/emails/appointment-rescheduled";
+import { BookingRequestEmail } from "@/emails/booking-request";
+import { ClientRespondedEmail } from "@/emails/client-responded";
+import { SlotTakenEmail } from "@/emails/slot-taken";
 import { createClient } from "@/lib/supabase/server";
 import { CONSENT_VERSION } from "@/lib/consent/config";
 import {
@@ -293,7 +304,7 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
   // never trusted from the client.
   const { data: service, error: serviceError } = await supabase
     .from("services")
-    .select("duration_minutes, price_cents")
+    .select("name, duration_minutes, price_cents")
     .eq("id", parsed.data.serviceId)
     .single();
 
@@ -374,11 +385,23 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
     return { ok: false, error: requestError.message };
   }
 
+  const barberEmail = getBarberEmail();
   await supabase.from("notifications").insert({
     user_id: profile.id,
     channel: "email",
-    recipient: "barber@samuelssoncuts.com",
+    recipient: barberEmail,
     subject: `${profile.full_name} requested ${parsed.data.date} at ${parsed.data.time}`,
+  });
+  await sendEmail({
+    to: barberEmail,
+    subject: `${profile.full_name} requested ${parsed.data.date} at ${parsed.data.time}`,
+    react: BookingRequestEmail({
+      clientName: profile.full_name,
+      service: service.name,
+      date: parsed.data.date,
+      time: parsed.data.time,
+      note: parsed.data.note,
+    }),
   });
 
   revalidatePath("/client", "layout");
@@ -429,6 +452,11 @@ export async function approveClientAction(clientId: string): Promise<ActionResul
     subject: "Your Samuelsson Cuts account was approved",
     body: `Hi ${profile.full_name}, your account is approved. You can now request appointments.`,
   });
+  await sendEmail({
+    to: profile.email,
+    subject: "Your Samuelsson Cuts account was approved",
+    react: AccountApprovedEmail({ clientName: profile.full_name }),
+  });
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
@@ -458,9 +486,107 @@ export async function rejectClientAction(clientId: string): Promise<ActionResult
     subject: "Update on your Samuelsson Cuts account",
     body: `Hi ${profile.full_name}, we are unable to approve your account at this time.`,
   });
+  await sendEmail({
+    to: profile.email,
+    subject: "Update on your Samuelsson Cuts account",
+    react: AccountRejectedEmail({ clientName: profile.full_name }),
+  });
 
   revalidatePath("/admin", "layout");
   return { ok: true, message: t.feedback.registrationRejected };
+}
+
+// Block an approved client: set status to 'blocked', cancel all their pending /
+// proposed requests and upcoming confirmed appointments, notify them by email.
+export async function blockClientAction(clientId: string): Promise<ActionResult> {
+  await requireAdmin();
+  const t = await getDict();
+  const supabase = await createClient();
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .update({ approval_status: "blocked" as never })
+    .eq("id", clientId)
+    .select("id, email, full_name")
+    .single();
+
+  if (profileError || !profile) {
+    return { ok: false, error: profileError?.message ?? t.feedback.couldNotUpdateClient };
+  }
+
+  // Cancel all pending/proposed booking requests.
+  await supabase
+    .from("booking_requests")
+    .update({ status: "cancelled" })
+    .eq("client_id", clientId)
+    .in("status", ["pending", "proposed"]);
+
+  // Cancel future confirmed appointments — just delete them (same as the admin cancel flow).
+  const now = new Date().toISOString();
+  await supabase
+    .from("appointments")
+    .delete()
+    .eq("client_id", clientId)
+    .gt("starts_at", now);
+
+  await supabase.from("notifications").insert({
+    user_id: profile.id,
+    channel: "email",
+    recipient: profile.email,
+    subject: "Your Samuelsson Cuts account access has been removed",
+  });
+  await sendEmail({
+    to: profile.email,
+    subject: "Your Samuelsson Cuts account access has been removed",
+    react: AccountBlockedEmail({ clientName: profile.full_name }),
+  });
+
+  revalidatePath("/admin", "layout");
+  revalidatePath("/client", "layout");
+  return { ok: true, message: t.feedback.clientBlocked };
+}
+
+// Restore a blocked client back to approved.
+export async function unblockClientAction(clientId: string): Promise<ActionResult> {
+  await requireAdmin();
+  const t = await getDict();
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ approval_status: "approved" })
+    .eq("id", clientId);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/admin", "layout");
+  revalidatePath("/client", "layout");
+  return { ok: true, message: t.feedback.clientUnblocked };
+}
+
+// Permanently delete a client account and all associated data.
+// Appointments and requests are cascade-deleted by the DB foreign keys.
+// The auth.users row is deleted via the Supabase admin API which also removes
+// the profile row (cascade on profiles.id → auth.users.id).
+export async function deleteClientAction(clientId: string): Promise<ActionResult> {
+  await requireAdmin();
+  const t = await getDict();
+  const supabase = await createClient();
+
+  // Hard-delete the profile; cascade removes requests, appointments, proposals.
+  const { error } = await supabase
+    .from("profiles")
+    .delete()
+    .eq("id", clientId);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: t.feedback.clientBlocked };
 }
 
 export async function proposeAppointmentAction(input: unknown): Promise<ActionResult> {
@@ -495,7 +621,7 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
 
   const { data: service, error: serviceError } = await supabase
     .from("services")
-    .select("duration_minutes")
+    .select("name, duration_minutes")
     .eq("id", request.service_id)
     .single();
 
@@ -505,7 +631,7 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
 
   const { data: clientProfile } = await supabase
     .from("profiles")
-    .select("email")
+    .select("email, full_name")
     .eq("id", request.client_id)
     .single();
 
@@ -558,6 +684,19 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
     subject: `Appointment proposed for ${parsed.data.date} at ${parsed.data.time}`,
     body: parsed.data.note ?? null,
   });
+  if (clientProfile?.email) {
+    await sendEmail({
+      to: clientProfile.email,
+      subject: `Appointment proposed for ${parsed.data.date} at ${parsed.data.time}`,
+      react: AppointmentProposedEmail({
+        clientName: clientProfile.full_name ?? "there",
+        service: service.name,
+        date: parsed.data.date,
+        time: parsed.data.time,
+        note: parsed.data.note,
+      }),
+    });
+  }
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
@@ -628,6 +767,14 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
     .update({ status: "confirmed" })
     .eq("id", request.id);
 
+  // Fetch client + service details for emails (non-fatal if missing).
+  const [{ data: confirmedClient }, { data: confirmedService }] = await Promise.all([
+    supabase.from("profiles").select("email, full_name").eq("id", request.client_id).single(),
+    supabase.from("services").select("name").eq("id", request.service_id).single(),
+  ]);
+  const confirmedDate = request.requested_start.slice(0, 10);
+  const confirmedTime = request.requested_start.slice(11, 16);
+
   // Auto-decline other pending requests for the exact same slot + notify them.
   const { data: siblings } = await supabase
     .from("booking_requests")
@@ -644,22 +791,52 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
       .eq("requested_start", request.requested_start)
       .neq("id", request.id);
 
+    // Fetch sibling emails for slot-taken notifications.
+    const siblingIds = siblings.map((s) => s.client_id).filter(Boolean) as string[];
+    const { data: siblingProfiles } = await supabase
+      .from("profiles")
+      .select("id, email, full_name")
+      .in("id", siblingIds);
+
     await supabase.from("notifications").insert(
       siblings.map((s) => ({
         user_id: s.client_id,
         channel: "email" as const,
-        recipient: "client",
+        recipient: siblingProfiles?.find((p) => p.id === s.client_id)?.email ?? "client",
         subject: "Your requested time was just booked — please pick another",
       })),
     );
+
+    // Send slot-taken emails to each displaced sibling.
+    for (const sibling of siblingProfiles ?? []) {
+      if (sibling.email) {
+        await sendEmail({
+          to: sibling.email,
+          subject: "Your requested time was just booked — please pick another",
+          react: SlotTakenEmail({ clientName: sibling.full_name ?? "there" }),
+        });
+      }
+    }
   }
 
   await supabase.from("notifications").insert({
     user_id: request.client_id,
     channel: "email",
-    recipient: "client",
+    recipient: confirmedClient?.email ?? "client",
     subject: "Your appointment is confirmed",
   });
+  if (confirmedClient?.email) {
+    await sendEmail({
+      to: confirmedClient.email,
+      subject: "Your appointment is confirmed",
+      react: AppointmentConfirmedEmail({
+        clientName: confirmedClient.full_name ?? "there",
+        service: confirmedService?.name ?? "",
+        date: confirmedDate,
+        time: confirmedTime,
+      }),
+    });
+  }
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
@@ -738,13 +915,12 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
     return { ok: false, error: t.feedback.slotTaken };
   }
 
-  const { data: clientProfile } = appointment.client_id
-    ? await supabase
-        .from("profiles")
-        .select("email")
-        .eq("id", appointment.client_id)
-        .single()
-    : { data: null };
+  const [{ data: clientProfile }, { data: rescheduleService }] = await Promise.all([
+    appointment.client_id
+      ? supabase.from("profiles").select("email, full_name").eq("id", appointment.client_id).single()
+      : Promise.resolve({ data: null }),
+    supabase.from("services").select("name").eq("id", appointment.service_id).single(),
+  ]);
 
   // Free the current slot.
   const { error: deleteError } = await supabase
@@ -791,6 +967,19 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
     subject: `Your appointment was moved — new time proposed for ${parsed.data.date} at ${parsed.data.time}`,
     body: parsed.data.note ?? null,
   });
+  if (clientProfile?.email) {
+    await sendEmail({
+      to: clientProfile.email,
+      subject: `Your appointment was moved — new time proposed for ${parsed.data.date} at ${parsed.data.time}`,
+      react: AppointmentRescheduledEmail({
+        clientName: clientProfile.full_name ?? "there",
+        service: rescheduleService?.name ?? "",
+        date: parsed.data.date,
+        time: parsed.data.time,
+        note: parsed.data.note,
+      }),
+    });
+  }
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
@@ -812,7 +1001,7 @@ export async function cancelAppointmentAdminAction(input: unknown): Promise<Acti
 
   const { data: appointment, error: appointmentError } = await supabase
     .from("appointments")
-    .select("id, request_id, client_id")
+    .select("id, request_id, client_id, service_id, starts_at")
     .eq("id", parsed.data.appointmentId)
     .single();
 
@@ -820,13 +1009,12 @@ export async function cancelAppointmentAdminAction(input: unknown): Promise<Acti
     return { ok: false, error: appointmentError?.message ?? t.feedback.appointmentNotFound };
   }
 
-  const { data: clientProfile } = appointment.client_id
-    ? await supabase
-        .from("profiles")
-        .select("email")
-        .eq("id", appointment.client_id)
-        .single()
-    : { data: null };
+  const [{ data: clientProfile }, { data: cancelService }] = await Promise.all([
+    appointment.client_id
+      ? supabase.from("profiles").select("email, full_name").eq("id", appointment.client_id).single()
+      : Promise.resolve({ data: null }),
+    supabase.from("services").select("name").eq("id", appointment.service_id).single(),
+  ]);
 
   const { error: deleteError } = await supabase
     .from("appointments")
@@ -851,13 +1039,26 @@ export async function cancelAppointmentAdminAction(input: unknown): Promise<Acti
   }
 
   // Walk-ins (no client_id) have nobody to notify.
-  if (appointment.client_id) {
+  if (appointment.client_id && clientProfile?.email) {
+    const cancelDate = appointment.starts_at.slice(0, 10);
+    const cancelTime = appointment.starts_at.slice(11, 16);
     await supabase.from("notifications").insert({
       user_id: appointment.client_id,
       channel: "email",
-      recipient: clientProfile?.email ?? "client",
+      recipient: clientProfile.email,
       subject: "Your appointment was cancelled",
       body: parsed.data.note ?? null,
+    });
+    await sendEmail({
+      to: clientProfile.email,
+      subject: "Your appointment was cancelled",
+      react: AppointmentCancelledEmail({
+        clientName: clientProfile.full_name ?? "there",
+        service: cancelService?.name ?? "",
+        date: cancelDate,
+        time: cancelTime,
+        note: parsed.data.note,
+      }),
     });
   }
 
@@ -983,6 +1184,11 @@ export async function respondToProposalAction(
     .eq("id", proposal.request_id)
     .single();
 
+  // Fetch service name for the response email (non-fatal if missing).
+  const { data: respondService } = request
+    ? await supabase.from("services").select("name").eq("id", request.service_id).single()
+    : { data: null };
+
   if (requestError || !request || request.client_id !== profile.id) {
     return { ok: false, error: t.feedback.cannotRespond };
   }
@@ -1026,11 +1232,29 @@ export async function respondToProposalAction(
     .update({ status: accepted ? "confirmed" : "declined" })
     .eq("id", request.id);
 
+  const barberEmailForResponse = getBarberEmail();
+  const respondDate = proposal.starts_at.slice(0, 10);
+  const respondTime = proposal.starts_at.slice(11, 16);
+  const respondSubject = accepted
+    ? `${profile.full_name} confirmed the appointment`
+    : `${profile.full_name} declined the proposed time`;
+
   await supabase.from("notifications").insert({
     user_id: profile.id,
     channel: "email",
-    recipient: "barber@samuelssoncuts.com",
-    subject: accepted ? "Client confirmed appointment" : "Client declined proposed time",
+    recipient: barberEmailForResponse,
+    subject: respondSubject,
+  });
+  await sendEmail({
+    to: barberEmailForResponse,
+    subject: respondSubject,
+    react: ClientRespondedEmail({
+      clientName: profile.full_name,
+      service: respondService?.name ?? "",
+      date: respondDate,
+      time: respondTime,
+      accepted,
+    }),
   });
 
   revalidatePath("/client", "layout");
@@ -1209,7 +1433,7 @@ export async function createServiceAction(input: {
   durationMinutes: number;
   priceCents: number;
   imageUrl?: string;
-}): Promise<ActionResult> {
+}): Promise<ActionResult & { id?: string }> {
   await requireAdmin();
   const t = await getDict();
   const parsed = serviceSchema.safeParse(input);
@@ -1219,20 +1443,24 @@ export async function createServiceAction(input: {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("services").insert({
-    name: parsed.data.name,
-    description: parsed.data.description ?? null,
-    duration_minutes: parsed.data.durationMinutes,
-    price_cents: parsed.data.priceCents,
-    image_url: parsed.data.imageUrl?.trim() || null,
-  });
+  const { data, error } = await supabase
+    .from("services")
+    .insert({
+      name: parsed.data.name,
+      description: parsed.data.description ?? null,
+      duration_minutes: parsed.data.durationMinutes,
+      price_cents: parsed.data.priceCents,
+      image_url: parsed.data.imageUrl?.trim() || null,
+    })
+    .select("id")
+    .single();
 
   if (error) {
     return { ok: false, error: error.message };
   }
 
   revalidatePath("/admin", "layout");
-  return { ok: true, message: t.feedback.serviceAdded };
+  return { ok: true, message: t.feedback.serviceAdded, id: data.id };
 }
 
 export async function updateServiceAction(
@@ -1294,6 +1522,68 @@ export async function toggleServiceActiveAction(
 }
 
 // ---------------------------------------------------------------------------
+// Service images — stored in the public `service-images` bucket under
+// services/{serviceId}.{ext}. One file per service (upsert). Admin-only.
+// ---------------------------------------------------------------------------
+
+const SERVICE_IMAGE_MAX_BYTES = 3 * 1024 * 1024; // 3 MB
+const SERVICE_IMAGE_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+export async function uploadServiceImageAction(
+  serviceId: string,
+  formData: FormData,
+): Promise<ActionResult & { url?: string }> {
+  await requireAdmin();
+  const t = await getDict();
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: t.feedback.avatarUploadFailed };
+  }
+
+  const ext = SERVICE_IMAGE_EXT[file.type];
+  if (!ext) {
+    return { ok: false, error: t.feedback.invalidImageType };
+  }
+  if (file.size > SERVICE_IMAGE_MAX_BYTES) {
+    return { ok: false, error: t.feedback.imageTooLarge };
+  }
+
+  const supabase = await createClient();
+  const path = `services/${serviceId}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("service-images")
+    .upload(path, file, { upsert: true, contentType: file.type });
+
+  if (uploadError) {
+    return { ok: false, error: uploadError.message };
+  }
+
+  const { data: publicUrlData } = supabase.storage
+    .from("service-images")
+    .getPublicUrl(path);
+  const publicUrl = `${publicUrlData.publicUrl}?v=${Date.now()}`;
+
+  const { error: updateError } = await supabase
+    .from("services")
+    .update({ image_url: publicUrl })
+    .eq("id", serviceId);
+
+  if (updateError) {
+    return { ok: false, error: updateError.message };
+  }
+
+  revalidatePath("/admin", "layout");
+  revalidatePath("/client", "layout");
+  return { ok: true, message: t.feedback.serviceImageUpdated, url: publicUrl };
+}
+
+// ---------------------------------------------------------------------------
 // Availability — vacation / blocked days (blocked_times)
 // ---------------------------------------------------------------------------
 
@@ -1351,6 +1641,31 @@ export async function unblockDateAction(blockId: string): Promise<ActionResult> 
 }
 
 // ---------------------------------------------------------------------------
+// Appointment outcome — admin marks past appointments as completed / no-show.
+// ---------------------------------------------------------------------------
+
+export async function markAppointmentOutcomeAction(
+  appointmentId: string,
+  outcome: "completed" | "no_show",
+): Promise<ActionResult> {
+  await requireAdmin();
+  const t = await getDict();
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("appointments")
+    .update({ outcome } as never)
+    .eq("id", appointmentId);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: t.feedback.outcomeRecorded };
+}
+
+// ---------------------------------------------------------------------------
 // Client cancel — pending/proposed only (no RLS path to undo a confirmed
 // appointment from the client side).
 // ---------------------------------------------------------------------------
@@ -1397,4 +1712,43 @@ export async function cancelRequestAction(requestId: string): Promise<ActionResu
   revalidatePath("/client", "layout");
   revalidatePath("/admin", "layout");
   return { ok: true, message: t.feedback.requestCancelled };
+}
+
+// ---------------------------------------------------------------------------
+// Business hours — weekly schedule config (admin only).
+// Upserts all 7 weekday rows in one call; the unique (barber_id, weekday)
+// constraint handles conflicts so there's never a duplicate row.
+// ---------------------------------------------------------------------------
+
+export async function saveBusinessHoursAction(
+  days: Array<{
+    weekday: number;
+    opensAt: string;
+    closesAt: string;
+    closed: boolean;
+  }>,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const t = await getDict();
+  const supabase = await createClient();
+
+  const rows = days.map((d) => ({
+    barber_id: admin.id,
+    weekday: d.weekday,
+    opens_at: d.opensAt,
+    closes_at: d.closesAt,
+    closed: d.closed,
+  }));
+
+  const { error } = await supabase
+    .from("business_hours")
+    .upsert(rows as never[], { onConflict: "barber_id,weekday" });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/admin", "layout");
+  revalidatePath("/client", "layout");
+  return { ok: true, message: t.feedback.businessHoursSaved };
 }

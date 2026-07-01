@@ -53,6 +53,7 @@ export type CalendarItem = {
   clientPhone?: string;
   clientAvatarUrl?: string | null;
   note?: string;
+  outcome?: "completed" | "no_show" | "cancelled" | null;
 };
 
 // Slim slot record threaded into the booking/reschedule modals so their time
@@ -114,6 +115,7 @@ export function AdminCalendar({
         clientEmail: client?.email,
         clientPhone: client?.phone,
         clientAvatarUrl: client?.avatarUrl,
+        outcome: appointment.outcome,
       });
     }
     for (const proposal of proposals) {
@@ -164,14 +166,21 @@ export function AdminCalendar({
         eyebrow={t.admin.calendarEyebrow}
         title={t.admin.schedule}
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusPill tone="success">{t.admin.confirmed}</StatusPill>
-            <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-500/15 dark:text-blue-300">
-              {t.admin.addBooking}
-            </span>
-            <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-800 dark:bg-orange-500/15 dark:text-orange-300">
-              {t.statuses.proposedShort}
-            </span>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                {t.admin.confirmed}
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-blue-500" />
+                {t.admin.addBooking}
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-orange-400" />
+                {t.statuses.proposedShort}
+              </span>
+            </div>
             <CalendarExport feedUrl={feedUrl} />
             <Button type="button" onClick={() => setDraft({})} className="gap-1.5">
               <span aria-hidden className="text-base leading-none">+</span>
