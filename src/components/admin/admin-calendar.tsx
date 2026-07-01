@@ -9,14 +9,16 @@ import { MonthCalendar } from "@/components/shared/month-calendar";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
 import {
-  addDays,
   CLOSE_MINUTES,
   formatDay,
   minutesOf,
   OPEN_MINUTES,
   serviceById,
+  shiftWeek,
   timeOfMinutes,
   todayIso,
+  weekLabel,
+  weekStart,
 } from "@/domain/schedule";
 
 import { CalendarExport } from "@/components/shared/calendar-export";
@@ -85,6 +87,7 @@ export function AdminCalendar({
   const t = useT();
   const locale = localeFor(useLang());
   const [view, setView] = useState<"week" | "month">("week");
+  const [weekMonday, setWeekMonday] = useState<string>(() => weekStart(todayIso()));
   const [draft, setDraft] = useState<{ date?: string; time?: string } | null>(null);
   const [selected, setSelected] = useState<CalendarItem | null>(null);
   const today = todayIso();
@@ -206,6 +209,8 @@ export function AdminCalendar({
         <WeekGrid
           t={t}
           locale={locale}
+          weekMonday={weekMonday}
+          onWeekChange={setWeekMonday}
           itemsByDate={itemsByDate}
           blockedDates={blockedDates}
           onAddSlot={(date, time) => setDraft({ date, time })}
@@ -215,16 +220,13 @@ export function AdminCalendar({
         <div className="mt-5">
           <MonthCalendar
             onDayClick={(cell) => {
-              const items = itemsByDate.get(cell.date) ?? [];
-              if (items.length === 0 && !blockedDates.has(cell.date) && cell.date >= today) {
-                setDraft({ date: cell.date });
-              }
+              // Drill into week view for that day — works for any date (past or future).
+              setWeekMonday(weekStart(cell.date));
+              setView("week");
             }}
             dayClassName={(cell) =>
-              cell.date < today
-                ? "cursor-not-allowed border-dashed !border-stone-400 !bg-stone-200 dark:!border-stone-700 dark:!bg-stone-800"
-                : blockedDates.has(cell.date)
-                  ? "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15"
+              blockedDates.has(cell.date)
+                ? "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15"
                 : ""
             }
             dayNumberClassName={(cell) =>
@@ -351,6 +353,8 @@ function CurrentTimeLine() {
 function WeekGrid({
   t,
   locale,
+  weekMonday,
+  onWeekChange,
   itemsByDate,
   blockedDates,
   onAddSlot,
@@ -358,14 +362,21 @@ function WeekGrid({
 }: {
   t: Dict;
   locale: string;
+  weekMonday: string;
+  onWeekChange: (monday: string) => void;
   itemsByDate: Map<string, CalendarItem[]>;
   blockedDates: Set<string>;
   onAddSlot: (date: string, time: string) => void;
   onSelect: (item: CalendarItem) => void;
 }) {
   const today = todayIso();
-  const days = Array.from({ length: 7 }, (_, index) => addDays(index));
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const d = new Date(`${weekMonday}T12:00:00`);
+    d.setDate(d.getDate() + index);
+    return d.toISOString().slice(0, 10);
+  });
   const hours = Array.from({ length: GRID_HOURS }, (_, index) => START_HOUR + index);
+  const isCurrentWeek = weekMonday === weekStart(today);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -378,8 +389,44 @@ function WeekGrid({
 
   return (
     <>
+      {/* Week navigation */}
+      <div className="mt-5 flex items-center gap-2">
+        <button
+          type="button"
+          aria-label={t.common.previousMonth}
+          onClick={() => onWeekChange(shiftWeek(weekMonday, -1))}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-black/10 text-stone-600 transition hover:bg-stone-100 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-800"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <span className="min-w-0 flex-1 text-center text-sm font-semibold text-black dark:text-white">
+          {weekLabel(weekMonday, locale)}
+        </span>
+        <button
+          type="button"
+          aria-label={t.common.nextMonth}
+          onClick={() => onWeekChange(shiftWeek(weekMonday, 1))}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-black/10 text-stone-600 transition hover:bg-stone-100 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-800"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+        {!isCurrentWeek ? (
+          <button
+            type="button"
+            onClick={() => onWeekChange(weekStart(today))}
+            className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
+          >
+            {t.common.today}
+          </button>
+        ) : null}
+      </div>
+
       {/* Desktop time grid */}
-      <div className="mt-5 hidden overflow-x-auto lg:block">
+      <div className="mt-3 hidden overflow-x-auto lg:block">
         <div className="min-w-[980px]">
           <div className="grid grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-px rounded-t-xl bg-black/5 dark:bg-white/10">
             <div className="bg-white dark:bg-stone-900" />
@@ -441,6 +488,7 @@ function WeekGrid({
                   day={day}
                   items={itemsByDate.get(day) ?? []}
                   isToday={day === today}
+                  isPast={day < today}
                   isBlocked={blockedDates.has(day)}
                   onAddSlot={onAddSlot}
                   onSelect={onSelect}
@@ -455,11 +503,13 @@ function WeekGrid({
       </div>
 
       {/* Mobile day list */}
-      <div className="mt-5 grid gap-3 lg:hidden">
+      <div className="mt-3 grid gap-3 lg:hidden">
         {days.map((day) => {
           const items = itemsByDate.get(day) ?? [];
           const isToday = day === today;
+          const isPast = day < today;
           const isBlocked = blockedDates.has(day);
+          const canAdd = !isBlocked && !isPast;
           return (
             <div
               key={day}
@@ -484,7 +534,7 @@ function WeekGrid({
                 <div className="flex items-center gap-2">
                   {isBlocked ? <StatusPill tone="danger">{t.admin.off}</StatusPill> : null}
                   {isToday ? <StatusPill tone="neutral">{t.common.today}</StatusPill> : null}
-                  {isBlocked ? null : (
+                  {canAdd ? (
                     <button
                       type="button"
                       onClick={() => onAddSlot(day, firstFreeSlot(items, isToday))}
@@ -493,7 +543,7 @@ function WeekGrid({
                       <span aria-hidden className="text-sm leading-none">+</span>
                       {t.admin.addShort}
                     </button>
-                  )}
+                  ) : null}
                 </div>
               </div>
               <div className="mt-3 space-y-2">
@@ -564,6 +614,7 @@ function DayColumn({
   day,
   items,
   isToday,
+  isPast,
   isBlocked,
   onAddSlot,
   onSelect,
@@ -573,6 +624,7 @@ function DayColumn({
   day: string;
   items: CalendarItem[];
   isToday: boolean;
+  isPast: boolean;
   isBlocked: boolean;
   onAddSlot: (date: string, time: string) => void;
   onSelect: (item: CalendarItem) => void;
@@ -597,13 +649,13 @@ function DayColumn({
   }
 
   function handleMove(event: React.MouseEvent<HTMLDivElement>) {
-    if (isBlocked) return;
+    if (isBlocked || isPast) return;
     const rect = event.currentTarget.getBoundingClientRect();
     setHoverMin(snapPointerToMinutes(event.clientY, rect));
   }
 
   function handleClick(event: React.MouseEvent<HTMLDivElement>) {
-    if (isBlocked) return;
+    if (isBlocked || isPast) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const minute = snapPointerToMinutes(event.clientY, rect);
     // No-op when the click lands inside an existing booking (the chip's own
@@ -613,7 +665,7 @@ function DayColumn({
   }
 
   const showHoverAdd =
-    !isBlocked && hoverMin !== null && !minuteIsBusy(hoverMin) && hoverMin >= earliest;
+    !isBlocked && !isPast && hoverMin !== null && !minuteIsBusy(hoverMin) && hoverMin >= earliest;
 
   return (
     <div

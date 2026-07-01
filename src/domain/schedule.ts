@@ -142,6 +142,30 @@ export function monthKey(date: string) {
 }
 
 /** Shift a "yyyy-mm" key by N months. */
+/** ISO date of the Monday that starts the week containing `date`. */
+export function weekStart(date: string): string {
+  const d = new Date(`${date}T12:00:00`);
+  const offset = (d.getDay() + 6) % 7; // Mon=0 … Sun=6
+  d.setDate(d.getDate() - offset);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Shift a week start date by `delta` weeks. */
+export function shiftWeek(monday: string, delta: number): string {
+  const d = new Date(`${monday}T12:00:00`);
+  d.setDate(d.getDate() + delta * 7);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Label for a week given its Monday ISO date. */
+export function weekLabel(monday: string, locale = "en-US"): string {
+  const sunday = new Date(`${monday}T12:00:00`);
+  sunday.setDate(sunday.getDate() + 6);
+  const sunIso = sunday.toISOString().slice(0, 10);
+  const fmt = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" });
+  return `${fmt.format(new Date(`${monday}T12:00:00`))} – ${fmt.format(new Date(`${sunIso}T12:00:00`))}`;
+}
+
 export function shiftMonth(key: string, delta: number) {
   const [year, month] = key.split("-").map(Number);
   const base = new Date(year, month - 1 + delta, 1);

@@ -125,20 +125,20 @@ export function ClientDetail({
                 ) : (
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="secondary"
                     disabled={pending}
                     onClick={() => setConfirmAction("block")}
-                    className="text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10"
+                    className="border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20"
                   >
                     {t.admin.blockClient}
                   </Button>
                 )}
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="secondary"
                   disabled={pending}
                   onClick={() => setConfirmAction("delete")}
-                  className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                  className="border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
                 >
                   {t.admin.deleteClient}
                 </Button>
