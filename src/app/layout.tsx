@@ -8,6 +8,7 @@ import { ConsentProvider } from "@/components/consent/consent-provider";
 import { ThemeScript } from "@/components/shared/theme-script";
 import { LanguageProvider } from "@/i18n/provider";
 import { getConsent } from "@/lib/consent/server";
+import { getSiteUrl } from "@/lib/env";
 import { getDict, getLang } from "@/i18n/server";
 
 const geistSans = Geist({
@@ -23,6 +24,7 @@ const geistMono = Geist_Mono({
 export async function generateMetadata(): Promise<Metadata> {
   const dict = await getDict();
   return {
+    metadataBase: new URL(getSiteUrl()),
     title: dict.metadata.title,
     description: dict.metadata.description,
     icons: {
