@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useId, useReducer, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -26,6 +26,7 @@ export function useRealtimeBadge(
   const onPage =
     pathname === resetOnPath || pathname.startsWith(`${resetOnPath}/`);
   const [state, dispatch] = useReducer(reducer, { count: 0, loaded: false });
+  const subscriptionId = useId().replace(/:/g, "");
 
   // Reset to 0 when navigating to the target page.
   useEffect(() => {
@@ -58,7 +59,7 @@ export function useRealtimeBadge(
 
     // Realtime subscription for new inserts.
     const channel = supabase
-      .channel(`badge:${table}`)
+      .channel(`badge:${table}:${subscriptionId}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table },
@@ -71,7 +72,7 @@ export function useRealtimeBadge(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [table, filterColumn, filterValue]); // stable — filterColumn/Value never change
+  }, [table, filterColumn, filterValue, subscriptionId]); // stable — filterColumn/Value never change
 
   return onPage ? 0 : state.count;
 }

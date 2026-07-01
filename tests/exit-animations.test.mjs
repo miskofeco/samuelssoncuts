@@ -4,6 +4,7 @@ import test from "node:test";
 
 const modal = readFileSync("src/components/shared/modal.tsx", "utf8");
 const mobileNav = readFileSync("src/components/layout/mobile-nav.tsx", "utf8");
+const realtimeBadge = readFileSync("src/hooks/use-realtime-badge.ts", "utf8");
 const css = readFileSync("src/app/globals.css", "utf8");
 
 test("modal remains mounted while playing its close animation", () => {
@@ -24,6 +25,12 @@ test("mobile sidebar remains mounted while playing its close animation", () => {
     mobileNav,
     /\n\s*\{open \? \(\n\s*<div className="fixed inset-0 z-50 lg:hidden">/,
   );
+});
+
+test("realtime badges use unique channels for duplicate sidebar mounts", () => {
+  assert.match(realtimeBadge, /useId/);
+  assert.match(realtimeBadge, /subscriptionId/);
+  assert.doesNotMatch(realtimeBadge, /channel\(`badge:\$\{table\}`\)/);
 });
 
 test("exit animation classes are defined for overlays, modals, and drawers", () => {
