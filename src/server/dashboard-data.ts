@@ -10,12 +10,14 @@ import type {
 } from "@/domain/types";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
+import { dateInShopTimeZone, formatInShopTimeZone, timeInShopTimeZone } from "@/lib/time-zone";
 import type { AuthProfile } from "@/server/auth";
 
 type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type AppointmentRow = Database["public"]["Tables"]["appointments"]["Row"];
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
+type BusySlotRow = Database["public"]["Functions"]["confirmed_appointment_slots"]["Returns"][number];
 
 // booking_requests with embedded preferences + proposals (FK-hinted).
 type RequestRow = Database["public"]["Tables"]["booking_requests"]["Row"] & {
@@ -32,22 +34,29 @@ const REQUEST_SELECT =
 // ---------------------------------------------------------------------------
 
 function dateFromIso(value: string) {
-  return new Date(value).toISOString().slice(0, 10);
+  return dateInShopTimeZone(value);
 }
 
 function timeFromIso(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(value));
+  return timeInShopTimeZone(value);
 }
 
 function shortDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
+  return formatInShopTimeZone(value, {
     month: "short",
     day: "numeric",
-  }).format(new Date(value));
+  });
+}
+
+function mapBusySlotRow(row: BusySlotRow): Appointment {
+  return {
+    id: `busy-${row.starts_at}-${row.service_id}`,
+    requestId: null,
+    clientId: null,
+    serviceId: row.service_id,
+    date: dateFromIso(row.starts_at),
+    time: timeFromIso(row.starts_at),
+  };
 }
 
 export function mapServiceRow(row: ServiceRow): Service {
@@ -122,7 +131,7 @@ export function mapAppointmentRow(row: AppointmentRow): Appointment {
     serviceId: row.service_id,
     date: dateFromIso(row.starts_at),
     time: timeFromIso(row.starts_at),
-    outcome: (row as Record<string, unknown>).outcome as Appointment["outcome"],
+    outcome: row.outcome,
   };
 }
 
@@ -138,6 +147,10 @@ export function mapNotificationRow(row: NotificationRow): Notification {
 
 function fail(label: string, error: { message: string } | null): never | void {
   if (error) throw new Error(`${label}: ${error.message}`);
+}
+
+function asRequestRows(data: unknown): RequestRow[] {
+  return Array.isArray(data) ? (data as RequestRow[]) : [];
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +202,7 @@ export async function loadBlockedDays(): Promise<{
   fail("blocked_times", error);
 
   const dates = new Set<string>();
-  const ranges = (data ?? []).map((row) => {
+    const ranges = (data ?? []).map((row) => {
     for (const day of eachDate(row.starts_at, row.ends_at)) {
       dates.add(day);
     }
@@ -251,7 +264,7 @@ export async function loadClientReservations(profile: AuthProfile): Promise<{
   fail("booking_requests", requestsResult.error);
   fail("services", servicesResult.error);
 
-  const rows = (requestsResult.data ?? []) as RequestRow[];
+  const rows = asRequestRows(requestsResult.data);
   return {
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
@@ -296,7 +309,7 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
   fail("notifications", notificationsResult.error);
 
   const blocked = await loadBlockedDays();
-  const rows = (requestsResult.data ?? []) as RequestRow[];
+  const rows = asRequestRows(requestsResult.data);
   return {
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
@@ -321,7 +334,7 @@ export async function loadBookingData(): Promise<{
   const [servicesResult, appointmentsResult, requestsResult, blocked] =
     await Promise.all([
       supabase.from("services").select("*").eq("active", true).order("duration_minutes"),
-      supabase.from("appointments").select("*").order("starts_at"),
+      supabase.rpc("confirmed_appointment_slots"),
       supabase
         .from("booking_requests")
         .select(REQUEST_SELECT)
@@ -333,12 +346,12 @@ export async function loadBookingData(): Promise<{
   fail("appointments", appointmentsResult.error);
   fail("booking_requests", requestsResult.error);
 
-  const rows = (requestsResult.data ?? []) as RequestRow[];
+  const rows = asRequestRows(requestsResult.data);
   const requests = rows.map(mapRequestRow);
   return {
     services: (servicesResult.data ?? []).map(mapServiceRow),
     blockedDates: blocked.dates,
-    appointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
+    appointments: (appointmentsResult.data ?? []).map(mapBusySlotRow),
     proposals: proposalsFromRequests(rows),
     pendingRequests: requests.filter(
       (r) => r.status === "pending" && Boolean(r.requestedDate),
@@ -382,7 +395,7 @@ export async function loadAdminOverview(): Promise<{
   fail("appointments", appointmentsResult.error);
   fail("notifications", notificationsResult.error);
 
-  const rows = (requestsResult.data ?? []) as RequestRow[];
+  const rows = asRequestRows(requestsResult.data);
   return {
     services: (servicesResult.data ?? []).map(mapServiceRow),
     clients: (profilesResult.data ?? []).map(mapClientRow),
@@ -419,7 +432,7 @@ export async function loadAdminCalendar(): Promise<{
   fail("booking_requests", requestsResult.error);
   fail("appointments", appointmentsResult.error);
 
-  const rows = (requestsResult.data ?? []) as RequestRow[];
+  const rows = asRequestRows(requestsResult.data);
   return {
     services: (servicesResult.data ?? []).map(mapServiceRow),
     clients: (profilesResult.data ?? []).map(mapClientRow),
@@ -447,7 +460,7 @@ export async function loadApprovals(): Promise<{
   fail("booking_requests", requestsResult.error);
   fail("services", servicesResult.error);
 
-  const rows = (requestsResult.data ?? []) as RequestRow[];
+  const rows = asRequestRows(requestsResult.data);
   return {
     clients: (profilesResult.data ?? []).map(mapClientRow),
     requests: rows.map(mapRequestRow),
@@ -481,7 +494,7 @@ export async function loadRequestQueue(): Promise<{
   fail("booking_requests", requestsResult.error);
   fail("appointments", appointmentsResult.error);
 
-  const rows = (requestsResult.data ?? []) as RequestRow[];
+  const rows = asRequestRows(requestsResult.data);
   return {
     services: (servicesResult.data ?? []).map(mapServiceRow),
     clients: (profilesResult.data ?? []).map(mapClientRow),
@@ -534,7 +547,7 @@ export async function loadClientHistory(clientId: string): Promise<{
   fail("appointments", appointmentsResult.error);
   fail("services", servicesResult.error);
 
-  const rows = (requestsResult.data ?? []) as RequestRow[];
+  const rows = asRequestRows(requestsResult.data);
   return {
     client: profileResult.data ? mapClientRow(profileResult.data) : null,
     requests: rows.map(mapRequestRow),
@@ -627,13 +640,12 @@ const DEFAULT_HOURS: BusinessHoursDay[] = Array.from({ length: 7 }, (_, w) => ({
 
 export async function loadBusinessHours(barberId: string): Promise<BusinessHoursDay[]> {
   const supabase = await createClient();
-  type BHRow = { weekday: number; opens_at: string; closes_at: string; closed: boolean };
 
   const { data, error } = await supabase
     .from("business_hours")
     .select("weekday, opens_at, closes_at, closed")
     .eq("barber_id", barberId)
-    .order("weekday") as unknown as { data: BHRow[] | null; error: unknown };
+    .order("weekday");
 
   if (error || !data || data.length === 0) return DEFAULT_HOURS;
 
@@ -651,4 +663,3 @@ export async function loadBusinessHours(barberId: string): Promise<BusinessHours
 }
 
 export { WEEKDAY_NAMES };
-

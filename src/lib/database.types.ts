@@ -13,7 +13,7 @@ export type Database = {
         Row: {
           id: string;
           role: "client" | "admin";
-          approval_status: "pending" | "approved" | "rejected";
+          approval_status: "pending" | "approved" | "rejected" | "blocked";
           full_name: string;
           email: string;
           phone: string | null;
@@ -26,7 +26,7 @@ export type Database = {
         Insert: {
           id: string;
           role?: "client" | "admin";
-          approval_status?: "pending" | "approved" | "rejected";
+          approval_status?: "pending" | "approved" | "rejected" | "blocked";
           full_name: string;
           email: string;
           phone?: string | null;
@@ -70,6 +70,7 @@ export type Database = {
           weekday: number;
           opens_at: string;
           closes_at: string;
+          closed: boolean;
         };
         Insert: {
           id?: string;
@@ -77,6 +78,7 @@ export type Database = {
           weekday: number;
           opens_at: string;
           closes_at: string;
+          closed?: boolean;
         };
         Update: Partial<Database["public"]["Tables"]["business_hours"]["Insert"]>;
         Relationships: [];
@@ -213,6 +215,8 @@ export type Database = {
           starts_at: string;
           ends_at: string;
           status: string;
+          reminded_at: string | null;
+          outcome: "completed" | "no_show" | "cancelled" | null;
           created_at: string;
         };
         Insert: {
@@ -226,6 +230,8 @@ export type Database = {
           starts_at: string;
           ends_at: string;
           status?: string;
+          reminded_at?: string | null;
+          outcome?: "completed" | "no_show" | "cancelled" | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["appointments"]["Insert"]>;
@@ -257,16 +263,86 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;
         Relationships: [];
       };
+      rate_limits: {
+        Row: {
+          key: string;
+          count: number;
+          reset_at: string;
+        };
+        Insert: {
+          key: string;
+          count?: number;
+          reset_at: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["rate_limits"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      phone_taken: {
+        Args: { p_phone: string };
+        Returns: boolean;
+      };
+      check_rate_limit: {
+        Args: {
+          p_key: string;
+          p_limit: number;
+          p_window_seconds: number;
+        };
+        Returns: boolean;
+      };
+      confirmed_appointment_slots: {
+        Args: Record<string, never>;
+        Returns: Array<{
+          starts_at: string;
+          ends_at: string;
+          service_id: string;
+        }>;
+      };
+      has_confirmed_appointment_overlap: {
+        Args: {
+          p_barber_id: string | null;
+          p_start: string;
+          p_end: string;
+          p_exclude_appointment_id: string | null;
+        };
+        Returns: boolean;
+      };
+      confirm_booking_request: {
+        Args: {
+          p_request_id: string;
+          p_barber_id: string;
+        };
+        Returns: string;
+      };
+      respond_to_appointment_proposal: {
+        Args: {
+          p_proposal_id: string;
+          p_client_id: string;
+          p_accepted: boolean;
+        };
+        Returns: string | null;
+      };
+      calendar_feed: {
+        Args: { p_token: string };
+        Returns: Array<{
+          id: string;
+          starts_at: string;
+          ends_at: string;
+          service_name: string;
+          customer: string;
+        }>;
+      };
+    };
     Enums: {
       user_role: "client" | "admin";
-      approval_status: "pending" | "approved" | "rejected";
+      approval_status: "pending" | "approved" | "rejected" | "blocked";
       request_status: "pending" | "proposed" | "confirmed" | "declined" | "cancelled";
       proposal_status: "sent" | "accepted" | "declined" | "expired";
       notification_channel: "email" | "sms";
       day_window: "Morning" | "Midday" | "Afternoon" | "Evening";
+      appointment_outcome: "completed" | "no_show" | "cancelled";
     };
     CompositeTypes: Record<string, never>;
   };

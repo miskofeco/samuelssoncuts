@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { appointmentUid, buildIcs, type IcsEvent } from "@/lib/ics";
+import { reportError } from "@/lib/observability";
 import { createClient } from "@/lib/supabase/server";
+import { enforceRateLimit } from "@/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -24,13 +26,24 @@ export async function GET(
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params;
+  const limit = await enforceRateLimit("calendar:feed", {
+    identity: token,
+    limit: 120,
+    windowSeconds: 60 * 60,
+  });
+  if (!limit.ok) {
+    return new NextResponse("Too many requests", { status: 429 });
+  }
+
   const supabase = await createClient();
 
-  // `as never` casts avoid populating the Functions type, which destabilizes
-  // supabase-js relationship inference across the dashboard loaders.
-  const { data, error } = await supabase.rpc("calendar_feed" as never, {
+  const { data, error } = await supabase.rpc("calendar_feed", {
     p_token: token,
-  } as never);
+  });
+
+  if (error) {
+    await reportError("calendar-feed", error);
+  }
 
   const rows: FeedRow[] = error || !Array.isArray(data) ? [] : (data as FeedRow[]);
 

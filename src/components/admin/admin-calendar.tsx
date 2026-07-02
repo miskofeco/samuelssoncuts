@@ -220,15 +220,24 @@ export function AdminCalendar({
         <div className="mt-5">
           <MonthCalendar
             onDayClick={(cell) => {
+              const items = itemsByDate.get(cell.date) ?? [];
+              if (items.length === 0 && !blockedDates.has(cell.date) && cell.date >= today) {
+                setDraft({ date: cell.date });
+                return;
+              }
               // Drill into week view for that day — works for any date (past or future).
               setWeekMonday(weekStart(cell.date));
               setView("week");
             }}
-            dayClassName={(cell) =>
-              blockedDates.has(cell.date)
-                ? "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15"
-                : ""
-            }
+            dayClassName={(cell) => {
+              if (cell.date < today) {
+                return "cursor-not-allowed border-dashed !border-stone-400 !bg-stone-200 text-stone-500 dark:!border-stone-700 dark:!bg-stone-800 dark:text-stone-500";
+              }
+              if (blockedDates.has(cell.date)) {
+                return "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15";
+              }
+              return "";
+            }}
             dayNumberClassName={(cell) =>
               cell.date < today
                 ? "text-stone-400 dark:text-stone-500"
@@ -704,31 +713,33 @@ function DayColumn({
       {/* Click-to-add surface — snaps to the cursor's 15-min slot. Sits beneath
           the booking chips (z-10) so clicks on bookings select rather than add. */}
       {!isBlocked ? (
-        <div
-          className="absolute inset-0 cursor-pointer"
-          onMouseMove={handleMove}
-          onMouseLeave={() => setHoverMin(null)}
-          onClick={handleClick}
-          title={
-            hoverMin !== null
-              ? t.admin.addBookingAt(formatDay(day, locale), timeOfMinutes(hoverMin))
-              : undefined
-          }
-        >
-          {showHoverAdd ? (
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-x-1 flex items-center gap-1 rounded-md border border-dashed border-stone-300 bg-white/70 px-1.5 text-[0.6rem] font-semibold text-stone-500 dark:border-stone-600 dark:bg-stone-800/70 dark:text-stone-300"
-              style={{
-                top: ((hoverMin - START_HOUR * 60) / 60) * HOUR_HEIGHT,
-                height: (SNAP_MINUTES / 60) * HOUR_HEIGHT,
-              }}
-            >
-              <span className="text-sm leading-none">+</span>
-              {timeOfMinutes(hoverMin)}
-            </span>
-          ) : null}
-        </div>
+        isBlocked ? null : (
+          <div
+            className="absolute inset-0 cursor-pointer"
+            onMouseMove={handleMove}
+            onMouseLeave={() => setHoverMin(null)}
+            onClick={handleClick}
+            title={
+              hoverMin !== null
+                ? t.admin.addBookingAt(formatDay(day, locale), timeOfMinutes(hoverMin))
+                : undefined
+            }
+          >
+            {showHoverAdd ? (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-x-1 flex items-center gap-1 rounded-md border border-dashed border-stone-300 bg-white/70 px-1.5 text-[0.6rem] font-semibold text-stone-500 dark:border-stone-600 dark:bg-stone-800/70 dark:text-stone-300"
+                style={{
+                  top: ((hoverMin - START_HOUR * 60) / 60) * HOUR_HEIGHT,
+                  height: (SNAP_MINUTES / 60) * HOUR_HEIGHT,
+                }}
+              >
+                <span className="text-sm leading-none">+</span>
+                {timeOfMinutes(hoverMin)}
+              </span>
+            ) : null}
+          </div>
+        )
       ) : null}
 
       {/* Bookings positioned by start time, sized by duration */}

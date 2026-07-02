@@ -48,6 +48,14 @@ const emptyDraft: Draft = {
 
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
 
+function ServiceImageLabel({ label }: { label: string }) {
+  return (
+    <span className="mb-2 block text-sm font-medium text-stone-700 dark:text-stone-300">
+      {label}
+    </span>
+  );
+}
+
 export function ServiceManager({ services }: { services: ServiceItem[] }) {
   const t = useT();
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -185,47 +193,50 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
       <Feedback result={feedback} className="mt-4" />
 
       <div className="mt-4 space-y-2">
-        {services.map((service) => (
-          <div
-            key={service.id}
-            className="flex items-center gap-3 rounded-xl border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-stone-900"
-          >
-            <span className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl">
-              <Image
-                src={defaultServiceImage(service)}
-                alt=""
-                fill
-                sizes="80px"
-                unoptimized={imageIsExternal(defaultServiceImage(service))}
-                className="object-cover"
-              />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="truncate font-semibold text-black dark:text-white">
-                  {service.name}
+        {services.map((service) => {
+          const imageSrc = defaultServiceImage(service);
+          return (
+            <div
+              key={service.id}
+              className="flex items-center gap-3 rounded-xl border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-stone-900"
+            >
+              <span className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl">
+                <Image
+                  src={imageSrc}
+                  alt=""
+                  fill
+                  sizes="80px"
+                  unoptimized={imageIsExternal(imageSrc)}
+                  className="object-cover"
+                />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="truncate font-semibold text-black dark:text-white">
+                    {service.name}
+                  </p>
+                  {!service.active ? <StatusPill tone="neutral">{t.admin.hiddenLabel}</StatusPill> : null}
+                </div>
+                <p className="text-sm text-stone-500 dark:text-stone-400">
+                  {service.duration} {t.admin.minutesShort} · {service.price} €
                 </p>
-                {!service.active ? <StatusPill tone="neutral">{t.admin.hiddenLabel}</StatusPill> : null}
-              </div>
-              <p className="text-sm text-stone-500 dark:text-stone-400">
-                {service.duration} {t.admin.minutesShort} · {service.price} €
-              </p>
-              <div className="mt-2 flex gap-2">
-                <Button type="button" variant="secondary" onClick={() => openEdit(service)}>
-                  {t.admin.edit}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={pending}
-                  onClick={() => toggle(service)}
-                >
-                  {service.active ? t.admin.hide : t.admin.show}
-                </Button>
+                <div className="mt-2 flex gap-2">
+                  <Button type="button" variant="secondary" onClick={() => openEdit(service)}>
+                    {t.admin.edit}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={pending}
+                    onClick={() => toggle(service)}
+                  >
+                    {service.active ? t.admin.hide : t.admin.show}
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <Modal
@@ -248,9 +259,7 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
 
             {/* Image upload */}
             <div>
-              <span className="mb-2 block text-sm font-medium text-stone-700 dark:text-stone-300">
-                {t.admin.serviceImage}
-              </span>
+              <ServiceImageLabel label={t.admin.serviceImage} />
               <div className="flex items-end gap-4">
                 <span className="relative h-24 w-28 shrink-0 overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
                   <Image

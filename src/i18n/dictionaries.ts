@@ -556,6 +556,7 @@ const en = {
     phoneTaken: "An account with this phone number already exists.",
     bookingRequestPlaced: "Booking requested. The barber will confirm it shortly.",
     slotOutsideHours: "That time is outside opening hours.",
+    slotUnavailable: "That time is unavailable. Please pick another time.",
     slotNoLongerFree: "That slot was just taken. Please pick another time.",
     requestConfirmed: "Appointment confirmed.",
     confirmedAndDeclinedOthers:
@@ -1181,6 +1182,7 @@ const sk: Dict = {
     phoneTaken: "Účet s týmto telefónnym číslom už existuje.",
     bookingRequestPlaced: "Rezervácia odoslaná. Barber ju čoskoro potvrdí.",
     slotOutsideHours: "Tento čas je mimo otváracích hodín.",
+    slotUnavailable: "Tento čas nie je dostupný. Vyberte iný čas.",
     slotNoLongerFree: "Tento termín bol práve obsadený. Vyberte si iný čas.",
     requestConfirmed: "Termín potvrdený.",
     confirmedAndDeclinedOthers:

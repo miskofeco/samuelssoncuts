@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Samuelsson Cuts
 
-## Getting Started
+Next.js 16 App Router barber booking app with Supabase Auth/Postgres/RLS and Resend email notifications.
 
-First, run the development server:
+## Local Setup
+
+1. Install dependencies:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Create `.env.local` from `.env.example` and set:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_SHOP_TIME_ZONE=Europe/Bratislava
+RESEND_API_KEY=
+RESEND_FROM_ADDRESS="Samuelsson Cuts <noreply@example.com>"
+BARBER_EMAIL=
+CRON_SECRET=
+ERROR_REPORT_WEBHOOK_URL=
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Apply Supabase migrations in `supabase/migrations` to the target project.
 
-## Learn More
+4. Start the app:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+pnpm dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Verification
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+pnpm test
+pnpm lint
+pnpm build
+```
 
-## Deploy on Vercel
+The test suite includes production-hardening checks for booking guards, cron auth, and the database overlap constraint.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Production Notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `CRON_SECRET` is required in production. `/api/cron/reminders` returns `503` if it is not configured and `401` unless called with `Authorization: Bearer <CRON_SECRET>`.
+- `SUPABASE_SERVICE_ROLE_KEY` is required for admin-only Auth user deletion. Keep it server-only and never expose it with a `NEXT_PUBLIC_` prefix.
+- `NEXT_PUBLIC_SHOP_TIME_ZONE` controls booking date/time conversion and display. The default is `Europe/Bratislava`; set it explicitly in every environment.
+- Auth, booking mutations, cron, and calendar feeds use the `public.check_rate_limit` RPC backed by `public.rate_limits`.
+- `RESEND_API_KEY`, `RESEND_FROM_ADDRESS`, and `BARBER_EMAIL` should be configured before launch. Without `RESEND_API_KEY`, email sends are skipped and logged.
+- `ERROR_REPORT_WEBHOOK_URL` is optional. When set, structured server errors are posted there in addition to platform logs. Configure your host log drain for stdout/stderr so `logEvent` and `reportError` JSON is retained.
+- Keep Supabase generated types in `src/lib/database.types.ts` in sync with migrations after schema changes.
+- The `0016_prevent_overlapping_confirmed_appointments.sql` migration adds a Postgres exclusion constraint to prevent overlapping confirmed appointments per barber. If production already has overlapping confirmed appointments, resolve them before applying the migration.
+- The `0017_launch_risk_hardening.sql` migration tightens appointment RLS, adds sanitized busy-slot RPCs, rate limiting, and transactional request/proposal confirmation RPCs.
+- Calendar feed URLs contain a per-profile secret token. Treat them as shareable secrets and rotate `profiles.calendar_token` if exposed.

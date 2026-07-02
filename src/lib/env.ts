@@ -26,6 +26,20 @@ export function requireSupabaseEnv(): SupabaseEnv {
   return env;
 }
 
+export function getSupabaseServiceRoleKey(): string | null {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY ?? null;
+}
+
+export function requireSupabaseServiceRoleKey(): string {
+  const key = getSupabaseServiceRoleKey();
+
+  if (!key) {
+    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
+  }
+
+  return key;
+}
+
 export function getSiteUrl() {
   if (process.env.NEXT_PUBLIC_SITE_URL) {
     return process.env.NEXT_PUBLIC_SITE_URL;
@@ -36,6 +50,14 @@ export function getSiteUrl() {
   }
 
   return "http://localhost:3000";
+}
+
+export function getShopTimeZone() {
+  return process.env.NEXT_PUBLIC_SHOP_TIME_ZONE ?? "Europe/Bratislava";
+}
+
+export function getErrorReportWebhookUrl(): string | null {
+  return process.env.ERROR_REPORT_WEBHOOK_URL ?? null;
 }
 
 // ─── Email ────────────────────────────────────────────────────────────────────

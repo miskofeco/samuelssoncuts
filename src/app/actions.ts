@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { getSiteUrl } from "@/lib/env";
 import { getBarberEmail, sendEmail } from "@/lib/email";
+import { reportError } from "@/lib/observability";
 import { AccountApprovedEmail } from "@/emails/account-approved";
 import { AccountBlockedEmail } from "@/emails/account-blocked";
 import { AccountRejectedEmail } from "@/emails/account-rejected";
@@ -17,11 +18,11 @@ import { AppointmentRescheduledEmail } from "@/emails/appointment-rescheduled";
 import { BookingRequestEmail } from "@/emails/booking-request";
 import { ClientRespondedEmail } from "@/emails/client-responded";
 import { SlotTakenEmail } from "@/emails/slot-taken";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { zonedDateTimeToUtcIso, timeInShopTimeZone, dateInShopTimeZone } from "@/lib/time-zone";
 import { CONSENT_VERSION } from "@/lib/consent/config";
 import {
-  CLOSE_MINUTES,
-  OPEN_MINUTES,
   clientSlotsForService,
   isPreferredClientStart,
   isStartInClientBookingWindow,
@@ -29,7 +30,13 @@ import {
   minutesOf,
   priceForSlot,
 } from "@/domain/schedule";
+import {
+  hasBlockedTimeOverlap,
+  hasConfirmedAppointmentOverlap,
+  isSlotInsideConfiguredBusinessHours,
+} from "@/server/booking-guards";
 import { dashboardPathFor, getCurrentProfile, requireAdmin, requireApprovedClient, requireProfile } from "@/server/auth";
+import { enforceRateLimit } from "@/server/rate-limit";
 import type { ActionResult } from "@/domain/types";
 import { getDict } from "@/i18n/server";
 
@@ -114,6 +121,22 @@ const blockDateSchema = z.object({
   reason: z.string().max(200).optional(),
 });
 
+const businessHoursSchema = z.array(
+  z.object({
+    weekday: z.number().int().min(0).max(6),
+    opensAt: z.string().regex(/^\d{2}:\d{2}$/),
+    closesAt: z.string().regex(/^\d{2}:\d{2}$/),
+    closed: z.boolean(),
+  }),
+)
+  .length(7)
+  .refine((days) => new Set(days.map((day) => day.weekday)).size === days.length, {
+    message: "duplicate-weekdays",
+  })
+  .refine((days) => days.every((day) => day.closed || minutesOf(day.closesAt) > minutesOf(day.opensAt)), {
+    message: "invalid-hours",
+  });
+
 function formString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value : "";
@@ -127,9 +150,9 @@ type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 // The unique index on profiles.phone is the real backstop; this just lets us
 // show a friendly message before attempting the write.
 async function isPhoneTaken(supabase: SupabaseClient, phone: string): Promise<boolean> {
-  const { data, error } = await supabase.rpc("phone_taken" as never, {
+  const { data, error } = await supabase.rpc("phone_taken", {
     p_phone: phone.trim(),
-  } as never);
+  });
   if (error) return false; // fail open — the DB unique index still protects us
   return data === true;
 }
@@ -146,16 +169,12 @@ function addMinutes(iso: string, minutes: number) {
 }
 
 function startsAt(date: string, time: string) {
-  return new Date(`${date}T${time}:00`).toISOString();
+  return zonedDateTimeToUtcIso(date, time);
 }
 
-// "HH:MM" (24h, local) from an ISO timestamp — used to compute durations/blocks.
+// "HH:MM" in the shop time zone from an ISO timestamp.
 function timeFromIso(iso: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(iso));
+  return timeInShopTimeZone(iso);
 }
 
 export async function signInAction(formData: FormData) {
@@ -167,6 +186,15 @@ export async function signInAction(formData: FormData) {
 
   if (!input.success) {
     redirect(`/login?error=${encodeURIComponent(t.feedback.checkEmailPassword)}`);
+  }
+
+  const limit = await enforceRateLimit("auth:sign-in", {
+    identity: input.data.email,
+    limit: 8,
+    windowSeconds: 15 * 60,
+  });
+  if (!limit.ok) {
+    redirect(`/login?error=${encodeURIComponent(limit.error)}`);
   }
 
   const supabase = await createClient();
@@ -214,6 +242,15 @@ export async function registerAction(formData: FormData) {
 
   if (!input.success) {
     redirect(`/register?error=${encodeURIComponent(t.feedback.fillAllFields)}`);
+  }
+
+  const registrationLimit = await enforceRateLimit("auth:register", {
+    identity: input.data.email,
+    limit: 5,
+    windowSeconds: 60 * 60,
+  });
+  if (!registrationLimit.ok) {
+    redirect(`/register?error=${encodeURIComponent(registrationLimit.error)}`);
   }
 
   const phone = input.data.phone.trim();
@@ -298,6 +335,15 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
     return { ok: false, error: t.feedback.pickServiceAndDays };
   }
 
+  const limit = await enforceRateLimit("booking:create-request", {
+    identity: profile.id,
+    limit: 10,
+    windowSeconds: 60 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
+
   const supabase = await createClient();
 
   // Load the service (duration + base price). Price is computed server-side and
@@ -323,41 +369,39 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
   if (!isStartInClientBookingWindow(start)) {
     return { ok: false, error: t.feedback.chooseWithinTwoWeeks };
   }
-  if (startMin < OPEN_MINUTES || startMin + service.duration_minutes > CLOSE_MINUTES) {
+  if (
+    !(await isSlotInsideConfiguredBusinessHours(supabase, {
+      date: parsed.data.date,
+      time: parsed.data.time,
+      durationMinutes: service.duration_minutes,
+    }))
+  ) {
     return { ok: false, error: t.feedback.slotOutsideHours };
+  }
+  if (await hasBlockedTimeOverlap(supabase, { start, end })) {
+    return { ok: false, error: t.feedback.slotUnavailable };
+  }
+  if (await hasConfirmedAppointmentOverlap(supabase, { start, end })) {
+    return { ok: false, error: t.feedback.slotNoLongerFree };
   }
 
   // The slot must not overlap a CONFIRMED appointment that day (pending requests
   // from other clients are allowed to coexist).
   const dayStart = startsAt(parsed.data.date, "00:00");
   const dayEnd = addMinutes(dayStart, 24 * 60);
-  const { data: dayAppts } = await supabase
-    .from("appointments")
-    .select("starts_at, ends_at")
-    .eq("status", "confirmed")
-    .gte("starts_at", dayStart)
-    .lt("starts_at", dayEnd);
-
-  const reqStartMs = new Date(start).getTime();
-  const reqEndMs = new Date(end).getTime();
-  const overlapsConfirmed = (dayAppts ?? []).some((a) => {
-    const s = new Date(a.starts_at).getTime();
-    const e = new Date(a.ends_at).getTime();
-    return reqStartMs < e && s < reqEndMs;
-  });
-  if (overlapsConfirmed) {
-    return { ok: false, error: t.feedback.slotNoLongerFree };
-  }
+  const { data: dayAppts } = await supabase.rpc("confirmed_appointment_slots");
 
   // Gap pricing: base only if the slot opens the day or extends the gapless
   // block anchored at opening; otherwise +10%.
-  const confirmedForDay = (dayAppts ?? []).map((a) => ({
-    date: parsed.data.date,
-    time: timeFromIso(a.starts_at),
-    durationMinutes: Math.round(
-      (new Date(a.ends_at).getTime() - new Date(a.starts_at).getTime()) / 60000,
-    ),
-  }));
+  const confirmedForDay = (dayAppts ?? [])
+    .filter((a) => a.starts_at >= dayStart && a.starts_at < dayEnd)
+    .map((a) => ({
+      date: parsed.data.date,
+      time: timeFromIso(a.starts_at),
+      durationMinutes: Math.round(
+        (new Date(a.ends_at).getTime() - new Date(a.starts_at).getTime()) / 60000,
+      ),
+    }));
   if (!clientSlotsForService(parsed.data.date, service.duration_minutes, confirmedForDay).includes(parsed.data.time)) {
     return { ok: false, error: t.feedback.pickGeneratedSlot };
   }
@@ -505,7 +549,7 @@ export async function blockClientAction(clientId: string): Promise<ActionResult>
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .update({ approval_status: "blocked" as never })
+    .update({ approval_status: "blocked" })
     .eq("id", clientId)
     .select("id, email, full_name")
     .single();
@@ -573,16 +617,18 @@ export async function unblockClientAction(clientId: string): Promise<ActionResul
 export async function deleteClientAction(clientId: string): Promise<ActionResult> {
   await requireAdmin();
   const t = await getDict();
-  const supabase = await createClient();
 
-  // Hard-delete the profile; cascade removes requests, appointments, proposals.
-  const { error } = await supabase
-    .from("profiles")
-    .delete()
-    .eq("id", clientId);
+  try {
+    const adminSupabase = getSupabaseAdminClient();
+    const { error } = await adminSupabase.auth.admin.deleteUser(clientId);
 
-  if (error) {
-    return { ok: false, error: error.message };
+    if (error) {
+      await reportError("delete-client", error, { clientId });
+      return { ok: false, error: error.message };
+    }
+  } catch (error) {
+    await reportError("delete-client", error, { clientId });
+    return { ok: false, error: t.feedback.couldNotUpdateClient };
   }
 
   revalidatePath("/admin", "layout");
@@ -637,15 +683,20 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
 
   const end = addMinutes(start, service.duration_minutes);
 
-  const { data: existing } = await supabase
-    .from("appointments")
-    .select("id")
-    .eq("barber_id", admin.id)
-    .eq("starts_at", start)
-    .eq("status", "confirmed")
-    .maybeSingle();
-
-  if (existing) {
+  if (
+    !(await isSlotInsideConfiguredBusinessHours(supabase, {
+      barberId: admin.id,
+      date: parsed.data.date,
+      time: parsed.data.time,
+      durationMinutes: service.duration_minutes,
+    }))
+  ) {
+    return { ok: false, error: t.feedback.slotOutsideHours };
+  }
+  if (await hasBlockedTimeOverlap(supabase, { barberId: admin.id, start, end })) {
+    return { ok: false, error: t.feedback.slotUnavailable };
+  }
+  if (await hasConfirmedAppointmentOverlap(supabase, { barberId: admin.id, start, end })) {
     return { ok: false, error: t.feedback.slotTaken };
   }
 
@@ -718,6 +769,15 @@ export async function proposeTimeFromAdminAction(
 export async function confirmRequestAction(requestId: string): Promise<ActionResult> {
   const admin = await requireAdmin();
   const t = await getDict();
+  const limit = await enforceRateLimit("booking:confirm-request", {
+    identity: admin.id,
+    limit: 60,
+    windowSeconds: 10 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
+
   const supabase = await createClient();
 
   const { data: request, error: requestError } = await supabase
@@ -736,61 +796,66 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
     return { ok: false, error: t.feedback.chooseFutureTime };
   }
 
-  // Race guard: the slot must still be free among confirmed appointments.
-  const { data: clash } = await supabase
-    .from("appointments")
-    .select("id")
-    .eq("barber_id", admin.id)
-    .eq("starts_at", request.requested_start)
-    .eq("status", "confirmed")
-    .maybeSingle();
+  // Race guard: the slot must still be bookable among confirmed appointments,
+  // blocked periods, and the barber's configured opening hours.
+  const requestedDate = dateInShopTimeZone(request.requested_start);
+  const requestedTime = timeFromIso(request.requested_start);
+  const requestedDuration = Math.round(
+    (new Date(request.requested_end).getTime() - new Date(request.requested_start).getTime()) / 60000,
+  );
 
-  if (clash) {
+  if (
+    requestedDuration <= 0 ||
+    !(await isSlotInsideConfiguredBusinessHours(supabase, {
+      barberId: admin.id,
+      date: requestedDate,
+      time: requestedTime,
+      durationMinutes: requestedDuration,
+    }))
+  ) {
+    return { ok: false, error: t.feedback.slotOutsideHours };
+  }
+  if (
+    await hasBlockedTimeOverlap(supabase, {
+      barberId: admin.id,
+      start: request.requested_start,
+      end: request.requested_end,
+    })
+  ) {
+    return { ok: false, error: t.feedback.slotUnavailable };
+  }
+  if (
+    await hasConfirmedAppointmentOverlap(supabase, {
+      barberId: admin.id,
+      start: request.requested_start,
+      end: request.requested_end,
+    })
+  ) {
     return { ok: false, error: t.feedback.slotNoLongerFree };
   }
-
-  const { error: appointmentError } = await supabase.from("appointments").insert({
-    request_id: request.id,
-    client_id: request.client_id,
-    barber_id: admin.id,
-    service_id: request.service_id,
-    starts_at: request.requested_start,
-    ends_at: request.requested_end,
-  });
-
-  if (appointmentError) {
-    return { ok: false, error: t.feedback.slotNoLongerFree };
-  }
-
-  await supabase
-    .from("booking_requests")
-    .update({ status: "confirmed" })
-    .eq("id", request.id);
 
   // Fetch client + service details for emails (non-fatal if missing).
-  const [{ data: confirmedClient }, { data: confirmedService }] = await Promise.all([
+  const [{ data: confirmedClient }, { data: confirmedService }, { data: siblings }] = await Promise.all([
     supabase.from("profiles").select("email, full_name").eq("id", request.client_id).single(),
     supabase.from("services").select("name").eq("id", request.service_id).single(),
-  ]);
-  const confirmedDate = request.requested_start.slice(0, 10);
-  const confirmedTime = request.requested_start.slice(11, 16);
-
-  // Auto-decline other pending requests for the exact same slot + notify them.
-  const { data: siblings } = await supabase
-    .from("booking_requests")
-    .select("id, client_id")
-    .eq("status", "pending")
-    .eq("requested_start", request.requested_start)
-    .neq("id", request.id);
-
-  if (siblings && siblings.length > 0) {
-    await supabase
+    supabase
       .from("booking_requests")
-      .update({ status: "declined" })
+      .select("id, client_id")
       .eq("status", "pending")
       .eq("requested_start", request.requested_start)
-      .neq("id", request.id);
+      .neq("id", request.id),
+  ]);
 
+  const { error: confirmError } = await supabase.rpc("confirm_booking_request", {
+    p_request_id: request.id,
+    p_barber_id: admin.id,
+  });
+
+  if (confirmError) {
+    return { ok: false, error: t.feedback.slotNoLongerFree };
+  }
+
+  if (siblings && siblings.length > 0) {
     // Fetch sibling emails for slot-taken notifications.
     const siblingIds = siblings.map((s) => s.client_id).filter(Boolean) as string[];
     const { data: siblingProfiles } = await supabase
@@ -832,8 +897,8 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
       react: AppointmentConfirmedEmail({
         clientName: confirmedClient.full_name ?? "there",
         service: confirmedService?.name ?? "",
-        date: confirmedDate,
-        time: confirmedTime,
+        date: requestedDate,
+        time: requestedTime,
       }),
     });
   }
@@ -896,22 +961,32 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
 
   const end = addMinutes(start, service.duration_minutes);
 
+  if (
+    !(await isSlotInsideConfiguredBusinessHours(supabase, {
+      barberId: admin.id,
+      date: parsed.data.date,
+      time: parsed.data.time,
+      durationMinutes: service.duration_minutes,
+    }))
+  ) {
+    return { ok: false, error: t.feedback.slotOutsideHours };
+  }
+  if (await hasBlockedTimeOverlap(supabase, { barberId: admin.id, start, end })) {
+    return { ok: false, error: t.feedback.slotUnavailable };
+  }
+
   // Conflict-check the new slot against *other* confirmed appointments, using a
   // half-open interval overlap [start, end): an existing booking clashes when it
   // starts before our end AND ends after our start. (Exact-start alone misses
   // partial overlaps like 16:00–17:15 vs a new 17:00 start.)
-  const { data: clash } = await supabase
-    .from("appointments")
-    .select("id")
-    .eq("barber_id", admin.id)
-    .eq("status", "confirmed")
-    .neq("id", appointment.id)
-    .lt("starts_at", end)
-    .gt("ends_at", start)
-    .limit(1)
-    .maybeSingle();
-
-  if (clash) {
+  if (
+    await hasConfirmedAppointmentOverlap(supabase, {
+      barberId: admin.id,
+      start,
+      end,
+      excludeAppointmentId: appointment.id,
+    })
+  ) {
     return { ok: false, error: t.feedback.slotTaken };
   }
 
@@ -1040,8 +1115,8 @@ export async function cancelAppointmentAdminAction(input: unknown): Promise<Acti
 
   // Walk-ins (no client_id) have nobody to notify.
   if (appointment.client_id && clientProfile?.email) {
-    const cancelDate = appointment.starts_at.slice(0, 10);
-    const cancelTime = appointment.starts_at.slice(11, 16);
+    const cancelDate = dateInShopTimeZone(appointment.starts_at);
+    const cancelTime = timeFromIso(appointment.starts_at);
     await supabase.from("notifications").insert({
       user_id: appointment.client_id,
       channel: "email",
@@ -1112,22 +1187,26 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
 
   const end = addMinutes(start, service.duration_minutes);
 
+  if (
+    !(await isSlotInsideConfiguredBusinessHours(supabase, {
+      barberId: admin.id,
+      date: parsed.data.date,
+      time: parsed.data.time,
+      durationMinutes: service.duration_minutes,
+    }))
+  ) {
+    return { ok: false, error: t.feedback.slotOutsideHours };
+  }
+  if (await hasBlockedTimeOverlap(supabase, { barberId: admin.id, start, end })) {
+    return { ok: false, error: t.feedback.slotUnavailable };
+  }
+
   // Pre-check the slot for any OVERLAP with confirmed appointments (half-open
   // interval [start, end)): a booking clashes when it starts before our end AND
   // ends after our start. The appointments_unique_start index is the hard
   // backstop for the exact-start race, but only overlap-checking here stops a new
   // booking from landing partway inside an existing one (e.g. 17:00 over 16:00–17:15).
-  const { data: existing } = await supabase
-    .from("appointments")
-    .select("id")
-    .eq("barber_id", admin.id)
-    .eq("status", "confirmed")
-    .lt("starts_at", end)
-    .gt("ends_at", start)
-    .limit(1)
-    .maybeSingle();
-
-  if (existing) {
+  if (await hasConfirmedAppointmentOverlap(supabase, { barberId: admin.id, start, end })) {
     return { ok: false, error: t.feedback.slotTaken };
   }
 
@@ -1156,6 +1235,15 @@ export async function respondToProposalAction(
 ): Promise<ActionResult> {
   const profile = await requireApprovedClient();
   const t = await getDict();
+  const limit = await enforceRateLimit("booking:respond-proposal", {
+    identity: profile.id,
+    limit: 30,
+    windowSeconds: 10 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
+
   const supabase = await createClient();
 
   const { data: proposal, error } = await supabase
@@ -1194,47 +1282,59 @@ export async function respondToProposalAction(
   }
 
   if (accepted) {
-    // Guard against the slot being taken between proposal and confirmation.
-    const { data: clash } = await supabase
-      .from("appointments")
-      .select("id")
-      .eq("barber_id", proposal.barber_id)
-      .eq("starts_at", proposal.starts_at)
-      .eq("status", "confirmed")
-      .maybeSingle();
+    // Guard against the slot being taken, blocked, or moved outside configured
+    // hours between proposal and confirmation.
+    const proposalDate = dateInShopTimeZone(proposal.starts_at);
+    const proposalTime = timeFromIso(proposal.starts_at);
+    const proposalDuration = Math.round(
+      (new Date(proposal.ends_at).getTime() - new Date(proposal.starts_at).getTime()) / 60000,
+    );
 
-    if (clash) {
+    if (
+      proposalDuration <= 0 ||
+      !(await isSlotInsideConfiguredBusinessHours(supabase, {
+        barberId: proposal.barber_id,
+        date: proposalDate,
+        time: proposalTime,
+        durationMinutes: proposalDuration,
+      }))
+    ) {
+      return { ok: false, error: t.feedback.slotOutsideHours };
+    }
+    if (
+      await hasBlockedTimeOverlap(supabase, {
+        barberId: proposal.barber_id,
+        start: proposal.starts_at,
+        end: proposal.ends_at,
+      })
+    ) {
+      return { ok: false, error: t.feedback.slotUnavailable };
+    }
+    if (
+      await hasConfirmedAppointmentOverlap(supabase, {
+        barberId: proposal.barber_id,
+        start: proposal.starts_at,
+        end: proposal.ends_at,
+      })
+    ) {
       return { ok: false, error: t.feedback.timeJustTaken };
     }
 
-    const { error: appointmentError } = await supabase.from("appointments").insert({
-      request_id: request.id,
-      proposal_id: proposal.id,
-      client_id: profile.id,
-      barber_id: proposal.barber_id,
-      service_id: request.service_id,
-      starts_at: proposal.starts_at,
-      ends_at: proposal.ends_at,
-    });
-
-    if (appointmentError) {
-      return { ok: false, error: t.feedback.timeJustTaken };
-    }
   }
 
-  await supabase
-    .from("appointment_proposals")
-    .update({ status: accepted ? "accepted" : "declined" })
-    .eq("id", proposalId);
+  const { error: responseError } = await supabase.rpc("respond_to_appointment_proposal", {
+    p_proposal_id: proposalId,
+    p_client_id: profile.id,
+    p_accepted: accepted,
+  });
 
-  await supabase
-    .from("booking_requests")
-    .update({ status: accepted ? "confirmed" : "declined" })
-    .eq("id", request.id);
+  if (responseError) {
+    return { ok: false, error: accepted ? t.feedback.timeJustTaken : t.feedback.cannotRespond };
+  }
 
   const barberEmailForResponse = getBarberEmail();
-  const respondDate = proposal.starts_at.slice(0, 10);
-  const respondTime = proposal.starts_at.slice(11, 16);
+  const respondDate = dateInShopTimeZone(proposal.starts_at);
+  const respondTime = timeFromIso(proposal.starts_at);
   const respondSubject = accepted
     ? `${profile.full_name} confirmed the appointment`
     : `${profile.full_name} declined the proposed time`;
@@ -1654,7 +1754,7 @@ export async function markAppointmentOutcomeAction(
 
   const { error } = await supabase
     .from("appointments")
-    .update({ outcome } as never)
+    .update({ outcome })
     .eq("id", appointmentId);
 
   if (error) {
@@ -1730,9 +1830,15 @@ export async function saveBusinessHoursAction(
 ): Promise<ActionResult> {
   const admin = await requireAdmin();
   const t = await getDict();
+  const parsed = businessHoursSchema.safeParse(days);
+
+  if (!parsed.success) {
+    return { ok: false, error: t.feedback.pickValidDateTime };
+  }
+
   const supabase = await createClient();
 
-  const rows = days.map((d) => ({
+  const rows = parsed.data.map((d) => ({
     barber_id: admin.id,
     weekday: d.weekday,
     opens_at: d.opensAt,
@@ -1742,7 +1848,7 @@ export async function saveBusinessHoursAction(
 
   const { error } = await supabase
     .from("business_hours")
-    .upsert(rows as never[], { onConflict: "barber_id,weekday" });
+    .upsert(rows, { onConflict: "barber_id,weekday" });
 
   if (error) {
     return { ok: false, error: error.message };

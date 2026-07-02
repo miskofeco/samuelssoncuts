@@ -7,8 +7,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCronSecret } from "@/lib/env";
+import { logEvent, reportError } from "@/lib/observability";
+import { dateInShopTimeZone, timeInShopTimeZone } from "@/lib/time-zone";
 import { sendEmail } from "@/lib/email";
 import { AppointmentReminderEmail } from "@/emails/appointment-reminder";
+import { enforceRateLimit } from "@/server/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,8 +19,26 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const secret = getCronSecret();
   const authHeader = request.headers.get("authorization");
-  if (secret && authHeader !== `Bearer ${secret}`) {
+
+  if (!secret) {
+    console.error("[cron/reminders] CRON_SECRET is not configured");
+    return NextResponse.json(
+      { error: "Cron secret is not configured" },
+      { status: 503 },
+    );
+  }
+
+  if (authHeader !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const limit = await enforceRateLimit("cron:reminders", {
+    identity: "authorized-cron",
+    limit: 6,
+    windowSeconds: 60,
+  });
+  if (!limit.ok) {
+    return NextResponse.json({ error: limit.error }, { status: 429 });
   }
 
   const supabase = await createClient();
@@ -34,10 +55,10 @@ export async function GET(request: NextRequest) {
     .eq("status", "confirmed")
     .gte("starts_at", windowStart)
     .lte("starts_at", windowEnd)
-    .is("reminded_at" as never, null); // reminded_at added in migration 0012
+    .is("reminded_at", null);
 
   if (error) {
-    console.error("[cron/reminders] DB error:", error.message);
+    await reportError("cron-reminders", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -60,8 +81,8 @@ export async function GET(request: NextRequest) {
 
     if (!profile?.email) continue;
 
-    const date = appt.starts_at.slice(0, 10);
-    const time = appt.starts_at.slice(11, 16);
+    const date = dateInShopTimeZone(appt.starts_at);
+    const time = timeInShopTimeZone(appt.starts_at);
 
     await sendEmail({
       to: profile.email,
@@ -77,7 +98,7 @@ export async function GET(request: NextRequest) {
     // Stamp reminded_at so the cron never double-sends even if it runs twice.
     await supabase
       .from("appointments")
-      .update({ reminded_at: new Date().toISOString() } as never)
+      .update({ reminded_at: new Date().toISOString() })
       .eq("id", appt.id);
 
     await supabase.from("notifications").insert({
@@ -90,6 +111,6 @@ export async function GET(request: NextRequest) {
     sent += 1;
   }
 
-  console.info(`[cron/reminders] sent ${sent} reminder(s)`);
+  logEvent("cron-reminders", { sent });
   return NextResponse.json({ ok: true, sent });
 }
