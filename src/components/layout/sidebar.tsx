@@ -13,7 +13,8 @@ import { useT } from "@/i18n/provider";
 import type { AuthProfile } from "@/server/auth";
 import { cn } from "@/lib/classnames";
 
-import { useOpenCount } from "@/hooks/use-realtime-badge";
+import { useAttentionRefresh } from "@/hooks/use-realtime-badge";
+import type { AttentionCounts } from "@/server/dashboard-data";
 import type { NavSection } from "./nav-items";
 
 function isActive(pathname: string, href: string) {
@@ -22,18 +23,24 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-// Live badge counts for admin — new booking requests and new client registrations.
+// Sidebar badge counts for admin — pending booking requests and pending
+// (email-confirmed) client registrations. The numbers come from the server via
+// `attention` and refresh through revalidatePath() after any admin action, so
+// they update immediately without a manual reload. Realtime is a live-update
+// nudge for changes made by OTHER admins/clients.
 export function Sidebar({
   sections,
   profile,
+  attention,
 }: {
   sections: NavSection[];
   profile: AuthProfile;
+  attention?: AttentionCounts;
 }) {
   const isAdmin = profile.role === "admin";
 
   return isAdmin ? (
-    <SidebarWithBadges sections={sections} profile={profile} />
+    <SidebarWithBadges sections={sections} profile={profile} attention={attention} />
   ) : (
     <SidebarInner sections={sections} profile={profile} requests={0} approvals={0} />
   );
@@ -42,23 +49,24 @@ export function Sidebar({
 function SidebarWithBadges({
   sections,
   profile,
+  attention,
 }: {
   sections: NavSection[];
   profile: AuthProfile;
+  attention?: AttentionCounts;
 }) {
-  // Live counts of items that currently need the barber's attention: pending
-  // booking requests, and pending sign-ups that have confirmed their email
-  // (the same rows the approval queue shows as actionable).
-  const requests = useOpenCount({
-    table: "booking_requests",
-    match: { status: "pending" },
-  });
-  const approvals = useOpenCount({
-    table: "profiles",
-    match: { approval_status: "pending" },
-    notNull: "email_confirmed_at",
-  });
-  return <SidebarInner sections={sections} profile={profile} requests={requests} approvals={approvals} />;
+  // Refresh the server components (and thus these counts) when a booking request
+  // or profile changes in the background. The counts themselves are the
+  // server-provided `attention` values.
+  useAttentionRefresh();
+  return (
+    <SidebarInner
+      sections={sections}
+      profile={profile}
+      requests={attention?.requests ?? 0}
+      approvals={attention?.approvals ?? 0}
+    />
+  );
 }
 
 function SidebarInner({

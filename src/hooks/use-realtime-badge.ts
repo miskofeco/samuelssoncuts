@@ -1,73 +1,61 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-// Config describing which rows count as "open / needs attention".
-export type OpenCountConfig = {
-  table: string;
-  // Equality filters applied to the count query, e.g. { status: "pending" }.
-  match: Record<string, string>;
-  // Optional "column IS NOT NULL" requirement, e.g. only email-confirmed
-  // profiles count as an actionable approval.
-  notNull?: string;
-};
+// Tables whose changes affect the admin sidebar "needs attention" badges.
+const WATCHED_TABLES = ["booking_requests", "profiles"] as const;
 
-// Live count of currently-open rows for a sidebar badge. Unlike a "new since
-// last visit" counter, this always reflects the true number of open items: it
-// runs an exact COUNT and re-runs it on ANY change to the table (insert,
-// update, or delete), so the badge goes UP when work arrives and DOWN the
-// moment the admin confirms/approves it. The sidebar hides the badge at 0.
-export function useOpenCount(config: OpenCountConfig): number {
-  const [count, setCount] = useState(0);
-  // Unique per mount so the desktop sidebar and the mobile drawer (both
-  // rendered simultaneously) don't collide on one realtime channel name.
-  const subscriptionId = useId().replace(/:/g, "");
-  // Stable primitive dep — the config object is recreated each render.
-  const configKey = JSON.stringify(config);
+// Keep the admin sidebar badge counts fresh. The counts themselves are computed
+// on the server (loadAttentionCounts) and passed down as props; they already
+// update after the current admin's own actions because those server actions call
+// revalidatePath("/admin", "layout").
+//
+// This hook covers the OTHER case: a booking request or profile changing in the
+// background (a new request comes in, or another admin/device acts). It listens
+// for Postgres changes on the relevant tables and calls router.refresh() to
+// re-run the server components, which recomputes the counts. Refreshes are
+// throttled so a burst of changes triggers at most one refresh per interval.
+export function useAttentionRefresh() {
+  const router = useRouter();
+  const lastRefresh = useRef(0);
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
-    let cancelled = false;
+    const MIN_INTERVAL_MS = 1500;
 
-    async function refresh() {
-      let query = supabase.from(config.table).select("*", { count: "exact", head: true });
-      for (const [column, value] of Object.entries(config.match)) {
-        query = query.eq(column, value);
+    function scheduleRefresh() {
+      const now = Date.now();
+      const elapsed = now - lastRefresh.current;
+      if (elapsed >= MIN_INTERVAL_MS) {
+        lastRefresh.current = now;
+        router.refresh();
+        return;
       }
-      if (config.notNull) {
-        query = query.not(config.notNull, "is", null);
-      }
-      const { count: next } = await query;
-      if (!cancelled) setCount(next ?? 0);
+      // Coalesce rapid changes into a single trailing refresh.
+      if (pending.current) return;
+      pending.current = setTimeout(() => {
+        pending.current = null;
+        lastRefresh.current = Date.now();
+        router.refresh();
+      }, MIN_INTERVAL_MS - elapsed);
     }
 
-    refresh();
-
-    // Subscribe to every change on the table and re-count. A status UPDATE that
-    // moves a row out of the "open" set would not match a value-scoped filter
-    // (Postgres CDC filters match the changed row), so we intentionally listen
-    // broadly and let the exact re-count stay authoritative. Table volume here
-    // (requests, profiles) is low, so this is cheap.
-    const channel = supabase
-      .channel(`open-count:${config.table}:${subscriptionId}`)
-      .on(
+    const channel = supabase.channel("admin-attention");
+    for (const table of WATCHED_TABLES) {
+      channel.on(
         "postgres_changes",
-        { event: "*", schema: "public", table: config.table },
-        () => {
-          if (!cancelled) refresh();
-        },
-      )
-      .subscribe();
+        { event: "*", schema: "public", table },
+        scheduleRefresh,
+      );
+    }
+    channel.subscribe();
 
     return () => {
-      cancelled = true;
+      if (pending.current) clearTimeout(pending.current);
       supabase.removeChannel(channel);
     };
-    // configKey (a stable JSON string) stands in for the config object's
-    // contents, which are recreated on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [configKey, subscriptionId]);
-
-  return count;
+  }, [router]);
 }

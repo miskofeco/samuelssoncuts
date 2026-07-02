@@ -27,10 +27,9 @@ test("mobile sidebar remains mounted while playing its close animation", () => {
   );
 });
 
-test("realtime badges use unique channels for duplicate sidebar mounts", () => {
-  assert.match(realtimeBadge, /useId/);
-  assert.match(realtimeBadge, /subscriptionId/);
-  assert.doesNotMatch(realtimeBadge, /channel\(`badge:\$\{table\}`\)/);
+test("sidebar attention refresh cleans up its realtime channel on unmount", () => {
+  assert.match(realtimeBadge, /export function useAttentionRefresh/);
+  assert.match(realtimeBadge, /removeChannel/);
 });
 
 test("exit animation classes are defined for overlays, modals, and drawers", () => {

@@ -10,6 +10,7 @@ import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
 import type { AuthProfile } from "@/server/auth";
+import type { AttentionCounts } from "@/server/dashboard-data";
 import type { NavSection } from "./nav-items";
 import { Sidebar } from "./sidebar";
 
@@ -18,9 +19,11 @@ const EXIT_ANIMATION_MS = 320;
 export function MobileNav({
   sections,
   profile,
+  attention,
 }: {
   sections: NavSection[];
   profile: AuthProfile;
+  attention?: AttentionCounts;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -111,7 +114,7 @@ export function MobileNav({
             )}
             onAnimationEnd={handleAnimationEnd}
           >
-            <Sidebar sections={sections} profile={profile} />
+            <Sidebar sections={sections} profile={profile} attention={attention} />
           </div>
         </div>
       ) : null}

@@ -30,13 +30,19 @@ test("baseline security headers are configured", () => {
   assert.match(nextConfig, /Permissions-Policy/);
 });
 
-test("sidebar badge is a live open-count that re-queries on any change", () => {
-  // The badge reflects the true number of currently-open items (not "new since
-  // last visit"): an exact count re-run on every insert/update/delete, so it
-  // decrements when the admin acts. See useOpenCount.
-  assert.match(badgeHook, /export function useOpenCount/);
-  assert.match(badgeHook, /count: "exact", head: true/);
-  assert.match(badgeHook, /event: "\*"/);
+test("sidebar badge counts are computed server-side and refresh via revalidatePath", () => {
+  // The counts come from loadAttentionCounts() (server) and are passed to the
+  // sidebar as props, so they update immediately after an admin action (which
+  // calls revalidatePath) — no manual reload needed. The realtime hook only
+  // nudges a router.refresh() for background changes by other admins/clients.
+  const dashboardData = readFileSync("src/server/dashboard-data.ts", "utf8");
+  const adminLayout = readFileSync("src/app/admin/layout.tsx", "utf8");
+  const sidebar = readFileSync("src/components/layout/sidebar.tsx", "utf8");
+  assert.match(dashboardData, /export async function loadAttentionCounts/);
+  assert.match(adminLayout, /loadAttentionCounts\(\)/);
+  assert.match(sidebar, /attention\?\.requests/);
+  assert.match(badgeHook, /export function useAttentionRefresh/);
+  assert.match(badgeHook, /router\.refresh\(\)/);
 });
 
 test("service image upload failure keeps the modal open and surfaces the error", () => {

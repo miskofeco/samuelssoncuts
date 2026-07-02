@@ -157,6 +157,34 @@ function asRequestRows(data: unknown): RequestRow[] {
 // Focused loaders
 // ---------------------------------------------------------------------------
 
+// Counts of items needing the barber's attention, for the sidebar badges.
+// Computed server-side so they refresh through the same revalidatePath() that
+// updates the rest of the admin UI after an approve/confirm/cancel action —
+// realtime is only a live-update bonus, not the source of truth.
+export type AttentionCounts = { requests: number; approvals: number };
+
+export async function loadAttentionCounts(): Promise<AttentionCounts> {
+  const supabase = await createClient();
+  const [requestsResult, approvalsResult] = await Promise.all([
+    supabase
+      .from("booking_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending"),
+    // Pending sign-ups that have confirmed their email — the rows the approval
+    // queue treats as actionable.
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("approval_status", "pending")
+      .not("email_confirmed_at", "is", null),
+  ]);
+
+  return {
+    requests: requestsResult.count ?? 0,
+    approvals: approvalsResult.count ?? 0,
+  };
+}
+
 export async function loadServices(): Promise<Service[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
