@@ -1,5 +1,6 @@
 // Sent to a client when the barber proposes an alternative time.
 import { EmailButton, EmailDetail, EmailDetails, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
+import { formatEmailDate } from "./date";
 import { getSiteUrl } from "@/lib/env";
 
 export function AppointmentProposedEmail({
@@ -15,8 +16,10 @@ export function AppointmentProposedEmail({
   time: string;
   note?: string | null;
 }) {
+  const formattedDate = formatEmailDate(date);
+
   return (
-    <EmailLayout preview={`Appointment proposed for ${date} at ${time}`}>
+    <EmailLayout preview={`Appointment proposed for ${formattedDate} at ${time}`}>
       <EmailHeading>New time proposed</EmailHeading>
       <EmailParagraph>Hi {clientName},</EmailParagraph>
       <EmailParagraph>
@@ -25,7 +28,7 @@ export function AppointmentProposedEmail({
       </EmailParagraph>
       <EmailDetails>
         <EmailDetail label="Service" value={service} />
-        <EmailDetail label="Proposed date" value={date} />
+        <EmailDetail label="Proposed date" value={formattedDate} />
         <EmailDetail label="Proposed time" value={time} />
       </EmailDetails>
       {note ? <EmailNote>{note}</EmailNote> : null}

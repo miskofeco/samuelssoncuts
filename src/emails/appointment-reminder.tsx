@@ -1,5 +1,6 @@
 // Sent ~24 hours before a confirmed appointment.
 import { EmailButton, EmailDetail, EmailDetails, EmailHeading, EmailLayout, EmailParagraph } from "./layout";
+import { formatEmailDate } from "./date";
 import { getSiteUrl } from "@/lib/env";
 
 export function AppointmentReminderEmail({
@@ -13,6 +14,8 @@ export function AppointmentReminderEmail({
   date: string;
   time: string;
 }) {
+  const formattedDate = formatEmailDate(date);
+
   return (
     <EmailLayout preview={`Reminder: your appointment tomorrow at ${time}`}>
       <EmailHeading>Appointment reminder</EmailHeading>
@@ -22,7 +25,7 @@ export function AppointmentReminderEmail({
       </EmailParagraph>
       <EmailDetails>
         <EmailDetail label="Service" value={service} />
-        <EmailDetail label="Date" value={date} />
+        <EmailDetail label="Date" value={formattedDate} />
         <EmailDetail label="Time" value={time} />
       </EmailDetails>
       <EmailButton href={`${getSiteUrl()}/client/reservations`}>

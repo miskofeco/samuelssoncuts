@@ -931,12 +931,12 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
       .neq("id", request.id),
   ]);
 
-  const { error: confirmError } = await supabase.rpc("confirm_booking_request", {
+  const { data: appointmentId, error: confirmError } = await supabase.rpc("confirm_booking_request", {
     p_request_id: request.id,
     p_barber_id: admin.id,
   });
 
-  if (confirmError) {
+  if (confirmError || !appointmentId) {
     return { ok: false, error: t.feedback.slotNoLongerFree };
   }
 
@@ -984,6 +984,9 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
         service: confirmedService?.name ?? "",
         date: requestedDate,
         time: requestedTime,
+        appointmentId,
+        startIso: request.requested_start,
+        endIso: request.requested_end,
       }),
     });
   }

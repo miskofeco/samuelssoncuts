@@ -1,5 +1,6 @@
 // Sent to a client when the barber reschedules a confirmed appointment.
 import { EmailButton, EmailDetail, EmailDetails, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
+import { formatEmailDate } from "./date";
 import { getSiteUrl } from "@/lib/env";
 
 export function AppointmentRescheduledEmail({
@@ -15,8 +16,10 @@ export function AppointmentRescheduledEmail({
   time: string;
   note?: string | null;
 }) {
+  const formattedDate = formatEmailDate(date);
+
   return (
-    <EmailLayout preview={`Your appointment was moved — new time ${date} at ${time}`}>
+    <EmailLayout preview={`Your appointment was moved — new time ${formattedDate} at ${time}`}>
       <EmailHeading>Appointment rescheduled</EmailHeading>
       <EmailParagraph>Hi {clientName},</EmailParagraph>
       <EmailParagraph>
@@ -25,7 +28,7 @@ export function AppointmentRescheduledEmail({
       </EmailParagraph>
       <EmailDetails>
         <EmailDetail label="Service" value={service} />
-        <EmailDetail label="New date" value={date} />
+        <EmailDetail label="New date" value={formattedDate} />
         <EmailDetail label="New time" value={time} />
       </EmailDetails>
       {note ? <EmailNote>{note}</EmailNote> : null}

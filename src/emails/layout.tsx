@@ -136,7 +136,7 @@ export function EmailNote({ children }: { children: ReactNode }) {
 // single bordered block instead of loose stacked text.
 export function EmailDetails({ children }: { children: ReactNode }) {
   return (
-    <Section className="my-5 rounded-xl border border-stone-200 bg-stone-50 px-5 py-2">
+    <Section className="my-5 rounded-xl border-x border-b border-stone-200 bg-stone-50 px-5 py-2">
       {children}
     </Section>
   );

@@ -1,5 +1,6 @@
 // Sent to the barber when a client accepts or declines a proposed time.
 import { EmailButton, EmailDetail, EmailDetails, EmailHeading, EmailLayout, EmailParagraph } from "./layout";
+import { formatEmailDate } from "./date";
 import { getSiteUrl } from "@/lib/env";
 
 export function ClientRespondedEmail({
@@ -15,6 +16,8 @@ export function ClientRespondedEmail({
   time: string;
   accepted: boolean;
 }) {
+  const formattedDate = formatEmailDate(date);
+
   return (
     <EmailLayout
       accent={accepted ? "positive" : "danger"}
@@ -33,7 +36,7 @@ export function ClientRespondedEmail({
       </EmailParagraph>
       <EmailDetails>
         <EmailDetail label="Service" value={service} />
-        <EmailDetail label="Date" value={date} />
+        <EmailDetail label="Date" value={formattedDate} />
         <EmailDetail label="Time" value={time} />
       </EmailDetails>
       <EmailButton href={`${getSiteUrl()}/admin/calendar`}>
