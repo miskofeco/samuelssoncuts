@@ -1,5 +1,5 @@
 // Sent to a client when the barber cancels their confirmed appointment.
-import { EmailButton, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
+import { EmailButton, EmailDetail, EmailDetails, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
 import { getSiteUrl } from "@/lib/env";
 
 export function AppointmentCancelledEmail({
@@ -16,13 +16,18 @@ export function AppointmentCancelledEmail({
   note?: string | null;
 }) {
   return (
-    <EmailLayout preview="Your appointment has been cancelled">
+    <EmailLayout preview="Your appointment has been cancelled" accent="danger">
       <EmailHeading>Appointment cancelled</EmailHeading>
       <EmailParagraph>Hi {clientName},</EmailParagraph>
       <EmailParagraph>
-        Your <strong>{service}</strong> appointment on <strong>{date} at {time}</strong> has been cancelled.
-        We apologise for the inconvenience.
+        The following appointment has been cancelled. We apologise for the
+        inconvenience.
       </EmailParagraph>
+      <EmailDetails>
+        <EmailDetail label="Service" value={service} />
+        <EmailDetail label="Date" value={date} />
+        <EmailDetail label="Time" value={time} />
+      </EmailDetails>
       {note ? <EmailNote>{note}</EmailNote> : null}
       <EmailButton href={`${getSiteUrl()}/client/book`}>Book a new appointment</EmailButton>
     </EmailLayout>

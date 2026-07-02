@@ -30,8 +30,13 @@ test("baseline security headers are configured", () => {
   assert.match(nextConfig, /Permissions-Policy/);
 });
 
-test("realtime badge subscription applies the same filter as the initial count", () => {
-  assert.match(badgeHook, /filter: `\$\{filterColumn\}=eq\.\$\{filterValue\}`/);
+test("sidebar badge is a live open-count that re-queries on any change", () => {
+  // The badge reflects the true number of currently-open items (not "new since
+  // last visit"): an exact count re-run on every insert/update/delete, so it
+  // decrements when the admin acts. See useOpenCount.
+  assert.match(badgeHook, /export function useOpenCount/);
+  assert.match(badgeHook, /count: "exact", head: true/);
+  assert.match(badgeHook, /event: "\*"/);
 });
 
 test("service image upload failure keeps the modal open and surfaces the error", () => {

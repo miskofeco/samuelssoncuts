@@ -1,5 +1,5 @@
 // Sent to a client when the barber proposes an alternative time.
-import { EmailButton, EmailDetail, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
+import { EmailButton, EmailDetail, EmailDetails, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
 import { getSiteUrl } from "@/lib/env";
 
 export function AppointmentProposedEmail({
@@ -23,9 +23,11 @@ export function AppointmentProposedEmail({
         Your barber has proposed a time for your appointment. Please review and
         accept or decline.
       </EmailParagraph>
-      <EmailDetail label="Service" value={service} />
-      <EmailDetail label="Proposed date" value={date} />
-      <EmailDetail label="Proposed time" value={time} />
+      <EmailDetails>
+        <EmailDetail label="Service" value={service} />
+        <EmailDetail label="Proposed date" value={date} />
+        <EmailDetail label="Proposed time" value={time} />
+      </EmailDetails>
       {note ? <EmailNote>{note}</EmailNote> : null}
       <EmailButton href={`${getSiteUrl()}/client/reservations`}>
         View &amp; respond

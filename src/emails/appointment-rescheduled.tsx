@@ -1,5 +1,5 @@
 // Sent to a client when the barber reschedules a confirmed appointment.
-import { EmailButton, EmailDetail, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
+import { EmailButton, EmailDetail, EmailDetails, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
 import { getSiteUrl } from "@/lib/env";
 
 export function AppointmentRescheduledEmail({
@@ -23,9 +23,11 @@ export function AppointmentRescheduledEmail({
         Your barber has moved your appointment to a new time. Please accept or
         decline the new proposal.
       </EmailParagraph>
-      <EmailDetail label="Service" value={service} />
-      <EmailDetail label="New date" value={date} />
-      <EmailDetail label="New time" value={time} />
+      <EmailDetails>
+        <EmailDetail label="Service" value={service} />
+        <EmailDetail label="New date" value={date} />
+        <EmailDetail label="New time" value={time} />
+      </EmailDetails>
       {note ? <EmailNote>{note}</EmailNote> : null}
       <EmailButton href={`${getSiteUrl()}/client/reservations`}>
         View &amp; respond

@@ -1,5 +1,5 @@
 // Sent to the barber when a client submits a new booking request.
-import { EmailButton, EmailDetail, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
+import { EmailButton, EmailDetail, EmailDetails, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
 import { getSiteUrl } from "@/lib/env";
 
 export function BookingRequestEmail({
@@ -21,9 +21,11 @@ export function BookingRequestEmail({
       <EmailParagraph>
         <strong>{clientName}</strong> has requested an appointment.
       </EmailParagraph>
-      <EmailDetail label="Service" value={service} />
-      <EmailDetail label="Date" value={date} />
-      <EmailDetail label="Time" value={time} />
+      <EmailDetails>
+        <EmailDetail label="Service" value={service} />
+        <EmailDetail label="Date" value={date} />
+        <EmailDetail label="Time" value={time} />
+      </EmailDetails>
       {note ? <EmailNote>{note}</EmailNote> : null}
       <EmailButton href={`${getSiteUrl()}/admin/requests`}>
         Review in admin panel

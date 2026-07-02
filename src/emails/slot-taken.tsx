@@ -5,7 +5,7 @@ import { getSiteUrl } from "@/lib/env";
 
 export function SlotTakenEmail({ clientName }: { clientName: string }) {
   return (
-    <EmailLayout preview="Your requested time was just booked by someone else">
+    <EmailLayout preview="Your requested time was just booked by someone else" accent="danger">
       <EmailHeading>Time slot no longer available</EmailHeading>
       <EmailParagraph>Hi {clientName},</EmailParagraph>
       <EmailParagraph>

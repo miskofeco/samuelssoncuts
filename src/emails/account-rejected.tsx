@@ -3,7 +3,7 @@ import { EmailHeading, EmailLayout, EmailParagraph } from "./layout";
 
 export function AccountRejectedEmail({ clientName }: { clientName: string }) {
   return (
-    <EmailLayout preview="Update on your Samuelsson Cuts account">
+    <EmailLayout preview="Update on your Samuelsson Cuts account" accent="danger">
       <EmailHeading>Account update</EmailHeading>
       <EmailParagraph>Hi {clientName},</EmailParagraph>
       <EmailParagraph>

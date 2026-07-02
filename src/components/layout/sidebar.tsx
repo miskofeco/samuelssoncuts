@@ -13,7 +13,7 @@ import { useT } from "@/i18n/provider";
 import type { AuthProfile } from "@/server/auth";
 import { cn } from "@/lib/classnames";
 
-import { useRealtimeBadge } from "@/hooks/use-realtime-badge";
+import { useOpenCount } from "@/hooks/use-realtime-badge";
 import type { NavSection } from "./nav-items";
 
 function isActive(pathname: string, href: string) {
@@ -46,8 +46,18 @@ function SidebarWithBadges({
   sections: NavSection[];
   profile: AuthProfile;
 }) {
-  const requests = useRealtimeBadge("booking_requests", "/admin/requests", "status", "pending");
-  const approvals = useRealtimeBadge("profiles", "/admin/approvals", "approval_status", "pending");
+  // Live counts of items that currently need the barber's attention: pending
+  // booking requests, and pending sign-ups that have confirmed their email
+  // (the same rows the approval queue shows as actionable).
+  const requests = useOpenCount({
+    table: "booking_requests",
+    match: { status: "pending" },
+  });
+  const approvals = useOpenCount({
+    table: "profiles",
+    match: { approval_status: "pending" },
+    notNull: "email_confirmed_at",
+  });
   return <SidebarInner sections={sections} profile={profile} requests={requests} approvals={approvals} />;
 }
 

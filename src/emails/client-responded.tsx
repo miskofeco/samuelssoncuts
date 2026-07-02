@@ -1,5 +1,5 @@
 // Sent to the barber when a client accepts or declines a proposed time.
-import { EmailButton, EmailDetail, EmailHeading, EmailLayout, EmailParagraph } from "./layout";
+import { EmailButton, EmailDetail, EmailDetails, EmailHeading, EmailLayout, EmailParagraph } from "./layout";
 import { getSiteUrl } from "@/lib/env";
 
 export function ClientRespondedEmail({
@@ -17,6 +17,7 @@ export function ClientRespondedEmail({
 }) {
   return (
     <EmailLayout
+      accent={accepted ? "positive" : "danger"}
       preview={
         accepted
           ? `${clientName} confirmed the appointment`
@@ -30,9 +31,11 @@ export function ClientRespondedEmail({
         <strong>{clientName}</strong> has{" "}
         {accepted ? "accepted" : "declined"} the proposed appointment.
       </EmailParagraph>
-      <EmailDetail label="Service" value={service} />
-      <EmailDetail label="Date" value={date} />
-      <EmailDetail label="Time" value={time} />
+      <EmailDetails>
+        <EmailDetail label="Service" value={service} />
+        <EmailDetail label="Date" value={date} />
+        <EmailDetail label="Time" value={time} />
+      </EmailDetails>
       <EmailButton href={`${getSiteUrl()}/admin/calendar`}>
         View calendar
       </EmailButton>

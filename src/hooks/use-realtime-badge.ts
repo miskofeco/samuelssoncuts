@@ -1,86 +1,73 @@
 "use client";
 
-import { useEffect, useId, useReducer, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect, useId, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type State = { count: number; loaded: boolean };
-type Action =
-  | { type: "loaded"; count: number }
-  | { type: "increment" }
-  | { type: "reset" };
+// Config describing which rows count as "open / needs attention".
+export type OpenCountConfig = {
+  table: string;
+  // Equality filters applied to the count query, e.g. { status: "pending" }.
+  match: Record<string, string>;
+  // Optional "column IS NOT NULL" requirement, e.g. only email-confirmed
+  // profiles count as an actionable approval.
+  notNull?: string;
+};
 
-function reducer(state: State, action: Action): State {
-  if (action.type === "reset") return { count: 0, loaded: true };
-  if (action.type === "loaded") return { count: action.count, loaded: true };
-  return { ...state, count: state.count + 1 };
-}
-
-export function useRealtimeBadge(
-  table: string,
-  resetOnPath: string,
-  filterColumn?: string,
-  filterValue?: string,
-): number {
-  const pathname = usePathname();
-  const onPage =
-    pathname === resetOnPath || pathname.startsWith(`${resetOnPath}/`);
-  const [state, dispatch] = useReducer(reducer, { count: 0, loaded: false });
+// Live count of currently-open rows for a sidebar badge. Unlike a "new since
+// last visit" counter, this always reflects the true number of open items: it
+// runs an exact COUNT and re-runs it on ANY change to the table (insert,
+// update, or delete), so the badge goes UP when work arrives and DOWN the
+// moment the admin confirms/approves it. The sidebar hides the badge at 0.
+export function useOpenCount(config: OpenCountConfig): number {
+  const [count, setCount] = useState(0);
+  // Unique per mount so the desktop sidebar and the mobile drawer (both
+  // rendered simultaneously) don't collide on one realtime channel name.
   const subscriptionId = useId().replace(/:/g, "");
+  // Stable primitive dep — the config object is recreated each render.
+  const configKey = JSON.stringify(config);
 
-  // Reset to 0 when navigating to the target page.
-  useEffect(() => {
-    if (onPage) dispatch({ type: "reset" });
-  }, [onPage]);
-
-  // Ref so the realtime callback can read the latest onPage without being a dep.
-  const onPageRef = useRef(onPage);
-  useEffect(() => {
-    onPageRef.current = onPage;
-  });
-
-  // Fetch initial count + subscribe for inserts — stable dep, never recreated.
   useEffect(() => {
     const supabase = createClient();
+    let cancelled = false;
 
-    // Initial count query.
-    let query = supabase
-      .from(table)
-      .select("*", { count: "exact", head: true });
-    if (filterColumn && filterValue) {
-      query = query.eq(filterColumn, filterValue);
-    }
-    query.then(({ count }) => {
-      // Only set the loaded count if we haven't already reset (i.e. not on the page).
-      if (!onPageRef.current) {
-        dispatch({ type: "loaded", count: count ?? 0 });
+    async function refresh() {
+      let query = supabase.from(config.table).select("*", { count: "exact", head: true });
+      for (const [column, value] of Object.entries(config.match)) {
+        query = query.eq(column, value);
       }
-    });
+      if (config.notNull) {
+        query = query.not(config.notNull, "is", null);
+      }
+      const { count: next } = await query;
+      if (!cancelled) setCount(next ?? 0);
+    }
 
-    // Realtime subscription for new inserts. Apply the SAME filter as the
-    // initial count so live increments and the loaded number use identical
-    // criteria — otherwise any insert (e.g. a request in any status) would bump
-    // a badge that only counts a specific status.
-    const changeFilter =
-      filterColumn && filterValue
-        ? { event: "INSERT" as const, schema: "public", table, filter: `${filterColumn}=eq.${filterValue}` }
-        : { event: "INSERT" as const, schema: "public", table };
+    refresh();
 
+    // Subscribe to every change on the table and re-count. A status UPDATE that
+    // moves a row out of the "open" set would not match a value-scoped filter
+    // (Postgres CDC filters match the changed row), so we intentionally listen
+    // broadly and let the exact re-count stay authoritative. Table volume here
+    // (requests, profiles) is low, so this is cheap.
     const channel = supabase
-      .channel(`badge:${table}:${subscriptionId}`)
+      .channel(`open-count:${config.table}:${subscriptionId}`)
       .on(
         "postgres_changes",
-        changeFilter,
+        { event: "*", schema: "public", table: config.table },
         () => {
-          if (!onPageRef.current) dispatch({ type: "increment" });
+          if (!cancelled) refresh();
         },
       )
       .subscribe();
 
     return () => {
+      cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [table, filterColumn, filterValue, subscriptionId]); // stable — filterColumn/Value never change
+    // configKey (a stable JSON string) stands in for the config object's
+    // contents, which are recreated on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configKey, subscriptionId]);
 
-  return onPage ? 0 : state.count;
+  return count;
 }

@@ -3,7 +3,7 @@ import { EmailHeading, EmailLayout, EmailParagraph } from "./layout";
 
 export function AccountBlockedEmail({ clientName }: { clientName: string }) {
   return (
-    <EmailLayout preview="Your Samuelsson Cuts account access has been removed">
+    <EmailLayout preview="Your Samuelsson Cuts account access has been removed" accent="danger">
       <EmailHeading>Account access removed</EmailHeading>
       <EmailParagraph>Hi {clientName},</EmailParagraph>
       <EmailParagraph>
