@@ -1,3 +1,4 @@
+import { MarkReadButton } from "@/components/client/mark-read-button";
 import { NotificationList } from "@/components/client/notification-list";
 import { PageHeader } from "@/components/shared/page-header";
 import { getDict } from "@/i18n/server";
@@ -10,6 +11,7 @@ export default async function ClientNotificationsPage() {
   const profile = await requireApprovedClient();
   const notifications = await loadClientNotifications(profile);
   const t = await getDict();
+  const hasUnread = notifications.some((n) => !n.read);
 
   return (
     <div className="space-y-6">
@@ -22,6 +24,7 @@ export default async function ClientNotificationsPage() {
         notifications={notifications}
         title={t.client.allNotifications}
         maxHeight="max-h-none"
+        action={<MarkReadButton hasUnread={hasUnread} />}
       />
     </div>
   );

@@ -1,4 +1,5 @@
 import { ReservationsView } from "@/components/client/reservations-view";
+import { UpcomingAppointments } from "@/components/client/upcoming-appointments";
 import { ButtonLink } from "@/components/shared/button";
 import { CalendarExport } from "@/components/shared/calendar-export";
 import { PageHeader } from "@/components/shared/page-header";
@@ -6,13 +7,16 @@ import { getDict } from "@/i18n/server";
 import { getSiteUrl } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { requireApprovedClient } from "@/server/auth";
-import { loadClientReservations } from "@/server/dashboard-data";
+import { loadBookingData, loadClientReservations } from "@/server/dashboard-data";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReservationsPage() {
   const profile = await requireApprovedClient();
-  const data = await loadClientReservations(profile);
+  const [data, bookingData] = await Promise.all([
+    loadClientReservations(profile),
+    loadBookingData(),
+  ]);
   const t = await getDict();
 
   // The client's own secret feed token → subscription URL (their appointments).
@@ -38,6 +42,13 @@ export default async function ReservationsPage() {
             <ButtonLink href="/client/book">{t.client.newRequest}</ButtonLink>
           </>
         }
+      />
+      <UpcomingAppointments
+        appointments={data.upcomingAppointments}
+        services={data.services}
+        bookedSlots={bookingData.appointments}
+        pendingRequests={bookingData.pendingRequests}
+        blockedDates={bookingData.blockedDates}
       />
       <ReservationsView
         requests={data.requests}

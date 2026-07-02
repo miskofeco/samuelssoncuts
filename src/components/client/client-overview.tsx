@@ -46,6 +46,15 @@ export async function ClientOverview({
   ).length;
   const openRequests = requests.filter((request) => request.status === "pending").length;
 
+  // One-tap rebooking: prefill the book form with the client's most recent
+  // service (next upcoming, else latest past appointment).
+  const lastServiceId =
+    next?.serviceId ??
+    [...appointments].sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1))[0]?.serviceId;
+  const bookAgainHref = lastServiceId
+    ? `/client/book?service=${lastServiceId}`
+    : "/client/book";
+
   return (
     <div className="space-y-6">
       {plannedBlocked.length > 0 ? (
@@ -106,7 +115,7 @@ export async function ClientOverview({
         <Card className="rounded-2xl p-5">
           <SectionHeader
             title={t.client.nextAppointment}
-            action={<ButtonLink href="/client/book">{t.client.bookAgain}</ButtonLink>}
+            action={<ButtonLink href={bookAgainHref}>{t.client.bookAgain}</ButtonLink>}
           />
           <div className="mt-4">
             {next ? (

@@ -9,6 +9,11 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { localeFor } from "@/i18n/config";
 import { getDict, getLang } from "@/i18n/server";
 import { formatFullDay, serviceById, todayIso } from "@/domain/schedule";
+import {
+  appointmentRevenueCents,
+  revenueLookups,
+  totalRevenueCents,
+} from "@/domain/analytics";
 import type {
   Appointment,
   BookingRequest,
@@ -39,13 +44,32 @@ export async function AdminOverview({
     .filter((a) => a.date >= today)
     .sort((a, b) => (a.date + a.time < b.date + b.time ? -1 : 1));
 
+  // Today at a glance + revenue (features 1 & 13). Money derives from the
+  // request price (or service list price), never stored on the appointment.
+  const todays = appointments.filter((a) => a.date === today);
+  const { requestsById, servicesById } = revenueLookups(requests, services);
+  const todayRevenue = Math.round(
+    todays.reduce((sum, a) => sum + appointmentRevenueCents(a, requestsById, servicesById), 0) /
+      100,
+  );
+  const monthPrefix = today.slice(0, 7);
+  const monthRevenue = Math.round(
+    totalRevenueCents(
+      appointments.filter((a) => a.date.slice(0, 7) === monthPrefix),
+      requests,
+      services,
+    ) / 100,
+  );
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
+        <StatCard label={t.admin.todayAppointments} value={todays.length} hint={t.admin.todayAppointmentsHint} tone={todays.length > 0 ? "emerald" : "neutral"} />
+        <StatCard label={t.admin.todayRevenue} value={`${todayRevenue} €`} hint={t.admin.todayRevenueHint} tone={todayRevenue > 0 ? "emerald" : "neutral"} />
+        <StatCard label={t.admin.revenueThisMonth} value={`${monthRevenue} €`} hint={t.admin.revenueThisMonthHint} />
         <StatCard label={t.admin.pendingApprovals} value={pendingApprovals} hint={t.admin.pendingApprovalsHint} tone={pendingApprovals > 0 ? "amber" : "neutral"} />
         <StatCard label={t.admin.openRequests} value={openRequests} hint={t.admin.openRequestsHint} tone={openRequests > 0 ? "sky" : "neutral"} />
         <StatCard label={t.admin.awaitingClient} value={awaitingClient} hint={t.admin.awaitingClientHint} />
-        <StatCard label={t.admin.confirmed} value={appointments.length} hint={t.admin.confirmedHint} tone={appointments.length > 0 ? "emerald" : "neutral"} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.6fr)]">

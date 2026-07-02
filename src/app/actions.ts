@@ -15,6 +15,7 @@ import { AppointmentCancelledEmail } from "@/emails/appointment-cancelled";
 import { AppointmentConfirmedEmail } from "@/emails/appointment-confirmed";
 import { AppointmentProposedEmail } from "@/emails/appointment-proposed";
 import { AppointmentRescheduledEmail } from "@/emails/appointment-rescheduled";
+import { BookingReceivedEmail } from "@/emails/booking-received";
 import { BookingRequestEmail } from "@/emails/booking-request";
 import { ClientRespondedEmail } from "@/emails/client-responded";
 import { SlotTakenEmail } from "@/emails/slot-taken";
@@ -120,6 +121,10 @@ const blockDateSchema = z.object({
   start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   reason: z.string().max(200).optional(),
+  // Optional time slice on the start date (e.g. a lunch break or a 2–4pm gap).
+  // When both are present, only that window on `start` is blocked, not full days.
+  startTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
 });
 
 const businessHoursSchema = z.array(
@@ -206,6 +211,55 @@ export async function signInAction(formData: FormData) {
   }
 
   redirect("/dashboard");
+}
+
+export async function requestPasswordResetAction(formData: FormData) {
+  const t = await getDict();
+  const email = signInSchema.shape.email.safeParse(formString(formData, "email"));
+
+  // Always show the same neutral message (don't leak which emails are registered).
+  const sentUrl = `/reset-password?message=${encodeURIComponent(t.auth.resetSent)}`;
+  if (!email.success) {
+    redirect(sentUrl);
+  }
+
+  const limit = await enforceRateLimit("auth:reset-request", {
+    identity: email.data,
+    limit: 5,
+    windowSeconds: 15 * 60,
+  });
+  if (!limit.ok) {
+    redirect(`/reset-password?error=${encodeURIComponent(limit.error)}`);
+  }
+
+  const supabase = await createClient();
+  // The recovery link lands on /auth/callback, which exchanges the code and
+  // forwards recovery sessions to /auth/update-password.
+  await supabase.auth.resetPasswordForEmail(email.data, {
+    redirectTo: `${getSiteUrl()}/auth/callback?type=recovery`,
+  });
+
+  redirect(sentUrl);
+}
+
+export async function updatePasswordAction(formData: FormData) {
+  const t = await getDict();
+  const password = signInSchema.shape.password.safeParse(formString(formData, "password"));
+
+  if (!password.success) {
+    redirect(`/auth/update-password?error=${encodeURIComponent(t.feedback.checkEmailPassword)}`);
+  }
+
+  // The recovery session was established by /auth/callback; updateUser applies to it.
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password: password.data });
+
+  if (error) {
+    redirect(`/auth/update-password?error=${encodeURIComponent(error.message)}`);
+  }
+
+  await supabase.auth.signOut();
+  redirect(`/login?message=${encodeURIComponent(t.auth.updated)}`);
 }
 
 export async function signInWithOAuthAction(formData: FormData) {
@@ -448,6 +502,28 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
       note: parsed.data.note,
     }),
   });
+
+  // Acknowledge to the client too (they used to hear nothing until confirmation).
+  if (profile.email) {
+    const clientSubject = "We received your booking request";
+    await supabase.from("notifications").insert({
+      user_id: profile.id,
+      channel: "email",
+      recipient: profile.email,
+      subject: clientSubject,
+      body: `Your request for ${service.name} on ${parsed.data.date} at ${parsed.data.time} was received. The barber will confirm shortly.`,
+    });
+    await sendEmail({
+      to: profile.email,
+      subject: clientSubject,
+      react: BookingReceivedEmail({
+        clientName: profile.full_name,
+        service: service.name,
+        date: parsed.data.date,
+        time: parsed.data.time,
+      }),
+    });
+  }
 
   revalidatePath("/client", "layout");
   revalidatePath("/admin", "layout");
@@ -834,6 +910,12 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
     });
   }
 
+  await recordAdminAction("appointment.propose", {
+    targetType: "booking_request",
+    targetId: parsed.data.requestId,
+    detail: { date: parsed.data.date, time: parsed.data.time },
+  });
+
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
   return { ok: true, message: t.feedback.proposalSent };
@@ -990,6 +1072,12 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
       }),
     });
   }
+
+  await recordAdminAction("request.confirm", {
+    targetType: "appointment",
+    targetId: appointmentId,
+    detail: { date: requestedDate, time: requestedTime },
+  });
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
@@ -1323,6 +1411,15 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
   if (insertError) {
     return { ok: false, error: t.feedback.slotTaken };
   }
+
+  await recordAdminAction("appointment.create", {
+    targetType: "appointment",
+    detail: {
+      date: parsed.data.date,
+      time: parsed.data.time,
+      walkIn: !parsed.data.clientId,
+    },
+  });
 
   revalidatePath("/admin", "layout");
   return { ok: true, message: t.feedback.bookingAdded };
@@ -1658,6 +1755,12 @@ export async function createServiceAction(input: {
     return { ok: false, error: error.message };
   }
 
+  await recordAdminAction("service.create", {
+    targetType: "service",
+    targetId: data.id,
+    detail: { name: parsed.data.name },
+  });
+
   revalidatePath("/admin", "layout");
   return { ok: true, message: t.feedback.serviceAdded, id: data.id };
 }
@@ -1696,6 +1799,12 @@ export async function updateServiceAction(
     return { ok: false, error: error.message };
   }
 
+  await recordAdminAction("service.update", {
+    targetType: "service",
+    targetId: serviceId,
+    detail: { name: parsed.data.name },
+  });
+
   revalidatePath("/admin", "layout");
   return { ok: true, message: t.feedback.serviceUpdated };
 }
@@ -1715,6 +1824,12 @@ export async function toggleServiceActiveAction(
   if (error) {
     return { ok: false, error: error.message };
   }
+
+  await recordAdminAction("service.toggle", {
+    targetType: "service",
+    targetId: serviceId,
+    detail: { active },
+  });
 
   revalidatePath("/admin", "layout");
   return { ok: true, message: active ? t.feedback.serviceActivated : t.feedback.serviceHidden };
@@ -1804,9 +1919,22 @@ export async function blockDateAction(input: {
   }
 
   const supabase = await createClient();
-  // Block the whole day(s): start at 00:00, end at 23:59:59 of the end date.
-  const starts = new Date(`${parsed.data.start}T00:00:00`).toISOString();
-  const ends = new Date(`${parsed.data.end}T23:59:59`).toISOString();
+
+  // Partial-day block: a time slice (break / partial time-off) on the start date.
+  const isSlice = Boolean(parsed.data.startTime && parsed.data.endTime);
+  let starts: string;
+  let ends: string;
+  if (isSlice) {
+    if (parsed.data.endTime! <= parsed.data.startTime!) {
+      return { ok: false, error: t.feedback.endAfterStart };
+    }
+    starts = zonedDateTimeToUtcIso(parsed.data.start, parsed.data.startTime!);
+    ends = zonedDateTimeToUtcIso(parsed.data.start, parsed.data.endTime!);
+  } else {
+    // Block the whole day(s): start at 00:00, end at 23:59:59 of the end date.
+    starts = new Date(`${parsed.data.start}T00:00:00`).toISOString();
+    ends = new Date(`${parsed.data.end}T23:59:59`).toISOString();
+  }
 
   const { error } = await supabase.from("blocked_times").insert({
     barber_id: admin.id,
@@ -1818,6 +1946,11 @@ export async function blockDateAction(input: {
   if (error) {
     return { ok: false, error: error.message };
   }
+
+  await recordAdminAction("availability.block", {
+    targetType: "blocked_time",
+    detail: { start: starts, end: ends, slice: isSlice },
+  });
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
@@ -1833,6 +1966,11 @@ export async function unblockDateAction(blockId: string): Promise<ActionResult> 
   if (error) {
     return { ok: false, error: error.message };
   }
+
+  await recordAdminAction("availability.unblock", {
+    targetType: "blocked_time",
+    targetId: blockId,
+  });
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
@@ -1859,6 +1997,12 @@ export async function markAppointmentOutcomeAction(
   if (error) {
     return { ok: false, error: error.message };
   }
+
+  await recordAdminAction("appointment.outcome", {
+    targetType: "appointment",
+    targetId: appointmentId,
+    detail: { outcome },
+  });
 
   revalidatePath("/admin", "layout");
   return { ok: true, message: t.feedback.outcomeRecorded };
@@ -1953,7 +2097,311 @@ export async function saveBusinessHoursAction(
     return { ok: false, error: error.message };
   }
 
+  await recordAdminAction("business_hours.update", { targetType: "business_hours" });
+
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
   return { ok: true, message: t.feedback.businessHoursSaved };
+}
+
+// ---------------------------------------------------------------------------
+// Client self-service over CONFIRMED appointments (migration 0020 RPCs).
+// The client cannot mutate confirmed rows directly under RLS, so these call
+// SECURITY DEFINER functions that enforce ownership + a 24h lead-time in SQL.
+// ---------------------------------------------------------------------------
+
+// Lead-time cutoff mirrored from the SQL guard for a friendly early message.
+const CANCEL_LEAD_MS = 24 * 60 * 60 * 1000;
+
+/** True when the appointment starts more than 24h from now. */
+function moreThan24hAway(startIso: string): boolean {
+  return new Date(startIso).getTime() - Date.now() > CANCEL_LEAD_MS;
+}
+
+export async function cancelConfirmedAppointmentAction(
+  appointmentId: string,
+): Promise<ActionResult> {
+  const profile = await requireApprovedClient();
+  const t = await getDict();
+  const supabase = await createClient();
+
+  const { data: appointment, error } = await supabase
+    .from("appointments")
+    .select("id, client_id, service_id, starts_at, status")
+    .eq("id", appointmentId)
+    .single();
+
+  if (error || !appointment || appointment.client_id !== profile.id) {
+    return { ok: false, error: t.feedback.cannotCancelRequest };
+  }
+  if (appointment.status !== "confirmed") {
+    return { ok: false, error: t.feedback.cannotCancelConfirmed };
+  }
+  if (!moreThan24hAway(appointment.starts_at)) {
+    return { ok: false, error: t.feedback.appointmentTooLateToCancel };
+  }
+
+  const { error: cancelError } = await supabase.rpc(
+    "client_cancel_confirmed_appointment",
+    { p_appointment_id: appointmentId },
+  );
+  if (cancelError) {
+    return { ok: false, error: t.feedback.appointmentTooLateToCancel };
+  }
+
+  // Notify the barber (email + notification row), non-fatal on failure.
+  const barberEmail = getBarberEmail();
+  const cancelDate = dateInShopTimeZone(appointment.starts_at);
+  const cancelTime = timeFromIso(appointment.starts_at);
+  const { data: cancelService } = await supabase
+    .from("services")
+    .select("name")
+    .eq("id", appointment.service_id)
+    .single();
+  const cancelSubject = `${profile.full_name} cancelled ${cancelDate} at ${cancelTime}`;
+  await supabase.from("notifications").insert({
+    user_id: profile.id,
+    channel: "email",
+    recipient: barberEmail,
+    subject: cancelSubject,
+  });
+  await sendEmail({
+    to: barberEmail,
+    subject: cancelSubject,
+    react: ClientRespondedEmail({
+      clientName: profile.full_name,
+      service: cancelService?.name ?? "",
+      date: cancelDate,
+      time: cancelTime,
+      accepted: false,
+    }),
+  });
+
+  revalidatePath("/client", "layout");
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: t.feedback.appointmentCancelledSelf };
+}
+
+export async function requestRescheduleAction(
+  appointmentId: string,
+  date: string,
+  time: string,
+): Promise<ActionResult> {
+  const profile = await requireApprovedClient();
+  const t = await getDict();
+  const supabase = await createClient();
+
+  const limit = await enforceRateLimit("booking:request-reschedule", {
+    identity: profile.id,
+    limit: 20,
+    windowSeconds: 10 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
+
+  const { data: appointment, error } = await supabase
+    .from("appointments")
+    .select("id, client_id, barber_id, service_id, starts_at, ends_at, status")
+    .eq("id", appointmentId)
+    .single();
+
+  if (error || !appointment || appointment.client_id !== profile.id) {
+    return { ok: false, error: t.feedback.cannotCancelRequest };
+  }
+  if (appointment.status !== "confirmed") {
+    return { ok: false, error: t.feedback.cannotCancelConfirmed };
+  }
+  if (!moreThan24hAway(appointment.starts_at)) {
+    return { ok: false, error: t.feedback.rescheduleTooLate };
+  }
+
+  const newStart = startsAt(date, time);
+  const durationMinutes = Math.round(
+    (new Date(appointment.ends_at).getTime() - new Date(appointment.starts_at).getTime()) / 60000,
+  );
+  const newEnd = addMinutes(newStart, durationMinutes);
+
+  // Validate the requested new time the same way a fresh booking is validated.
+  if (!moreThan24hAway(newStart)) {
+    return { ok: false, error: t.feedback.rescheduleTooLate };
+  }
+  if (!isStartInFuture(newStart)) {
+    return { ok: false, error: t.feedback.chooseFutureTime };
+  }
+  if (!isStartInClientBookingWindow(newStart)) {
+    return { ok: false, error: t.feedback.chooseWithinTwoWeeks };
+  }
+  if (
+    !(await isSlotInsideConfiguredBusinessHours(supabase, {
+      barberId: appointment.barber_id,
+      date,
+      time,
+      durationMinutes,
+    }))
+  ) {
+    return { ok: false, error: t.feedback.slotOutsideHours };
+  }
+  if (
+    await hasBlockedTimeOverlap(supabase, {
+      barberId: appointment.barber_id,
+      start: newStart,
+      end: newEnd,
+    })
+  ) {
+    return { ok: false, error: t.feedback.slotUnavailable };
+  }
+
+  const { error: rescheduleError } = await supabase.rpc("client_request_reschedule", {
+    p_appointment_id: appointmentId,
+    p_new_start: newStart,
+  });
+  if (rescheduleError) {
+    return { ok: false, error: t.feedback.slotNoLongerFree };
+  }
+
+  // Notify the barber that a confirmed slot needs re-confirming at a new time.
+  const barberEmail = getBarberEmail();
+  const { data: rescheduleService } = await supabase
+    .from("services")
+    .select("name")
+    .eq("id", appointment.service_id)
+    .single();
+  const rescheduleSubject = `${profile.full_name} asked to move to ${date} at ${time}`;
+  await supabase.from("notifications").insert({
+    user_id: profile.id,
+    channel: "email",
+    recipient: barberEmail,
+    subject: rescheduleSubject,
+  });
+  await sendEmail({
+    to: barberEmail,
+    subject: rescheduleSubject,
+    react: BookingRequestEmail({
+      clientName: profile.full_name,
+      service: rescheduleService?.name ?? "",
+      date,
+      time,
+      note: undefined,
+    }),
+  });
+
+  revalidatePath("/client", "layout");
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: t.feedback.rescheduleRequested };
+}
+
+// ---------------------------------------------------------------------------
+// GDPR self-service — the client can export or delete their own data.
+// ---------------------------------------------------------------------------
+
+/** Assemble the caller's own data as a JSON string for download (GDPR access). */
+export async function exportMyDataAction(): Promise<
+  { ok: true; data: string } | { ok: false; error: string }
+> {
+  const profile = await requireApprovedClient();
+  const t = await getDict();
+  const supabase = await createClient();
+
+  const [requests, appointments, notifications] = await Promise.all([
+    supabase.from("booking_requests").select("*").eq("client_id", profile.id),
+    supabase.from("appointments").select("*").eq("client_id", profile.id),
+    supabase.from("notifications").select("*").eq("user_id", profile.id),
+  ]);
+
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, phone, role, approval_status, created_at")
+    .eq("id", profile.id)
+    .single();
+
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    profile: profileRow ?? null,
+    bookingRequests: requests.data ?? [],
+    appointments: appointments.data ?? [],
+    notifications: notifications.data ?? [],
+  };
+
+  if (requests.error || appointments.error || notifications.error) {
+    return { ok: false, error: t.common.somethingWentWrong };
+  }
+
+  return { ok: true, data: JSON.stringify(payload, null, 2) };
+}
+
+/**
+ * Permanently delete the caller's own account and data (GDPR erasure). Mirrors
+ * the admin deleteClientAction sequence but scoped to auth.uid(), using the
+ * service-role client to clear rows and remove the auth user.
+ */
+export async function deleteMyAccountAction(): Promise<ActionResult> {
+  const profile = await requireApprovedClient();
+  const t = await getDict();
+
+  const limit = await enforceRateLimit("account:self-delete", {
+    identity: profile.id,
+    limit: 3,
+    windowSeconds: 60 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
+
+  const clientId = profile.id;
+  try {
+    const adminSupabase = getSupabaseAdminClient();
+
+    const { data: requests } = await adminSupabase
+      .from("booking_requests")
+      .select("id")
+      .eq("client_id", clientId);
+    const requestIds = (requests ?? []).map((r) => r.id);
+
+    await adminSupabase.from("appointments").delete().eq("client_id", clientId);
+    if (requestIds.length > 0) {
+      await adminSupabase.from("appointments").delete().in("request_id", requestIds);
+    }
+    await adminSupabase
+      .from("booking_requests")
+      .update({ selected_proposal_id: null })
+      .eq("client_id", clientId);
+    await adminSupabase.from("booking_requests").delete().eq("client_id", clientId);
+
+    const { error } = await adminSupabase.auth.admin.deleteUser(clientId);
+    if (error) {
+      await reportError("self-delete", error, { clientId });
+      return { ok: false, error: t.feedback.couldNotDeleteAccount };
+    }
+  } catch (error) {
+    await reportError("self-delete", error, { clientId });
+    return { ok: false, error: t.feedback.couldNotDeleteAccount };
+  }
+
+  // Sign out (their session is now orphaned) and send them to login.
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect(`/login?message=${encodeURIComponent(t.feedback.accountDeleted)}`);
+}
+
+// ---------------------------------------------------------------------------
+// Notification center — mark the client's own notifications read (0020 policy).
+// ---------------------------------------------------------------------------
+export async function markNotificationsReadAction(): Promise<ActionResult> {
+  const profile = await requireApprovedClient();
+  const t = await getDict();
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("user_id", profile.id)
+    .is("read_at", null);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/client", "layout");
+  return { ok: true, message: t.feedback.notificationsMarkedRead };
 }

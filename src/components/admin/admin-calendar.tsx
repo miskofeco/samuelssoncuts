@@ -11,6 +11,7 @@ import { StatusPill } from "@/components/shared/status-pill";
 import {
   CLOSE_MINUTES,
   formatDay,
+  formatFullDay,
   minutesOf,
   OPEN_MINUTES,
   serviceById,
@@ -86,8 +87,9 @@ export function AdminCalendar({
 }) {
   const t = useT();
   const locale = localeFor(useLang());
-  const [view, setView] = useState<"week" | "month">("week");
+  const [view, setView] = useState<"day" | "week" | "month">("week");
   const [weekMonday, setWeekMonday] = useState<string>(() => weekStart(todayIso()));
+  const [dayDate, setDayDate] = useState<string>(() => todayIso());
   const [draft, setDraft] = useState<{ date?: string; time?: string } | null>(null);
   const [selected, setSelected] = useState<CalendarItem | null>(null);
   const today = todayIso();
@@ -199,13 +201,25 @@ export function AdminCalendar({
           value={view}
           onChange={setView}
           options={[
+            { label: t.admin.day, value: "day" },
             { label: t.admin.week, value: "week" },
             { label: t.admin.month, value: "month" },
           ]}
         />
       </div>
 
-      {view === "week" ? (
+      {view === "day" ? (
+        <DayAgenda
+          t={t}
+          locale={locale}
+          date={dayDate}
+          onDateChange={setDayDate}
+          items={itemsByDate.get(dayDate) ?? []}
+          blocked={blockedDates.has(dayDate)}
+          onAddSlot={(date, time) => setDraft({ date, time })}
+          onSelect={setSelected}
+        />
+      ) : view === "week" ? (
         <WeekGrid
           t={t}
           locale={locale}
@@ -323,6 +337,123 @@ export function addMinutesToTime(time: string, minutes: number) {
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
+// "yyyy-mm-dd" shifted by whole days (noon anchor avoids DST edge cases).
+function shiftDay(date: string, days: number) {
+  const d = new Date(`${date}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Single-day agenda: a chronological list of the day's items with prev/next
+// navigation. Reuses the same item model and detail modal as the other views.
+function DayAgenda({
+  t,
+  locale,
+  date,
+  onDateChange,
+  items,
+  blocked,
+  onAddSlot,
+  onSelect,
+}: {
+  t: Dict;
+  locale: string;
+  date: string;
+  onDateChange: (date: string) => void;
+  items: CalendarItem[];
+  blocked: boolean;
+  onAddSlot: (date: string, time?: string) => void;
+  onSelect: (item: CalendarItem) => void;
+}) {
+  const today = todayIso();
+  const sorted = [...items].sort((a, b) => (a.time < b.time ? -1 : 1));
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          type="button"
+          variant="secondary"
+          aria-label={t.admin.prevDay}
+          onClick={() => onDateChange(shiftDay(date, -1))}
+        >
+          ‹
+        </Button>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-black dark:text-white">
+            {formatFullDay(date, locale)}
+          </p>
+          {date !== today ? (
+            <button
+              type="button"
+              onClick={() => onDateChange(today)}
+              className="text-xs font-semibold text-stone-500 underline underline-offset-4 hover:text-black dark:text-stone-400 dark:hover:text-white"
+            >
+              {t.common.today}
+            </button>
+          ) : null}
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          aria-label={t.admin.nextDay}
+          onClick={() => onDateChange(shiftDay(date, 1))}
+        >
+          ›
+        </Button>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {blocked ? (
+          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200">
+            {t.admin.off}
+          </p>
+        ) : null}
+        {sorted.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-black/15 px-3 py-6 text-center dark:border-white/15">
+            <p className="text-sm text-stone-500 dark:text-stone-400">{t.admin.noAppointments}</p>
+            {date >= today && !blocked ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="mt-3"
+                onClick={() => onAddSlot(date)}
+              >
+                +
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          sorted.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onSelect(item)}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition",
+                neutralChipClasses,
+              )}
+            >
+              <span className={cn("h-8 w-1 shrink-0 rounded-full", accentToneClasses(item.type))} />
+              <span className="w-14 shrink-0 text-sm font-semibold tabular-nums text-black dark:text-white">
+                {item.time}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-black dark:text-white">
+                  {item.title}
+                </span>
+                <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
+                  {item.service}
+                </span>
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Pixel offset of the current time within the grid (clamped to the visible band).
 function nowOffsetPx() {
   const now = new Date();
@@ -436,7 +567,7 @@ function WeekGrid({
 
       {/* Desktop time grid */}
       <div className="mt-3 hidden overflow-x-auto lg:block">
-        <div className="min-w-[980px]">
+        <div className="min-w-245">
           <div className="grid grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-px rounded-t-xl bg-black/5 dark:bg-white/10">
             <div className="bg-white dark:bg-stone-900" />
             {days.map((day) => {

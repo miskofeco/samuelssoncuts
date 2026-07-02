@@ -26,15 +26,20 @@ export function RequestForm({
   appointments,
   pendingRequests,
   blockedDates,
+  initialServiceId,
 }: {
   services: Service[];
   appointments: Appointment[];
   pendingRequests: BookingRequest[];
   blockedDates: ReadonlySet<string>;
+  /** Preselected service for one-tap rebooking (?service=<id>). */
+  initialServiceId?: string;
 }) {
   const t = useT();
   const orderedServices = orderClientServices(services);
-  const [serviceId, setServiceId] = useState(defaultClientServiceId(services));
+  const [serviceId, setServiceId] = useState(
+    initialServiceId ?? defaultClientServiceId(services),
+  );
   const [date, setDate] = useState<string | null>(null);
   const [slot, setSlot] = useState<SlotChoice | null>(null);
   const [note, setNote] = useState("");

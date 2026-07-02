@@ -35,5 +35,11 @@ export async function GET(request: NextRequest) {
     return loginWithError();
   }
 
+  // Password-recovery links exchange to a valid session too; send them to set a
+  // new password instead of into the app.
+  if (requestUrl.searchParams.get("type") === "recovery") {
+    return NextResponse.redirect(`${getSiteUrl()}/auth/update-password`);
+  }
+
   return NextResponse.redirect(`${getSiteUrl()}/dashboard`);
 }

@@ -56,6 +56,25 @@ export function getShopTimeZone() {
   return process.env.NEXT_PUBLIC_SHOP_TIME_ZONE ?? "Europe/Bratislava";
 }
 
+// ─── Shop contact (shown on the appointment detail view) ───────────────────────
+// Public so both server and client components can read them.
+
+export function getShopAddress(): string | null {
+  return process.env.NEXT_PUBLIC_SHOP_ADDRESS ?? null;
+}
+
+export function getShopPhone(): string | null {
+  return process.env.NEXT_PUBLIC_SHOP_PHONE ?? null;
+}
+
+/** Google Maps search link for the configured address (null when unset). */
+export function getShopMapUrl(): string | null {
+  const address = getShopAddress();
+  return address
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+    : null;
+}
+
 export function getErrorReportWebhookUrl(): string | null {
   return process.env.ERROR_REPORT_WEBHOOK_URL ?? null;
 }

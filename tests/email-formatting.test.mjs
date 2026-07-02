@@ -13,6 +13,8 @@ for (const file of [
   "src/emails/appointment-reminder.tsx",
   "src/emails/appointment-rescheduled.tsx",
   "src/emails/booking-request.tsx",
+  "src/emails/booking-received.tsx",
+  "src/emails/barber-agenda.tsx",
   "src/emails/client-responded.tsx",
 ]) {
   test(`${file} formats date detail values for Slovak email display`, () => {

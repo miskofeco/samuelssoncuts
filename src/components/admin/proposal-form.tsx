@@ -82,6 +82,10 @@ export function ProposalComposer({
   const tone = statusTone[request.status];
   const label = statusLabel(t, request.status);
   const canPropose = request.status === "pending" || request.status === "declined";
+  // Reliability signal at decision time: how many times this client no-showed.
+  const clientNoShows = client
+    ? appointments.filter((a) => a.clientId === client.id && a.outcome === "no_show").length
+    : 0;
 
   const [open, setOpen] = useState(request.status === "pending");
   const initialDate = request.preferences[0]?.date ?? addDays(1);
@@ -179,6 +183,12 @@ export function ProposalComposer({
                 {client?.name ?? t.admin.clientFallback}
               </p>
               <StatusPill tone={tone}>{label}</StatusPill>
+              {clientNoShows > 0 ? (
+                <StatusPill tone="warning">
+                  ⚠ {clientNoShows}{" "}
+                  {clientNoShows === 1 ? t.admin.reliabilityFlag : t.admin.reliabilityFlagPlural}
+                </StatusPill>
+              ) : null}
             </div>
             <p className="mt-0.5 truncate text-sm text-stone-500 dark:text-stone-400">
               {service.name} · {service.duration} {t.admin.minutesShort}

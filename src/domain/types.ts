@@ -88,7 +88,20 @@ export type Notification = {
   channel: NotificationChannel;
   to: string;
   subject: string;
+  body?: string | null;
+  read: boolean;
   createdAt: string;
+};
+
+// A client's own upcoming confirmed appointment, with the pre-computed 24h
+// lead-time flag that gates self-service cancel/reschedule.
+export type ClientAppointment = {
+  id: string;
+  serviceId: string;
+  date: string;
+  time: string;
+  /** True when the appointment starts more than 24h from now. */
+  canModify: boolean;
 };
 
 export type AppState = {

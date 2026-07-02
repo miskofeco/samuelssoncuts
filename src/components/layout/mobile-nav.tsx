@@ -20,10 +20,12 @@ export function MobileNav({
   sections,
   profile,
   attention,
+  unreadNotifications,
 }: {
   sections: NavSection[];
   profile: AuthProfile;
   attention?: AttentionCounts;
+  unreadNotifications?: number;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -114,7 +116,12 @@ export function MobileNav({
             )}
             onAnimationEnd={handleAnimationEnd}
           >
-            <Sidebar sections={sections} profile={profile} attention={attention} />
+            <Sidebar
+              sections={sections}
+              profile={profile}
+              attention={attention}
+              unreadNotifications={unreadNotifications}
+            />
           </div>
         </div>
       ) : null}

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { signInAction } from "@/app/actions";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
@@ -33,6 +35,14 @@ export default async function LoginPage({
         <SubmitButton className="w-full" pendingLabel={t.common.sending}>
           {t.auth.signIn}
         </SubmitButton>
+        <p className="text-center text-sm">
+          <Link
+            href="/reset-password"
+            className="font-semibold text-stone-600 underline-offset-4 hover:underline dark:text-stone-400"
+          >
+            {t.auth.forgotPassword}
+          </Link>
+        </p>
       </form>
       <OAuthButtons />
     </AuthPanel>

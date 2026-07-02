@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusPill } from "@/components/shared/status-pill";
+import { totalRevenueCents, outcomeSummary } from "@/domain/analytics";
 import { formatFullDay, serviceById, todayIso } from "@/domain/schedule";
 import type {
   ApprovalStatus,
@@ -65,10 +66,10 @@ export function ClientDetail({
   const router = useRouter();
   const today = todayIso();
   const upcoming = appointments.filter((a) => a.date >= today).length;
-  const totalSpend = appointments.reduce(
-    (sum, a) => sum + serviceById(a.serviceId, services).price,
-    0,
-  );
+  // Lifetime value excludes no-shows/cancellations (the revenue helper zeroes
+  // them) and uses the captured request price where available.
+  const totalSpend = Math.round(totalRevenueCents(appointments, requests, services) / 100);
+  const noShows = outcomeSummary(appointments).noShow;
   const requestStatusMeta = statusMeta(t);
 
   const [pending, startTransition] = useTransition();
@@ -191,10 +192,11 @@ export function ClientDetail({
       </Card>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
         <StatCard label={t.admin.detailTotalVisits} value={appointments.length} />
         <StatCard label={t.admin.detailUpcoming} value={upcoming} tone={upcoming > 0 ? "emerald" : "neutral"} />
         <StatCard label={t.admin.detailRequests} value={requests.length} />
+        <StatCard label={t.admin.noShows} value={noShows} hint={t.admin.noShowsHint} tone={noShows > 0 ? "amber" : "neutral"} />
         <StatCard label={t.admin.detailLifetimeValue} value={`${totalSpend} €`} hint={t.admin.detailConfirmedVisits} />
       </div>
 

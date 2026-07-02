@@ -6,11 +6,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getBarberEmail } from "@/lib/email";
 import { getCronSecret } from "@/lib/env";
 import { logEvent, reportError } from "@/lib/observability";
 import { dateInShopTimeZone, timeInShopTimeZone } from "@/lib/time-zone";
 import { sendEmail } from "@/lib/email";
 import { AppointmentReminderEmail } from "@/emails/appointment-reminder";
+import { BarberAgendaEmail, type AgendaItem } from "@/emails/barber-agenda";
 import { enforceRateLimit } from "@/server/rate-limit";
 
 export const runtime = "nodejs";
@@ -114,6 +116,56 @@ export async function GET(request: NextRequest) {
     sent += 1;
   }
 
-  logEvent("cron-reminders", { sent });
-  return NextResponse.json({ ok: true, sent });
+  // ---- Barber morning agenda -------------------------------------------
+  // Send the barber a digest of today's confirmed appointments. "Today" is in
+  // the shop time zone, so query a generous UTC window and filter by shop-date.
+  let agendaSent = false;
+  try {
+    const barberEmail = getBarberEmail();
+    if (barberEmail) {
+      const todayShop = dateInShopTimeZone(now.toISOString());
+      const from = new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString();
+      const to = new Date(now.getTime() + 36 * 60 * 60 * 1000).toISOString();
+
+      const { data: todaysAppts } = await supabase
+        .from("appointments")
+        .select("starts_at, service_id, client_id, customer_name")
+        .eq("status", "confirmed")
+        .gte("starts_at", from)
+        .lte("starts_at", to)
+        .order("starts_at");
+
+      const forToday = (todaysAppts ?? []).filter(
+        (a) => dateInShopTimeZone(a.starts_at) === todayShop,
+      );
+
+      const items: AgendaItem[] = [];
+      for (const appt of forToday) {
+        const [{ data: svc }, { data: prof }] = await Promise.all([
+          supabase.from("services").select("name").eq("id", appt.service_id).single(),
+          appt.client_id
+            ? supabase.from("profiles").select("full_name").eq("id", appt.client_id).single()
+            : Promise.resolve({ data: null }),
+        ]);
+        items.push({
+          time: timeInShopTimeZone(appt.starts_at),
+          service: svc?.name ?? "",
+          customer: prof?.full_name ?? appt.customer_name ?? "Walk-in",
+        });
+      }
+
+      await sendEmail({
+        to: barberEmail,
+        subject: `Today: ${items.length} appointment${items.length === 1 ? "" : "s"}`,
+        react: BarberAgendaEmail({ date: todayShop, items }),
+      });
+      agendaSent = true;
+    }
+  } catch (agendaError) {
+    // Never let the agenda failure fail the whole cron (reminders already sent).
+    await reportError("cron-agenda", agendaError);
+  }
+
+  logEvent("cron-reminders", { sent, agendaSent });
+  return NextResponse.json({ ok: true, sent, agendaSent });
 }

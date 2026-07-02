@@ -31,13 +31,21 @@ export function AvailabilityManager({
   const [start, setStart] = useState(addDays(1));
   const [end, setEnd] = useState(addDays(1));
   const [reason, setReason] = useState("");
+  const [sliceMode, setSliceMode] = useState(false);
+  const [startTime, setStartTime] = useState("12:00");
+  const [endTime, setEndTime] = useState("13:00");
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
 
   function block() {
     setFeedback(null);
     startTransition(async () => {
-      const result = await blockDateAction({ start, end, reason: reason || undefined });
+      const result = await blockDateAction({
+        start,
+        end: sliceMode ? start : end,
+        reason: reason || undefined,
+        ...(sliceMode ? { startTime, endTime } : {}),
+      });
       setFeedback(result);
       if (result.ok) setReason("");
     });
@@ -69,14 +77,40 @@ export function AvailabilityManager({
               if (event.target.value > end) setEnd(event.target.value);
             }}
           />
-          <Field
-            type="date"
-            label={t.admin.to}
-            value={end}
-            min={start}
-            onChange={(event) => setEnd(event.target.value)}
-          />
+          {sliceMode ? (
+            <div className="grid grid-cols-2 gap-3">
+              <Field
+                type="time"
+                label={t.admin.startTime}
+                value={startTime}
+                step={1800}
+                onChange={(event) => setStartTime(event.target.value)}
+              />
+              <Field
+                type="time"
+                label={t.admin.endTime}
+                value={endTime}
+                step={1800}
+                onChange={(event) => setEndTime(event.target.value)}
+              />
+            </div>
+          ) : (
+            <Field
+              type="date"
+              label={t.admin.to}
+              value={end}
+              min={start}
+              onChange={(event) => setEnd(event.target.value)}
+            />
+          )}
         </div>
+        <button
+          type="button"
+          onClick={() => setSliceMode((v) => !v)}
+          className="mt-2 text-xs font-semibold text-stone-500 underline underline-offset-4 hover:text-black dark:text-stone-400 dark:hover:text-white"
+        >
+          {sliceMode ? t.admin.blockWholeDays : t.admin.blockTimeSlice}
+        </button>
         <Field
           label={`${t.admin.reason} ${t.common.optional}`}
           value={reason}
@@ -88,7 +122,7 @@ export function AvailabilityManager({
         <Feedback result={feedback} className="mt-3" />
 
         <Button type="button" onClick={block} disabled={pending} className="mt-3">
-          {pending ? t.common.saving : t.admin.blockTheseDates}
+          {pending ? t.common.saving : sliceMode ? t.admin.blockThisSlot : t.admin.blockTheseDates}
         </Button>
 
         <div className="mt-6">

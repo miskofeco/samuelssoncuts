@@ -25,7 +25,11 @@ export default async function AdminHomePage() {
         appointments={data.appointments}
         services={data.services}
       />
-      <AdminAnalytics appointments={data.appointments} requests={data.requests} />
+      <AdminAnalytics
+        appointments={data.appointments}
+        requests={data.requests}
+        services={data.services}
+      />
     </div>
   );
 }

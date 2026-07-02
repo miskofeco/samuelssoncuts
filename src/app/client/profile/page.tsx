@@ -1,4 +1,5 @@
 import { OpenPreferencesCard } from "@/components/consent/open-preferences-button";
+import { PrivacyControls } from "@/components/client/privacy-controls";
 import { ProfileForm } from "@/components/shared/profile-form";
 import { PageHeader } from "@/components/shared/page-header";
 import { getDict } from "@/i18n/server";
@@ -25,6 +26,7 @@ export default async function ClientProfilePage() {
           avatarUrl={profile.avatar_url}
         />
         <OpenPreferencesCard />
+        <PrivacyControls />
       </div>
     </div>
   );

@@ -247,6 +247,7 @@ export type Database = {
           body: string | null;
           provider_message_id: string | null;
           sent_at: string | null;
+          read_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -258,6 +259,7 @@ export type Database = {
           body?: string | null;
           provider_message_id?: string | null;
           sent_at?: string | null;
+          read_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;
@@ -364,6 +366,17 @@ export type Database = {
           service_name: string;
           customer: string;
         }>;
+      };
+      client_cancel_confirmed_appointment: {
+        Args: { p_appointment_id: string };
+        Returns: string | null;
+      };
+      client_request_reschedule: {
+        Args: {
+          p_appointment_id: string;
+          p_new_start: string;
+        };
+        Returns: string;
       };
     };
     Enums: {

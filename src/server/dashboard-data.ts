@@ -3,6 +3,7 @@ import type {
   Appointment,
   BookingRequest,
   BusinessHoursDay,
+  ClientAppointment,
   ClientProfile,
   Notification,
   Proposal,
@@ -141,6 +142,8 @@ export function mapNotificationRow(row: NotificationRow): Notification {
     channel: row.channel === "sms" ? "SMS" : "Email",
     to: row.recipient,
     subject: row.subject,
+    body: row.body,
+    read: row.read_at != null,
     createdAt: shortDate(row.created_at),
   };
 }
@@ -273,6 +276,22 @@ export async function loadClientNotifications(
   return (data ?? []).map(mapNotificationRow);
 }
 
+// Count of the client's unread notifications, for the nav badge. Mirrors the
+// admin attention-count pattern: server-computed and refreshed via
+// revalidatePath after any action that reads/creates notifications.
+export async function loadUnreadNotificationCount(profile: AuthProfile): Promise<number> {
+  const supabase = await createClient();
+  const orFilter = notificationOrFilter(profile);
+  let query = supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .is("read_at", null);
+  query = orFilter ? query.or(orFilter) : query.eq("user_id", profile.id);
+  const { count, error } = await query;
+  if (error) return 0;
+  return count ?? 0;
+}
+
 export async function loadAdminNotifications(limit = 40): Promise<Notification[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -285,30 +304,110 @@ export async function loadAdminNotifications(limit = 40): Promise<Notification[]
   return (data ?? []).map(mapNotificationRow);
 }
 
-/** A client's own requests + derived proposals. */
+/** A client's own requests + derived proposals + actionable upcoming appts. */
 export async function loadClientReservations(profile: AuthProfile): Promise<{
   requests: BookingRequest[];
   proposals: Proposal[];
   services: Service[];
+  upcomingAppointments: ClientAppointment[];
 }> {
   const supabase = await createClient();
-  const [requestsResult, servicesResult] = await Promise.all([
+  const nowIso = new Date().toISOString();
+  const [requestsResult, servicesResult, appointmentsResult] = await Promise.all([
     supabase
       .from("booking_requests")
       .select(REQUEST_SELECT)
       .eq("client_id", profile.id)
       .order("created_at", { ascending: false }),
     supabase.from("services").select("*"),
+    supabase
+      .from("appointments")
+      .select("id, service_id, starts_at, status")
+      .eq("client_id", profile.id)
+      .eq("status", "confirmed")
+      .gte("starts_at", nowIso)
+      .order("starts_at"),
   ]);
 
   fail("booking_requests", requestsResult.error);
   fail("services", servicesResult.error);
+  fail("appointments", appointmentsResult.error);
 
   const rows = asRequestRows(requestsResult.data);
+  const cutoff = Date.now() + 24 * 60 * 60 * 1000;
+  const upcomingAppointments: ClientAppointment[] = (appointmentsResult.data ?? []).map(
+    (a) => ({
+      id: a.id,
+      serviceId: a.service_id,
+      date: dateFromIso(a.starts_at),
+      time: timeFromIso(a.starts_at),
+      canModify: new Date(a.starts_at).getTime() > cutoff,
+    }),
+  );
+
   return {
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
     services: (servicesResult.data ?? []).map(mapServiceRow),
+    upcomingAppointments,
+  };
+}
+
+export type ClientAppointmentDetail = {
+  id: string;
+  serviceName: string;
+  serviceDuration: number;
+  date: string;
+  time: string;
+  startIso: string;
+  endIso: string;
+  status: string;
+  outcome: string | null;
+  priceCents: number | null;
+  surcharge: boolean;
+  canModify: boolean;
+};
+
+/** One of the client's own appointments, for the detail page. Null if not theirs. */
+export async function loadClientAppointmentDetail(
+  profile: AuthProfile,
+  appointmentId: string,
+): Promise<ClientAppointmentDetail | null> {
+  const supabase = await createClient();
+  const { data: appt, error } = await supabase
+    .from("appointments")
+    .select("id, request_id, service_id, starts_at, ends_at, status, outcome, client_id")
+    .eq("id", appointmentId)
+    .single();
+
+  if (error || !appt || appt.client_id !== profile.id) return null;
+
+  const [{ data: service }, requestResult] = await Promise.all([
+    supabase.from("services").select("name, duration_minutes").eq("id", appt.service_id).single(),
+    appt.request_id
+      ? supabase
+          .from("booking_requests")
+          .select("price_cents, surcharge")
+          .eq("id", appt.request_id)
+          .single()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  return {
+    id: appt.id,
+    serviceName: service?.name ?? "",
+    serviceDuration: service?.duration_minutes ?? 0,
+    date: dateFromIso(appt.starts_at),
+    time: timeFromIso(appt.starts_at),
+    startIso: appt.starts_at,
+    endIso: appt.ends_at,
+    status: appt.status,
+    outcome: appt.outcome,
+    priceCents: requestResult.data?.price_cents ?? null,
+    surcharge: requestResult.data?.surcharge ?? false,
+    canModify:
+      appt.status === "confirmed" &&
+      new Date(appt.starts_at).getTime() > Date.now() + 24 * 60 * 60 * 1000,
   };
 }
 

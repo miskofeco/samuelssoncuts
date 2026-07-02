@@ -32,17 +32,25 @@ export function Sidebar({
   sections,
   profile,
   attention,
+  unreadNotifications,
 }: {
   sections: NavSection[];
   profile: AuthProfile;
   attention?: AttentionCounts;
+  unreadNotifications?: number;
 }) {
   const isAdmin = profile.role === "admin";
 
   return isAdmin ? (
     <SidebarWithBadges sections={sections} profile={profile} attention={attention} />
   ) : (
-    <SidebarInner sections={sections} profile={profile} requests={0} approvals={0} />
+    <SidebarInner
+      sections={sections}
+      profile={profile}
+      requests={0}
+      approvals={0}
+      unread={unreadNotifications ?? 0}
+    />
   );
 }
 
@@ -65,6 +73,7 @@ function SidebarWithBadges({
       profile={profile}
       requests={attention?.requests ?? 0}
       approvals={attention?.approvals ?? 0}
+      unread={0}
     />
   );
 }
@@ -74,11 +83,13 @@ function SidebarInner({
   profile,
   requests,
   approvals,
+  unread,
 }: {
   sections: NavSection[];
   profile: AuthProfile;
   requests: number;
   approvals: number;
+  unread: number;
 }) {
   const pathname = usePathname();
   const t = useT();
@@ -87,6 +98,7 @@ function SidebarInner({
   function badgeFor(href: string): number {
     if (href === "/admin/requests") return requests;
     if (href === "/admin/approvals") return approvals;
+    if (href === "/client/notifications") return unread;
     return 0;
   }
 

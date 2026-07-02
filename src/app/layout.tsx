@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
 
@@ -17,11 +17,27 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(getSiteUrl()),
     title: dict.metadata.title,
     description: dict.metadata.description,
+    manifest: "/manifest.webmanifest",
     icons: {
       icon: "/favicon.png",
+      apple: "/icon-192.png",
+    },
+    appleWebApp: {
+      capable: true,
+      title: "Samuelsson Cuts",
+      statusBarStyle: "default",
     },
   };
 }
+
+// theme-color adapts to the light/dark app surface (Next 16 requires this in the
+// dedicated viewport export, not in metadata).
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f4f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#0c0a09" },
+  ],
+};
 
 export default async function RootLayout({
   children,
