@@ -13,6 +13,8 @@ test("domain exposes a single client booking window of today through 14 days ahe
   assert.match(schedule, /export function isDateInClientBookingWindow/);
   assert.match(schedule, /export function isStartInClientBookingWindow/);
   assert.match(schedule, /export function isStartInFuture/);
+  assert.match(schedule, /dateInShopTimeZone\(new Date\(\)\.toISOString\(\)\)/);
+  assert.match(slotPicker, /zonedDateTimeToUtcIso/);
 });
 
 test("server actions reject client bookings outside the future two-week window", () => {
@@ -32,11 +34,19 @@ test("server actions reject past starts on admin booking-producing paths", () =>
 
 test("client calendar disables and visibly marks past and beyond-window dates", () => {
   assert.match(slotPicker, /latestClientBookingDate\(\)/);
+  assert.match(slotPicker, /isDateInClientBookingWindow\(cell\.date\)/);
   assert.match(slotPicker, /cell\.date > latestDate/);
   assert.match(slotPicker, /not-allowed/);
   assert.match(slotPicker, /!bg-stone-200/);
   assert.match(slotPicker, /border-dashed/);
   assert.doesNotMatch(slotPicker, /line-through/);
+});
+
+test("client booking can select today's shop date and filters only past times", () => {
+  assert.match(slotPicker, /if \(!date \|\| !isDateInClientBookingWindow\(date\)\) return \[\]/);
+  assert.doesNotMatch(slotPicker, /if \(!date \|\| date < today \|\| date > latestDate\) return \[\]/);
+  assert.match(slotPicker, /zonedDateTimeToUtcIso\(date, s\.time\)/);
+  assert.match(slotPicker, /isStartInFuture\(start\)/);
 });
 
 test("client calendar selected date is green while today keeps shared black ring", () => {

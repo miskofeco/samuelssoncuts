@@ -196,6 +196,7 @@ function UpcomingCard({
         onClose={() => setRescheduling(false)}
         title={t.client.rescheduleTitle}
         description={t.client.rescheduleDescription}
+        className="sm:!max-w-4xl"
       >
         <SlotPicker
           service={service}

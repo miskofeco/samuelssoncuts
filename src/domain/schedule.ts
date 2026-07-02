@@ -1,4 +1,5 @@
 import type { AppState, AvailabilityDay, DayWindow, Service } from "./types";
+import { dateInShopTimeZone } from "../lib/time-zone";
 
 export const services: Service[] = [
   {
@@ -93,11 +94,14 @@ export function windowForTime(time: string): DayWindow {
 export const dayCapacity = 7;
 export const CLIENT_BOOKING_WINDOW_DAYS = 14;
 
+function addDaysToIsoDate(date: string, days: number) {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
 export function addDays(days: number) {
-  const date = new Date();
-  date.setHours(12, 0, 0, 0);
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  return addDaysToIsoDate(todayIso(), days);
 }
 
 export function makeId(prefix: string) {
@@ -255,7 +259,7 @@ export function eachDate(start: string, end: string) {
 }
 
 export function todayIso() {
-  return addDays(0);
+  return dateInShopTimeZone(new Date().toISOString());
 }
 
 export function latestClientBookingDate() {
@@ -271,10 +275,7 @@ export function isStartInFuture(iso: string) {
 }
 
 export function isStartInClientBookingWindow(iso: string) {
-  const start = new Date(iso).getTime();
-  const now = Date.now();
-  const latest = now + CLIENT_BOOKING_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-  return start > now && start <= latest;
+  return isStartInFuture(iso) && isDateInClientBookingWindow(dateInShopTimeZone(iso));
 }
 
 export function getAvailability(

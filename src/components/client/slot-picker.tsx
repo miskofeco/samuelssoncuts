@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { MonthCalendar } from "@/components/shared/month-calendar";
 import {
   clientSlotsForService,
+  isDateInClientBookingWindow,
   isStartInClientBookingWindow,
   isStartInFuture,
   isPreferredClientStart,
@@ -18,6 +19,7 @@ import {
 import type { Appointment, BookingRequest, Service } from "@/domain/types";
 import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
+import { zonedDateTimeToUtcIso } from "@/lib/time-zone";
 
 export type SlotChoice = {
   time: string;
@@ -79,7 +81,7 @@ export function SlotPicker({
 
   // All slots for the chosen date with status + price.
   const slots = useMemo(() => {
-    if (!date || date < today || date > latestDate) return [];
+    if (!date || !isDateInClientBookingWindow(date)) return [];
     return clientSlotsForService(date, service.duration, confirmed)
       .map((time) => {
         const startMin = minutesOf(time);
@@ -94,10 +96,10 @@ export function SlotPicker({
       })
       // Hide slots taken by a confirmed appointment.
       .filter((s) => {
-        const start = new Date(`${date}T${s.time}:00`).toISOString();
+        const start = zonedDateTimeToUtcIso(date, s.time);
         return s.status !== "taken" && isStartInFuture(start) && isStartInClientBookingWindow(start);
       });
-  }, [date, today, latestDate, confirmed, pendingStarts, service.duration, service.price]);
+  }, [date, confirmed, pendingStarts, service.duration, service.price]);
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -107,6 +109,7 @@ export function SlotPicker({
         <MonthCalendar
           onDayClick={(cell) => {
             if (
+              !isDateInClientBookingWindow(cell.date) ||
               cell.date < today ||
               cell.date > latestDate ||
               blockedDates.has(cell.date)
@@ -114,7 +117,10 @@ export function SlotPicker({
             onDateChange(cell.date);
           }}
           dayClassName={(cell) => {
-            const outOfWindow = cell.date < today || cell.date > latestDate;
+            const outOfWindow =
+              !isDateInClientBookingWindow(cell.date) ||
+              cell.date < today ||
+              cell.date > latestDate;
             if (outOfWindow) {
               return "cursor-not-allowed border-dashed !border-stone-400 !bg-stone-200 text-stone-500 dark:!border-stone-700 dark:!bg-stone-800 dark:text-stone-500";
             }
@@ -125,7 +131,7 @@ export function SlotPicker({
             return "";
           }}
           dayNumberClassName={(cell) =>
-            cell.date < today || cell.date > latestDate
+            !isDateInClientBookingWindow(cell.date) || cell.date < today || cell.date > latestDate
               ? "text-stone-400 dark:text-stone-500"
               : ""
           }
