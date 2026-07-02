@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 
 import { ConsentBanner } from "@/components/consent/consent-banner";
@@ -29,6 +30,8 @@ export default async function RootLayout({
 }>) {
   const lang = await getLang();
   const consent = await getConsent();
+  // Per-request CSP nonce set by the proxy; used by the inline theme script.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
     <html
@@ -37,7 +40,7 @@ export default async function RootLayout({
       className="h-full"
     >
       <head>
-        <ThemeScript />
+        <ThemeScript nonce={nonce} />
       </head>
       <body className="flex min-h-full flex-col antialiased">
         <LanguageProvider lang={lang}>

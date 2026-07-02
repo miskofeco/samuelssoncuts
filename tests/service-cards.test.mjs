@@ -8,7 +8,7 @@ const serviceManager = readFileSync("src/components/admin/service-manager.tsx", 
 const actions = readFileSync("src/app/actions.ts", "utf8");
 const dashboardData = readFileSync("src/server/dashboard-data.ts", "utf8");
 const databaseTypes = readFileSync("src/lib/database.types.ts", "utf8");
-const migration = readFileSync("supabase/migrations/0010_service_images.sql", "utf8");
+const migration = readFileSync("supabase/migrations/0010b_service_images.sql", "utf8");
 
 test("client booking uses service cards with public image defaults", () => {
   assert.match(schedule, /export function defaultServiceImage/);

@@ -4,14 +4,34 @@ import { type NextRequest, NextResponse } from "next/server";
 import type { Database } from "@/lib/database.types";
 import { getSupabaseEnv } from "@/lib/env";
 
-export async function updateSession(request: NextRequest) {
+// updateSession refreshes the Supabase auth session on every request and, when
+// provided, threads a per-request CSP nonce through both the forwarded request
+// headers (so Next's SSR applies it to framework/inline scripts) and the
+// response headers (so the browser enforces it).
+export async function updateSession(
+  request: NextRequest,
+  security?: { nonce: string; csp: string },
+) {
   const env = getSupabaseEnv();
 
-  if (!env) {
-    return NextResponse.next({ request });
+  // Forward incoming request headers, adding the nonce + CSP so downstream
+  // rendering can read them (Next extracts the nonce from the CSP header).
+  const requestHeaders = new Headers(request.headers);
+  if (security) {
+    requestHeaders.set("x-nonce", security.nonce);
+    requestHeaders.set("Content-Security-Policy", security.csp);
   }
 
-  let response = NextResponse.next({ request });
+  const applyCsp = (response: NextResponse) => {
+    if (security) response.headers.set("Content-Security-Policy", security.csp);
+    return response;
+  };
+
+  if (!env) {
+    return applyCsp(NextResponse.next({ request: { headers: requestHeaders } }));
+  }
+
+  let response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const supabase = createServerClient<Database>(env.url, env.publishableKey, {
     cookies: {
@@ -20,7 +40,7 @@ export async function updateSession(request: NextRequest) {
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        response = NextResponse.next({ request: { headers: requestHeaders } });
         cookiesToSet.forEach(({ name, value, options }) => {
           response.cookies.set(name, value, options);
         });
@@ -30,5 +50,5 @@ export async function updateSession(request: NextRequest) {
 
   await supabase.auth.getClaims();
 
-  return response;
+  return applyCsp(response);
 }

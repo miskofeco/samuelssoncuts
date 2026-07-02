@@ -158,6 +158,12 @@ export function SlotPicker({
                   <button
                     key={slot.time}
                     type="button"
+                    aria-pressed={active}
+                    aria-label={
+                      slot.status === "requested"
+                        ? `${slot.time} — ${t.client.requestedHint}`
+                        : slot.time
+                    }
                     onClick={() =>
                       onSelectTime({
                         time: slot.time,

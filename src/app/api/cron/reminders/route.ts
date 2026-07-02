@@ -5,7 +5,7 @@
 // Vercel Cron schedule: vercel.json → "0 8 * * *"
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCronSecret } from "@/lib/env";
 import { logEvent, reportError } from "@/lib/observability";
 import { dateInShopTimeZone, timeInShopTimeZone } from "@/lib/time-zone";
@@ -41,7 +41,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: limit.error }, { status: 429 });
   }
 
-  const supabase = await createClient();
+  // The cron runs with no user session, so RLS on `appointments` (which scopes
+  // reads to the row's own client or an admin) would return zero rows for an
+  // anon client. Use the service-role admin client to read across all clients.
+  const supabase = getSupabaseAdminClient();
   const now = new Date();
   const windowStart = new Date(now.getTime() + 23 * 60 * 60 * 1000).toISOString();
   const windowEnd = new Date(now.getTime() + 25 * 60 * 60 * 1000).toISOString();

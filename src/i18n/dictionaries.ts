@@ -14,6 +14,7 @@ const en = {
     sending: "Sending…",
     working: "Working…",
     done: "Done.",
+    somethingWentWrong: "Something went wrong. Please try again.",
     previousMonth: "Previous month",
     nextMonth: "Next month",
     email: "Email",
@@ -27,6 +28,14 @@ const en = {
   metadata: {
     title: "Samuelsson Cuts Scheduler",
     description: "Approval based barbershop planning and reservation system.",
+  },
+  errors: {
+    genericTitle: "Something went wrong",
+    genericBody: "An unexpected error occurred. Please try again.",
+    retry: "Try again",
+    notFoundTitle: "Page not found",
+    notFoundBody: "The page you are looking for doesn't exist or has moved.",
+    goHome: "Go to homepage",
   },
   language: {
     label: "Language",
@@ -97,6 +106,7 @@ const en = {
     clients: "Clients",
     availability: "Availability",
     settings: "Settings",
+    auditLog: "Audit log",
     cookiePreferences: "Cookie preferences",
   },
   windows: {
@@ -244,6 +254,16 @@ const en = {
     clientsTitle: "Clients",
     clientsDescription:
       "Search clients and open a profile to see their full history.",
+    auditEyebrow: "Accountability",
+    auditTitle: "Admin audit log",
+    auditDescription:
+      "A record of privileged actions — approvals, blocks, deletions, and appointment changes.",
+    auditColWhen: "When",
+    auditColActor: "Admin",
+    auditColAction: "Action",
+    auditColTarget: "Target",
+    auditColDetail: "Detail",
+    auditEmpty: "No admin actions recorded yet.",
     availabilityEyebrow: "Availability",
     availabilityTitle: "Vacation & blocked days",
     availabilityDescription:
@@ -502,6 +522,7 @@ const en = {
     registrationRejected: "Registration rejected.",
     clientBlocked: "Client blocked and pending bookings cancelled.",
     clientUnblocked: "Client access restored.",
+    clientDeleted: "Client account permanently deleted.",
     couldNotUpdateClient: "Could not update this client.",
     pickValidDateTime: "Pick a valid date and time before sending.",
     chooseFutureTime: "Choose a time in the future.",
@@ -662,6 +683,7 @@ const sk: Dict = {
     sending: "Odosielam…",
     working: "Pracujem…",
     done: "Hotovo.",
+    somethingWentWrong: "Niečo sa pokazilo. Skúste to znova.",
     previousMonth: "Predchádzajúci mesiac",
     nextMonth: "Nasledujúci mesiac",
     email: "E-mail",
@@ -675,6 +697,14 @@ const sk: Dict = {
   metadata: {
     title: "Samuelsson Cuts Rezervácie",
     description: "Rezervačný a plánovací systém Barbera so schvaľovaním.",
+  },
+  errors: {
+    genericTitle: "Niečo sa pokazilo",
+    genericBody: "Nastala neočakávaná chyba. Skúste to znova.",
+    retry: "Skúsiť znova",
+    notFoundTitle: "Stránka sa nenašla",
+    notFoundBody: "Stránka, ktorú hľadáte, neexistuje alebo bola presunutá.",
+    goHome: "Prejsť na domovskú stránku",
   },
   language: {
     label: "Jazyk",
@@ -743,6 +773,7 @@ const sk: Dict = {
     clients: "Klienti",
     availability: "Dostupnosť",
     settings: "Nastavenia",
+    auditLog: "Záznam auditu",
     cookiePreferences: "Nastavenia cookies",
   },
   windows: {
@@ -882,6 +913,16 @@ const sk: Dict = {
     clientsTitle: "Klienti",
     clientsDescription:
       "Vyhľadajte klientov a otvorte profil, aby ste videli celú históriu.",
+    auditEyebrow: "Zodpovednosť",
+    auditTitle: "Záznam auditu administrátora",
+    auditDescription:
+      "Záznam privilegovaných akcií — schválenia, blokovania, vymazania a zmeny termínov.",
+    auditColWhen: "Kedy",
+    auditColActor: "Administrátor",
+    auditColAction: "Akcia",
+    auditColTarget: "Cieľ",
+    auditColDetail: "Detail",
+    auditEmpty: "Zatiaľ neboli zaznamenané žiadne akcie administrátora.",
     availabilityEyebrow: "Dostupnosť",
     availabilityTitle: "Dovolenka a blokované dni",
     availabilityDescription:
@@ -1128,6 +1169,7 @@ const sk: Dict = {
     registrationRejected: "Registrácia zamietnutá.",
     clientBlocked: "Klient zablokovaný a čakajúce rezervácie zrušené.",
     clientUnblocked: "Prístup klienta obnovený.",
+    clientDeleted: "Účet klienta bol natrvalo odstránený.",
     couldNotUpdateClient: "Nepodarilo sa aktualizovať tohto klienta.",
     pickValidDateTime: "Pred odoslaním vyberte platný dátum a čas.",
     chooseFutureTime: "Vyberte čas v budúcnosti.",

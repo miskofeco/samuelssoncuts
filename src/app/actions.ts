@@ -36,6 +36,7 @@ import {
   isSlotInsideConfiguredBusinessHours,
 } from "@/server/booking-guards";
 import { dashboardPathFor, getCurrentProfile, requireAdmin, requireApprovedClient, requireProfile } from "@/server/auth";
+import { recordAdminAction } from "@/server/audit";
 import { enforceRateLimit } from "@/server/rate-limit";
 import type { ActionResult } from "@/domain/types";
 import { getDict } from "@/i18n/server";
@@ -502,6 +503,8 @@ export async function approveClientAction(clientId: string): Promise<ActionResul
     react: AccountApprovedEmail({ clientName: profile.full_name }),
   });
 
+  await recordAdminAction("client.approve", { targetType: "profile", targetId: clientId });
+
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
   return { ok: true, message: t.feedback.clientApproved };
@@ -535,6 +538,8 @@ export async function rejectClientAction(clientId: string): Promise<ActionResult
     subject: "Update on your Samuelsson Cuts account",
     react: AccountRejectedEmail({ clientName: profile.full_name }),
   });
+
+  await recordAdminAction("client.reject", { targetType: "profile", targetId: clientId });
 
   revalidatePath("/admin", "layout");
   return { ok: true, message: t.feedback.registrationRejected };
@@ -585,6 +590,8 @@ export async function blockClientAction(clientId: string): Promise<ActionResult>
     react: AccountBlockedEmail({ clientName: profile.full_name }),
   });
 
+  await recordAdminAction("client.block", { targetType: "profile", targetId: clientId });
+
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
   return { ok: true, message: t.feedback.clientBlocked };
@@ -605,6 +612,8 @@ export async function unblockClientAction(clientId: string): Promise<ActionResul
     return { ok: false, error: error.message };
   }
 
+  await recordAdminAction("client.unblock", { targetType: "profile", targetId: clientId });
+
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
   return { ok: true, message: t.feedback.clientUnblocked };
@@ -615,8 +624,18 @@ export async function unblockClientAction(clientId: string): Promise<ActionResul
 // The auth.users row is deleted via the Supabase admin API which also removes
 // the profile row (cascade on profiles.id → auth.users.id).
 export async function deleteClientAction(clientId: string): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const t = await getDict();
+
+  // Destructive + service-role powered — cap how fast it can be invoked.
+  const limit = await enforceRateLimit("admin:delete-client", {
+    identity: admin.id,
+    limit: 20,
+    windowSeconds: 10 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
 
   try {
     const adminSupabase = getSupabaseAdminClient();
@@ -694,8 +713,11 @@ export async function deleteClientAction(clientId: string): Promise<ActionResult
     return { ok: false, error: t.feedback.couldNotUpdateClient };
   }
 
+  // target_id is plain text, so the reference survives the row's deletion.
+  await recordAdminAction("client.delete", { targetType: "profile", targetId: clientId });
+
   revalidatePath("/admin", "layout");
-  return { ok: true, message: t.feedback.clientBlocked };
+  return { ok: true, message: t.feedback.clientDeleted };
 }
 
 export async function proposeAppointmentAction(input: unknown): Promise<ActionResult> {
@@ -1119,6 +1141,12 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
     });
   }
 
+  await recordAdminAction("appointment.reschedule", {
+    targetType: "appointment",
+    targetId: parsed.data.appointmentId,
+    detail: { date: parsed.data.date, time: parsed.data.time },
+  });
+
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
   return { ok: true, message: t.feedback.slotFreedProposed };
@@ -1199,6 +1227,11 @@ export async function cancelAppointmentAdminAction(input: unknown): Promise<Acti
       }),
     });
   }
+
+  await recordAdminAction("appointment.cancel", {
+    targetType: "appointment",
+    targetId: parsed.data.appointmentId,
+  });
 
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");

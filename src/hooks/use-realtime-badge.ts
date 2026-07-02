@@ -57,12 +57,20 @@ export function useRealtimeBadge(
       }
     });
 
-    // Realtime subscription for new inserts.
+    // Realtime subscription for new inserts. Apply the SAME filter as the
+    // initial count so live increments and the loaded number use identical
+    // criteria — otherwise any insert (e.g. a request in any status) would bump
+    // a badge that only counts a specific status.
+    const changeFilter =
+      filterColumn && filterValue
+        ? { event: "INSERT" as const, schema: "public", table, filter: `${filterColumn}=eq.${filterValue}` }
+        : { event: "INSERT" as const, schema: "public", table };
+
     const channel = supabase
       .channel(`badge:${table}:${subscriptionId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table },
+        changeFilter,
         () => {
           if (!onPageRef.current) dispatch({ type: "increment" });
         },

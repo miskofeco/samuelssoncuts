@@ -9,14 +9,16 @@ const script = `(() => {
   } catch (_) {}
 })();`;
 
-export function ThemeScript() {
+export function ThemeScript({ nonce }: { nonce?: string }) {
   // On the server emit a runnable script (executes during HTML parse, before
   // paint — preventing the theme flash). On the client emit an inert text/plain
   // tag so React doesn't warn about rendering a <script>; suppressHydrationWarning
   // covers the type attribute mismatch. Per Next.js "preventing flash" guide.
+  // The nonce lets this inline script pass the nonce-based CSP (script-src).
   return (
     <script
       type={typeof window === "undefined" ? "text/javascript" : "text/plain"}
+      nonce={nonce}
       suppressHydrationWarning
       dangerouslySetInnerHTML={{ __html: script }}
     />

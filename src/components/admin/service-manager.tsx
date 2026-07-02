@@ -151,12 +151,15 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
         serviceId = result.id;
       }
 
-      // Upload a pending file if one was picked before saving.
+      // Upload a pending file if one was picked before saving. If the image
+      // upload fails, keep the modal open and surface the error — the service
+      // itself saved fine, but silently closing would hide the failed image.
       if (pendingFile && serviceId) {
         const data = new FormData();
         data.set("file", pendingFile);
         const uploadResult = await uploadServiceImageAction(serviceId, data);
         setUploadFeedback(uploadResult);
+        if (!uploadResult.ok) return;
       }
 
       onClose();

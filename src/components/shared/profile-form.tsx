@@ -39,7 +39,11 @@ export function ProfileForm({
     event.preventDefault();
     setFeedback(null);
     startTransition(async () => {
-      setFeedback(await updateProfileAction({ fullName: name, phone: phoneValue }));
+      try {
+        setFeedback(await updateProfileAction({ fullName: name, phone: phoneValue }));
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
   }
 
@@ -52,18 +56,26 @@ export function ProfileForm({
     data.set("file", file);
     setPhotoFeedback(null);
     startPhotoTransition(async () => {
-      const result = await uploadAvatarAction(data);
-      setPhotoFeedback(result);
-      if (result.ok) router.refresh();
+      try {
+        const result = await uploadAvatarAction(data);
+        setPhotoFeedback(result);
+        if (result.ok) router.refresh();
+      } catch {
+        setPhotoFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
   }
 
   function onRemove() {
     setPhotoFeedback(null);
     startPhotoTransition(async () => {
-      const result = await removeAvatarAction();
-      setPhotoFeedback(result);
-      if (result.ok) router.refresh();
+      try {
+        const result = await removeAvatarAction();
+        setPhotoFeedback(result);
+        if (result.ok) router.refresh();
+      } catch {
+        setPhotoFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
   }
 

@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { AnimationEvent, ReactNode } from "react";
 
 import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
 
 const EXIT_ANIMATION_MS = 320;
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function Modal({
   open,
@@ -25,6 +28,9 @@ export function Modal({
 }) {
   const t = useT();
   const [mounted, setMounted] = useState(open);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const descriptionId = useId();
 
   if (open && !mounted) {
     setMounted(true);
@@ -56,6 +62,42 @@ export function Modal({
     };
   }, [mounted, onClose, open]);
 
+  // Accessibility: move focus into the dialog when it opens, and restore it to
+  // the element that had focus (the trigger) when it closes.
+  useEffect(() => {
+    if (!open || !mounted) return;
+    restoreFocusRef.current = document.activeElement as HTMLElement | null;
+    const panel = panelRef.current;
+    if (panel) {
+      const first = panel.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+      (first ?? panel).focus();
+    }
+    return () => {
+      restoreFocusRef.current?.focus?.();
+    };
+  }, [open, mounted]);
+
+  // Trap Tab within the dialog so keyboard focus can't wander to the page behind.
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Tab") return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+      (el) => el.offsetParent !== null || el === document.activeElement,
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   if (!mounted) return null;
 
   function handleAnimationEnd(event: AnimationEvent<HTMLDivElement>) {
@@ -75,9 +117,13 @@ export function Modal({
         aria-hidden
       />
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        aria-describedby={description ? descriptionId : undefined}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
         onAnimationEnd={handleAnimationEnd}
         className={cn(
           open ? "ss-modal-panel-in" : "ss-modal-panel-out",
@@ -90,7 +136,7 @@ export function Modal({
             <div>
               <h2 className="text-lg font-semibold text-black dark:text-white">{title}</h2>
               {description ? (
-                <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+                <p id={descriptionId} className="mt-1 text-sm text-stone-500 dark:text-stone-400">
                   {description}
                 </p>
               ) : null}

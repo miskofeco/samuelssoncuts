@@ -1,8 +1,8 @@
 import { registerAction } from "@/app/actions";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
-import { Button } from "@/components/shared/button";
 import { Field } from "@/components/shared/form";
+import { SubmitButton } from "@/components/shared/submit-button";
 import { getDict } from "@/i18n/server";
 
 export default async function RegisterPage({
@@ -37,9 +37,9 @@ export default async function RegisterPage({
           type="password"
           placeholder={t.auth.passwordPlaceholder}
         />
-        <Button type="submit" className="w-full">
+        <SubmitButton className="w-full" pendingLabel={t.common.sending}>
           {t.auth.createAccount}
-        </Button>
+        </SubmitButton>
       </form>
       <OAuthButtons />
     </AuthPanel>

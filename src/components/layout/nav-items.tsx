@@ -89,6 +89,12 @@ const CalendarOff = () => (
     <path d="M16 2v4M8 2v4M3 10h18M9 16l6 0" />
   </svg>
 );
+const ClipboardList = () => (
+  <svg {...iconProps}>
+    <rect x="8" y="2" width="8" height="4" rx="1" />
+    <path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3M8 11h8M8 16h5" />
+  </svg>
+);
 const Settings = () => (
   <svg {...iconProps}>
     <circle cx="12" cy="12" r="3" />
@@ -127,6 +133,7 @@ export const adminNav: NavSection[] = [
     items: [
       { href: "/admin/clients", key: "clients", icon: <Users /> },
       { href: "/admin/availability", key: "availability", icon: <CalendarOff /> },
+      { href: "/admin/audit", key: "auditLog", icon: <ClipboardList /> },
       { href: "/admin/settings", key: "settings", icon: <Settings /> },
     ],
   },

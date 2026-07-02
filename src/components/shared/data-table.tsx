@@ -63,10 +63,24 @@ export function DataTable<T>({
             <tr
               key={rowKey(row)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
+              // Keyboard access for clickable rows: focusable + Enter/Space
+              // activate, matching the mouse affordance.
+              role={onRowClick ? "button" : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onRowClick(row);
+                      }
+                    }
+                  : undefined
+              }
               className={cn(
                 "border-b border-black/5 last:border-0 dark:border-white/5",
                 onRowClick &&
-                  "cursor-pointer transition hover:bg-stone-50 dark:hover:bg-stone-800/50",
+                  "cursor-pointer transition hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:hover:bg-stone-800/50 dark:focus-visible:ring-white",
               )}
             >
               {columns.map((column) => (

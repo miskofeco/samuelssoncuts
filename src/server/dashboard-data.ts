@@ -217,15 +217,27 @@ export async function loadBlockedDays(): Promise<{
   return { dates, ranges };
 }
 
+// A PostgREST `.or()` filter is a comma/paren-delimited string, so an email
+// containing those characters would corrupt the expression. Emails are already
+// validated at registration, but we defensively fall back to the safe user_id
+// filter if the address contains any delimiter the filter grammar reserves.
+function notificationOrFilter(profile: AuthProfile): string | null {
+  const email = profile.email;
+  if (!email || /[,()"']/.test(email)) return null;
+  return `user_id.eq.${profile.id},recipient.eq.${email}`;
+}
+
 export async function loadClientNotifications(
   profile: AuthProfile,
   limit = 30,
 ): Promise<Notification[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("notifications")
-    .select("*")
-    .or(`user_id.eq.${profile.id},recipient.eq.${profile.email}`)
+  const orFilter = notificationOrFilter(profile);
+  let query = supabase.from("notifications").select("*");
+  query = orFilter
+    ? query.or(orFilter)
+    : query.eq("user_id", profile.id);
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -295,12 +307,13 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
         .eq("client_id", profile.id)
         .order("starts_at"),
       supabase.from("services").select("*"),
-      supabase
-        .from("notifications")
-        .select("*")
-        .or(`user_id.eq.${profile.id},recipient.eq.${profile.email}`)
-        .order("created_at", { ascending: false })
-        .limit(8),
+      (() => {
+        const orFilter = notificationOrFilter(profile);
+        const base = supabase.from("notifications").select("*");
+        return (orFilter ? base.or(orFilter) : base.eq("user_id", profile.id))
+          .order("created_at", { ascending: false })
+          .limit(8);
+      })(),
     ]);
 
   fail("booking_requests", requestsResult.error);
@@ -621,6 +634,65 @@ export async function loadExportAppointments(
       row.customer_name ??
       "Walk-in",
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Admin audit log
+// ---------------------------------------------------------------------------
+
+export type AuditEntry = {
+  id: string;
+  actor: string;
+  action: string;
+  target: string | null;
+  detail: string | null;
+  createdAt: string;
+};
+
+// Recent admin actions for the audit viewer. Resolves actor_id → name in JS
+// (RLS lets an admin read all profiles). Read is admin-only via the table's RLS
+// policy; this loader is only ever called behind requireAdmin().
+export async function loadAuditLog(limit = 100): Promise<AuditEntry[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("admin_audit_log")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  fail("admin_audit_log", error);
+
+  const actorIds = Array.from(
+    new Set((data ?? []).map((row) => row.actor_id).filter((id): id is string => Boolean(id))),
+  );
+  const actorName = new Map<string, string>();
+  if (actorIds.length > 0) {
+    const { data: actors } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", actorIds);
+    for (const actor of actors ?? []) actorName.set(actor.id, actor.full_name);
+  }
+
+  return (data ?? []).map((row) => {
+    const detail = row.detail && typeof row.detail === "object" && Object.keys(row.detail).length > 0
+      ? JSON.stringify(row.detail)
+      : null;
+    return {
+      id: row.id,
+      actor: (row.actor_id && actorName.get(row.actor_id)) || "—",
+      action: row.action,
+      target: row.target_id ? `${row.target_type ?? ""}:${row.target_id}` : null,
+      detail,
+      createdAt: formatInShopTimeZone(row.created_at, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------

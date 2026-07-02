@@ -46,12 +46,18 @@ export function ApprovalQueue({
   ).length;
 
   function run(action: (id: string) => Promise<ActionResult>, id: string) {
+    if (pendingTransition) return; // guard against overlapping cross-row actions
     setFeedback(null);
     setBusyId(id);
     startTransition(async () => {
-      const result = await action(id);
-      setBusyId(null);
-      setFeedback(result);
+      try {
+        const result = await action(id);
+        setFeedback(result);
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
+      } finally {
+        setBusyId(null);
+      }
     });
   }
 
@@ -135,7 +141,7 @@ export function ApprovalQueue({
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <Button
                     type="button"
-                    disabled={Boolean(busy)}
+                    disabled={pendingTransition}
                     onClick={() => run(approveClientAction, client.id)}
                   >
                     {busy ? t.common.working : t.admin.approve}
@@ -143,10 +149,10 @@ export function ApprovalQueue({
                   <Button
                     type="button"
                     variant="secondary"
-                    disabled={Boolean(busy)}
+                    disabled={pendingTransition}
                     onClick={() => run(rejectClientAction, client.id)}
                   >
-                    {t.admin.reject}
+                    {busy ? t.common.working : t.admin.reject}
                   </Button>
                 </div>
               </div>

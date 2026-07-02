@@ -277,6 +277,28 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["rate_limits"]["Insert"]>;
         Relationships: [];
       };
+      admin_audit_log: {
+        Row: {
+          id: string;
+          actor_id: string | null;
+          action: string;
+          target_type: string | null;
+          target_id: string | null;
+          detail: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          actor_id?: string | null;
+          action: string;
+          target_type?: string | null;
+          target_id?: string | null;
+          detail?: Json;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["admin_audit_log"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -291,6 +313,15 @@ export type Database = {
           p_window_seconds: number;
         };
         Returns: boolean;
+      };
+      record_admin_action: {
+        Args: {
+          p_action: string;
+          p_target_type?: string | null;
+          p_target_id?: string | null;
+          p_detail?: Json;
+        };
+        Returns: string;
       };
       confirmed_appointment_slots: {
         Args: Record<string, never>;

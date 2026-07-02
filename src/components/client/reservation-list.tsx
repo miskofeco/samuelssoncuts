@@ -82,14 +82,22 @@ function ReservationCard({
     if (!liveProposal) return;
     setFeedback(null);
     startTransition(async () => {
-      setFeedback(await respondToProposalAction(liveProposal.id, accepted));
+      try {
+        setFeedback(await respondToProposalAction(liveProposal.id, accepted));
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
   }
 
   function cancel() {
     setFeedback(null);
     startTransition(async () => {
-      setFeedback(await cancelRequestAction(request.id));
+      try {
+        setFeedback(await cancelRequestAction(request.id));
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
   }
 

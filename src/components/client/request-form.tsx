@@ -48,11 +48,15 @@ export function RequestForm({
     if (!date || !slot) return;
     setFeedback(null);
     startTransition(async () => {
-      const result = await createRequestFromClientAction(serviceId, date, slot.time, note);
-      setFeedback(result);
-      if (result.ok) {
-        setNote("");
-        setSlot(null);
+      try {
+        const result = await createRequestFromClientAction(serviceId, date, slot.time, note);
+        setFeedback(result);
+        if (result.ok) {
+          setNote("");
+          setSlot(null);
+        }
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
       }
     });
   }
