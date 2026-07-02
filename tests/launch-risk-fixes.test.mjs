@@ -30,9 +30,15 @@ test("appointment RLS no longer exposes all raw appointment rows to every client
 });
 
 test("client deletion uses Supabase admin API with service-role credentials", () => {
+  const deleteBody = actions.slice(
+    actions.indexOf("export async function deleteClientAction"),
+    actions.indexOf("export async function proposeAppointmentAction"),
+  );
   assert.match(env, /SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(actions, /getSupabaseAdminClient/);
   assert.match(actions, /auth\.admin\.deleteUser\(clientId\)/);
+  assert.match(deleteBody, /from\("appointments"\)[\s\S]*delete\(\)[\s\S]*eq\("client_id", clientId\)/);
+  assert.match(deleteBody, /from\("booking_requests"\)[\s\S]*delete\(\)[\s\S]*eq\("client_id", clientId\)/);
   assert.match(readme, /SUPABASE_SERVICE_ROLE_KEY/);
 });
 

@@ -620,6 +620,69 @@ export async function deleteClientAction(clientId: string): Promise<ActionResult
 
   try {
     const adminSupabase = getSupabaseAdminClient();
+    const { data: requests, error: requestListError } = await adminSupabase
+      .from("booking_requests")
+      .select("id")
+      .eq("client_id", clientId);
+
+    if (requestListError) {
+      await reportError("delete-client", requestListError, { clientId, phase: "list-requests" });
+      return { ok: false, error: requestListError.message };
+    }
+
+    const requestIds = (requests ?? []).map((request) => request.id);
+
+    const { error: appointmentClientDeleteError } = await adminSupabase
+      .from("appointments")
+      .delete()
+      .eq("client_id", clientId);
+
+    if (appointmentClientDeleteError) {
+      await reportError("delete-client", appointmentClientDeleteError, {
+        clientId,
+        phase: "delete-client-appointments",
+      });
+      return { ok: false, error: appointmentClientDeleteError.message };
+    }
+
+    if (requestIds.length > 0) {
+      const { error: appointmentRequestDeleteError } = await adminSupabase
+        .from("appointments")
+        .delete()
+        .in("request_id", requestIds);
+
+      if (appointmentRequestDeleteError) {
+        await reportError("delete-client", appointmentRequestDeleteError, {
+          clientId,
+          phase: "delete-request-appointments",
+        });
+        return { ok: false, error: appointmentRequestDeleteError.message };
+      }
+    }
+
+    const { error: clearSelectedProposalError } = await adminSupabase
+      .from("booking_requests")
+      .update({ selected_proposal_id: null })
+      .eq("client_id", clientId);
+
+    if (clearSelectedProposalError) {
+      await reportError("delete-client", clearSelectedProposalError, {
+        clientId,
+        phase: "clear-selected-proposal",
+      });
+      return { ok: false, error: clearSelectedProposalError.message };
+    }
+
+    const { error: requestDeleteError } = await adminSupabase
+      .from("booking_requests")
+      .delete()
+      .eq("client_id", clientId);
+
+    if (requestDeleteError) {
+      await reportError("delete-client", requestDeleteError, { clientId, phase: "delete-requests" });
+      return { ok: false, error: requestDeleteError.message };
+    }
+
     const { error } = await adminSupabase.auth.admin.deleteUser(clientId);
 
     if (error) {
