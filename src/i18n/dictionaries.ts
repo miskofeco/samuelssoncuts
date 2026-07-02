@@ -591,6 +591,8 @@ const en = {
       rejectAll: "Reject all",
       customize: "Manage preferences",
       policyLink: "Read our Cookie Policy",
+      privacyLink: "Privacy Policy",
+      termsLink: "Terms of Service",
     },
     modal: {
       title: "Cookie preferences",
@@ -667,6 +669,92 @@ const en = {
       contactTitle: "Contact",
       contactBody:
         "If you have questions about this policy or how we use cookies, please contact the barbershop directly and we will be happy to help.",
+    },
+  },
+  legal: {
+    backToApp: "Back",
+    lastUpdatedLabel: "Last updated",
+    privacy: {
+      title: "Privacy Policy",
+      intro:
+        "This Privacy Policy explains what personal data Samuelsson Cuts collects, why we collect it, how we use and protect it, and the rights you have over it. We keep the data we hold to what we genuinely need to run the barbershop and manage your bookings.",
+      sections: [
+        {
+          heading: "Who we are",
+          body: "Samuelsson Cuts operates this booking application as the data controller for the personal data described here. If you have any questions about your data, you can contact the barbershop directly using the details you were given when booking.",
+        },
+        {
+          heading: "Data we collect",
+          body: "When you create an account we collect your name, email address, and phone number. When you book we store your chosen service, requested and confirmed appointment times, and any note you add. We also keep a record of your appointment history, account status, and — if you sign in with Google — the basic profile information that provider shares. Technical data such as your approximate IP address is processed transiently for security and rate limiting.",
+        },
+        {
+          heading: "How we use your data",
+          body: "We use your data to create and secure your account, to take and manage bookings, to contact you about appointments (confirmations, proposed times, reminders, cancellations), and to run the barbershop day to day. We do not sell your personal data, and we do not use it for advertising profiles.",
+        },
+        {
+          heading: "Legal basis",
+          body: "We process booking and account data to perform the service you request and on the basis of our legitimate interest in operating a secure, functioning barbershop. Optional cookies and any marketing messages are used only with your consent, which you can withdraw at any time.",
+        },
+        {
+          heading: "Sharing & processors",
+          body: "We share data only with the service providers that make the app work: our hosting and database provider, our authentication provider, and our transactional email provider. These providers act on our instructions under appropriate agreements and are not permitted to use your data for their own purposes.",
+        },
+        {
+          heading: "Data retention",
+          body: "We keep your account and booking data for as long as your account is active and for a reasonable period afterwards to meet legal, accounting, and dispute-resolution needs. When you ask us to delete your account, we remove your personal data and associated bookings, subject to any records we are legally required to retain.",
+        },
+        {
+          heading: "Your rights",
+          body: "Depending on where you live, you may have the right to access, correct, export, or delete your personal data, to object to or restrict certain processing, and to withdraw consent. You can update your name and phone number from your profile at any time, and you can request account deletion. You also have the right to complain to your local data-protection authority.",
+        },
+        {
+          heading: "Security",
+          body: "Access to your data is protected by authentication and row-level security so that you can only see your own information and only the barber can see the full schedule. Data is encrypted in transit. No system is perfectly secure, but we take reasonable measures to protect your information.",
+        },
+        {
+          heading: "Contact",
+          body: "If you have questions about this Privacy Policy or wish to exercise any of your rights, please contact the barbershop directly and we will be happy to help.",
+        },
+      ],
+    },
+    terms: {
+      title: "Terms of Service",
+      intro:
+        "These Terms of Service govern your use of the Samuelsson Cuts booking application. By creating an account or booking an appointment you agree to these terms. Please read them carefully.",
+      sections: [
+        {
+          heading: "Accounts & approval",
+          body: "To book an appointment you must create an account with accurate details, including a valid phone number, and verify your email. New accounts are reviewed by the barbershop and are only able to book once approved. You are responsible for keeping your login credentials secure and for activity that happens under your account.",
+        },
+        {
+          heading: "Booking & confirmation",
+          body: "When you request a time, that request is not final until the barber confirms it or proposes an alternative time. A slot is only reserved for you once it is confirmed. The barber may propose a different time, which you can accept or decline. Prices shown at the time of booking may include a surcharge for slots that leave a gap in the schedule, as indicated during booking.",
+        },
+        {
+          heading: "Changes, cancellations & no-shows",
+          body: "You may cancel a pending or proposed request from your reservations page. Confirmed appointments are managed by the barbershop — contact them directly to change or cancel a confirmed booking. Please give as much notice as possible. Repeated no-shows or abuse of the booking system may result in your account being blocked.",
+        },
+        {
+          heading: "Acceptable use",
+          body: "You agree to use the app only for genuine bookings and not to submit false information, make spam or automated requests, attempt to access other users' data, or otherwise interfere with the service. We use rate limiting and other safeguards to protect the service and may restrict access that breaches these terms.",
+        },
+        {
+          heading: "Availability",
+          body: "We aim to keep the app available and accurate, but we provide it on an “as is” basis without guarantees of uninterrupted availability. Opening hours, services, prices, and available times may change, and appointments remain subject to the barber's confirmation.",
+        },
+        {
+          heading: "Suspension & termination",
+          body: "The barbershop may block or remove accounts that breach these terms, provide false information, or misuse the service. When an account is removed, pending and upcoming bookings are cancelled. You may request deletion of your own account at any time.",
+        },
+        {
+          heading: "Changes to these terms",
+          body: "We may update these terms from time to time. Material changes will be reflected by the “last updated” date on this page, and continued use of the app after an update means you accept the revised terms.",
+        },
+        {
+          heading: "Contact",
+          body: "If you have questions about these Terms of Service, please contact the barbershop directly.",
+        },
+      ],
     },
   },
 };
@@ -1238,6 +1326,8 @@ const sk: Dict = {
       rejectAll: "Odmietnuť všetky",
       customize: "Spravovať predvoľby",
       policyLink: "Prečítať zásady používania cookies",
+      privacyLink: "Zásady ochrany osobných údajov",
+      termsLink: "Podmienky používania",
     },
     modal: {
       title: "Nastavenia cookies",
@@ -1314,6 +1404,92 @@ const sk: Dict = {
       contactTitle: "Kontakt",
       contactBody:
         "Ak máte otázky k týmto zásadám alebo k tomu, ako používame cookies, kontaktujte priamo Barbera a radi vám pomôžeme.",
+    },
+  },
+  legal: {
+    backToApp: "Späť",
+    lastUpdatedLabel: "Naposledy aktualizované",
+    privacy: {
+      title: "Zásady ochrany osobných údajov",
+      intro:
+        "Tieto zásady ochrany osobných údajov vysvetľujú, aké osobné údaje Samuelsson Cuts zhromažďuje, prečo ich zhromažďujeme, ako ich používame a chránime a aké práva k nim máte. Uchovávame len tie údaje, ktoré skutočne potrebujeme na prevádzku Barbershopu a správu vašich rezervácií.",
+      sections: [
+        {
+          heading: "Kto sme",
+          body: "Samuelsson Cuts prevádzkuje túto rezervačnú aplikáciu ako prevádzkovateľ osobných údajov opísaných v tomto dokumente. Ak máte akékoľvek otázky týkajúce sa vašich údajov, môžete kontaktovať priamo Barbershop pomocou kontaktných údajov, ktoré ste dostali pri rezervácii.",
+        },
+        {
+          heading: "Aké údaje zhromažďujeme",
+          body: "Pri vytvorení účtu zhromažďujeme vaše meno, e-mailovú adresu a telefónne číslo. Pri rezervácii ukladáme vybranú službu, požadované a potvrdené termíny a prípadnú poznámku, ktorú pridáte. Uchovávame tiež históriu vašich termínov, stav účtu a — ak sa prihlásite cez Google — základné profilové informácie, ktoré tento poskytovateľ zdieľa. Technické údaje, ako je približná IP adresa, sa spracúvajú prechodne na účely bezpečnosti a obmedzenia počtu požiadaviek.",
+        },
+        {
+          heading: "Ako vaše údaje používame",
+          body: "Vaše údaje používame na vytvorenie a zabezpečenie vášho účtu, na prijímanie a správu rezervácií, na kontaktovanie ohľadom termínov (potvrdenia, navrhnuté časy, pripomienky, zrušenia) a na každodennú prevádzku Barbershopu. Vaše osobné údaje nepredávame a nepoužívame ich na reklamné profily.",
+        },
+        {
+          heading: "Právny základ",
+          body: "Údaje o rezerváciách a účte spracúvame na účely poskytnutia služby, o ktorú žiadate, a na základe nášho oprávneného záujmu prevádzkovať bezpečný a funkčný Barbershop. Voliteľné cookies a prípadné marketingové správy používame len s vaším súhlasom, ktorý môžete kedykoľvek odvolať.",
+        },
+        {
+          heading: "Zdieľanie a sprostredkovatelia",
+          body: "Údaje zdieľame len s poskytovateľmi služieb, ktorí zabezpečujú fungovanie aplikácie: náš poskytovateľ hostingu a databázy, poskytovateľ autentifikácie a poskytovateľ transakčných e-mailov. Títo poskytovatelia konajú podľa našich pokynov na základe príslušných zmlúv a nesmú vaše údaje používať na vlastné účely.",
+        },
+        {
+          heading: "Uchovávanie údajov",
+          body: "Údaje o vašom účte a rezerváciách uchovávame po dobu, počas ktorej je váš účet aktívny, a primeraný čas potom na splnenie právnych, účtovných a prípadných sporových požiadaviek. Keď nás požiadate o vymazanie účtu, odstránime vaše osobné údaje a súvisiace rezervácie, s výnimkou záznamov, ktoré sme povinní uchovávať zo zákona.",
+        },
+        {
+          heading: "Vaše práva",
+          body: "V závislosti od miesta, kde žijete, môžete mať právo na prístup k svojim osobným údajom, ich opravu, prenos alebo vymazanie, namietať alebo obmedziť určité spracúvanie a odvolať súhlas. Meno a telefónne číslo môžete kedykoľvek upraviť vo svojom profile a môžete požiadať o vymazanie účtu. Máte tiež právo podať sťažnosť miestnemu dozornému úradu pre ochranu údajov.",
+        },
+        {
+          heading: "Bezpečnosť",
+          body: "Prístup k vašim údajom je chránený autentifikáciou a zabezpečením na úrovni riadkov, takže vidíte len svoje vlastné informácie a celý rozvrh vidí iba Barber. Údaje sú šifrované pri prenose. Žiadny systém nie je dokonale bezpečný, no prijímame primerané opatrenia na ochranu vašich informácií.",
+        },
+        {
+          heading: "Kontakt",
+          body: "Ak máte otázky k týmto zásadám ochrany osobných údajov alebo chcete uplatniť niektoré zo svojich práv, kontaktujte priamo Barbershop a radi vám pomôžeme.",
+        },
+      ],
+    },
+    terms: {
+      title: "Podmienky používania",
+      intro:
+        "Tieto podmienky používania upravujú vaše používanie rezervačnej aplikácie Samuelsson Cuts. Vytvorením účtu alebo rezerváciou termínu s týmito podmienkami súhlasíte. Prečítajte si ich, prosím, pozorne.",
+      sections: [
+        {
+          heading: "Účty a schvaľovanie",
+          body: "Na rezerváciu termínu si musíte vytvoriť účet so správnymi údajmi vrátane platného telefónneho čísla a overiť svoj e-mail. Nové účty posudzuje Barbershop a rezervovať je možné až po schválení. Zodpovedáte za bezpečnosť svojich prihlasovacích údajov a za aktivitu, ktorá prebieha pod vaším účtom.",
+        },
+        {
+          heading: "Rezervácia a potvrdenie",
+          body: "Keď požiadate o termín, táto žiadosť nie je konečná, kým ju Barber nepotvrdí alebo nenavrhne iný čas. Termín je pre vás rezervovaný až po jeho potvrdení. Barber môže navrhnúť iný čas, ktorý môžete prijať alebo odmietnuť. Ceny zobrazené pri rezervácii môžu zahŕňať príplatok za termíny, ktoré ponechávajú medzeru v rozvrhu, ako je uvedené počas rezervácie.",
+        },
+        {
+          heading: "Zmeny, zrušenia a neúčasť",
+          body: "Čakajúcu alebo navrhnutú žiadosť môžete zrušiť na stránke svojich rezervácií. Potvrdené termíny spravuje Barbershop — pre zmenu alebo zrušenie potvrdenej rezervácie ho kontaktujte priamo. Oznámte to prosím čo najskôr. Opakovaná neúčasť alebo zneužívanie rezervačného systému môže viesť k zablokovaniu vášho účtu.",
+        },
+        {
+          heading: "Prijateľné používanie",
+          body: "Súhlasíte, že aplikáciu budete používať len na skutočné rezervácie a nebudete zadávať nepravdivé informácie, posielať spam či automatizované požiadavky, pokúšať sa o prístup k údajom iných používateľov ani inak narúšať službu. Na ochranu služby používame obmedzenie počtu požiadaviek a ďalšie opatrenia a môžeme obmedziť prístup, ktorý porušuje tieto podmienky.",
+        },
+        {
+          heading: "Dostupnosť",
+          body: "Snažíme sa udržiavať aplikáciu dostupnú a presnú, no poskytujeme ju „tak, ako je“, bez záruk neprerušovanej dostupnosti. Otváracie hodiny, služby, ceny a dostupné časy sa môžu meniť a termíny naďalej podliehajú potvrdeniu Barbera.",
+        },
+        {
+          heading: "Pozastavenie a ukončenie",
+          body: "Barbershop môže zablokovať alebo odstrániť účty, ktoré porušujú tieto podmienky, uvádzajú nepravdivé informácie alebo zneužívajú službu. Pri odstránení účtu sa čakajúce a nadchádzajúce rezervácie zrušia. O vymazanie vlastného účtu môžete požiadať kedykoľvek.",
+        },
+        {
+          heading: "Zmeny týchto podmienok",
+          body: "Tieto podmienky môžeme priebežne aktualizovať. Podstatné zmeny sa prejavia dátumom „naposledy aktualizované“ na tejto stránke a pokračovaním v používaní aplikácie po aktualizácii vyjadrujete súhlas so zmenenými podmienkami.",
+        },
+        {
+          heading: "Kontakt",
+          body: "Ak máte otázky k týmto podmienkam používania, kontaktujte priamo Barbershop.",
+        },
+      ],
     },
   },
 };

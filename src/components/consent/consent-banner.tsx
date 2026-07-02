@@ -17,9 +17,9 @@ export function ConsentBanner() {
   const pathname = usePathname();
   const { bannerOpen, acceptAll, rejectAll, openPreferences } = useConsent();
 
-  // Hide on the full policy page so it doesn't cover the content the user came
+  // Hide on the legal/policy pages so it doesn't cover the content the user came
   // to read — it reappears when they navigate back.
-  if (pathname === "/cookies") return null;
+  if (pathname === "/cookies" || pathname === "/privacy" || pathname === "/terms") return null;
   if (!bannerOpen) return null;
 
   return (
@@ -38,12 +38,26 @@ export function ConsentBanner() {
             <p className="mt-1.5 text-sm leading-6 text-stone-600 dark:text-stone-400">
               {t.consent.banner.body}
             </p>
-            <Link
-              href="/cookies"
-              className="mt-2 inline-block text-sm font-semibold text-black underline underline-offset-4 dark:text-white"
-            >
-              {t.consent.banner.policyLink}
-            </Link>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold">
+              <Link
+                href="/cookies"
+                className="text-black underline underline-offset-4 dark:text-white"
+              >
+                {t.consent.banner.policyLink}
+              </Link>
+              <Link
+                href="/privacy"
+                className="text-black underline underline-offset-4 dark:text-white"
+              >
+                {t.consent.banner.privacyLink}
+              </Link>
+              <Link
+                href="/terms"
+                className="text-black underline underline-offset-4 dark:text-white"
+              >
+                {t.consent.banner.termsLink}
+              </Link>
+            </div>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
