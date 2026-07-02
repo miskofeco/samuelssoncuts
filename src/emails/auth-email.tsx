@@ -3,6 +3,8 @@
 // and go out through Resend from the barber's domain — instead of Supabase's
 // built-in plain template. English only: the hook has no access to the user's
 // `lang` cookie, matching the other transactional emails.
+import { Link, Text } from "@react-email/components";
+
 import { EmailButton, EmailHeading, EmailLayout, EmailParagraph } from "./layout";
 
 // Supabase EmailOtpType values we tailor copy for; anything else falls back to a
@@ -62,11 +64,13 @@ export function AuthEmail({
       <EmailButton href={confirmUrl} accent={accent}>
         {copy.cta}
       </EmailButton>
-      <EmailParagraph>
+      <Text className="mb-0 mt-5 text-xs leading-relaxed text-stone-500">
         If the button doesn&apos;t work, copy and paste this link into your browser:
         <br />
-        {confirmUrl}
-      </EmailParagraph>
+        <Link href={confirmUrl} className="break-all text-xs text-stone-500 underline">
+          {confirmUrl}
+        </Link>
+      </Text>
     </EmailLayout>
   );
 }

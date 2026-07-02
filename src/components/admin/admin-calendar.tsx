@@ -323,6 +323,7 @@ const START_HOUR = 7;
 const END_HOUR = 21; // exclusive end — 07:00 open, last book 20:00 (runs to ~21:00)
 const GRID_HOURS = END_HOUR - START_HOUR;
 const HOUR_HEIGHT = 64;
+const WEEK_GRID_COLUMNS = "64px repeat(7, minmax(0, 1fr))";
 // Visible height of the scrollable grid body (the full grid is taller and scrolls).
 const VIEWPORT_HEIGHT = 9 * HOUR_HEIGHT;
 
@@ -519,12 +520,32 @@ function WeekGrid({
   const isCurrentWeek = weekMonday === weekStart(today);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollbarWidth, setScrollbarWidth] = useState(0);
 
   // Center the current time in the scroll viewport on first open.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = Math.max(nowOffsetPx() - VIEWPORT_HEIGHT / 2, 0);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const updateScrollbarWidth = () => {
+      setScrollbarWidth(Math.max(0, el.offsetWidth - el.clientWidth));
+    };
+    updateScrollbarWidth();
+
+    const observer =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateScrollbarWidth) : null;
+    observer?.observe(el);
+    window.addEventListener("resize", updateScrollbarWidth);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateScrollbarWidth);
+    };
   }, []);
 
   return (
@@ -568,38 +589,46 @@ function WeekGrid({
       {/* Desktop time grid */}
       <div className="mt-3 hidden overflow-x-auto lg:block">
         <div className="min-w-245">
-          <div className="grid grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-px rounded-t-xl bg-black/5 dark:bg-white/10">
-            <div className="bg-white dark:bg-stone-900" />
-            {days.map((day) => {
-              const isToday = day === today;
-              const isBlocked = blockedDates.has(day);
-              return (
-                <div
-                  key={day}
-                  className={cn(
-                    "px-2 py-3 text-center",
-                    isBlocked
-                      ? "bg-red-50 text-red-900 dark:bg-red-500/15 dark:text-red-100"
-                      : isToday
-                        ? "bg-stone-900 text-white dark:bg-white dark:text-black"
-                        : "bg-white dark:bg-stone-900",
-                  )}
-                >
-                  <p
+          <div
+            className="rounded-t-xl bg-black/5 dark:bg-white/10"
+            style={{ paddingRight: scrollbarWidth }}
+          >
+            <div
+              className="grid gap-px"
+              style={{ gridTemplateColumns: WEEK_GRID_COLUMNS }}
+            >
+              <div className="bg-white dark:bg-stone-900" />
+              {days.map((day) => {
+                const isToday = day === today;
+                const isBlocked = blockedDates.has(day);
+                return (
+                  <div
+                    key={day}
                     className={cn(
-                      "text-sm font-semibold",
+                      "px-2 py-3 text-center",
                       isBlocked
-                        ? "text-red-900 dark:text-red-100"
+                        ? "bg-red-50 text-red-900 dark:bg-red-500/15 dark:text-red-100"
                         : isToday
-                          ? ""
-                          : "text-black dark:text-white",
+                          ? "bg-stone-900 text-white dark:bg-white dark:text-black"
+                          : "bg-white dark:bg-stone-900",
                     )}
                   >
-                    {formatDay(day, locale)}
-                  </p>
-                </div>
-              );
-            })}
+                    <p
+                      className={cn(
+                        "text-sm font-semibold",
+                        isBlocked
+                          ? "text-red-900 dark:text-red-100"
+                          : isToday
+                            ? ""
+                            : "text-black dark:text-white",
+                      )}
+                    >
+                      {formatDay(day, locale)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
           {/* Scrollable time body */}
           <div
@@ -607,7 +636,10 @@ function WeekGrid({
             className="overflow-y-auto"
             style={{ height: VIEWPORT_HEIGHT }}
           >
-            <div className="relative grid grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-px bg-black/5 dark:bg-white/10">
+            <div
+              className="relative grid gap-px bg-black/5 dark:bg-white/10"
+              style={{ gridTemplateColumns: WEEK_GRID_COLUMNS }}
+            >
               {/* Time gutter */}
               <div className="bg-white dark:bg-stone-900">
                 {hours.map((hour) => (

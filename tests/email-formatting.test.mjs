@@ -41,6 +41,17 @@ test("email details card has no top border", () => {
   assert.doesNotMatch(detailsBody, /rounded-xl border border-stone-200/);
 });
 
+test("email layout card has no top status border", () => {
+  const layoutBody = layout.slice(
+    layout.indexOf("export function EmailLayout"),
+    layout.indexOf("export function EmailHeading"),
+  );
+
+  assert.match(layoutBody, /rounded-2xl border border-stone-200 bg-white/);
+  assert.doesNotMatch(layoutBody, /borderTop/);
+  assert.doesNotMatch(layout, /ACCENT_BAR/);
+});
+
 test("confirmed appointment email includes Google and Apple calendar actions", () => {
   const source = readFileSync("src/emails/appointment-confirmed.tsx", "utf8");
   const actions = readFileSync("src/app/actions.ts", "utf8");

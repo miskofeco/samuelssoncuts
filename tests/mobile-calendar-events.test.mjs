@@ -88,3 +88,11 @@ test("week calendar pointer snapping uses rendered grid height", () => {
   assert.match(adminCalendar, /snapOffsetToMinutes\(clientY - rect\.top, renderedHourHeight\)/);
   assert.match(adminCalendar, /snapPointerToMinutes\(event\.clientY, rect\)/);
 });
+
+test("week calendar day headers reserve the body scrollbar gutter", () => {
+  assert.match(adminCalendar, /const WEEK_GRID_COLUMNS = "64px repeat\(7, minmax\(0, 1fr\)\)"/);
+  assert.match(adminCalendar, /const \[scrollbarWidth, setScrollbarWidth\] = useState\(0\)/);
+  assert.match(adminCalendar, /el\.offsetWidth - el\.clientWidth/);
+  assert.match(adminCalendar, /paddingRight: scrollbarWidth/);
+  assert.match(adminCalendar, /gridTemplateColumns: WEEK_GRID_COLUMNS/);
+});

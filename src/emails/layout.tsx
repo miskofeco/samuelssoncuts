@@ -16,17 +16,9 @@ import {
 import type { ReactNode } from "react";
 import { getSiteUrl } from "@/lib/env";
 
-// Semantic accent applied to the card's top bar and (optionally) the CTA button,
-// giving each email an at-a-glance status cue. Colors mirror the app palette:
+// Semantic accent applied to CTA buttons. Colors mirror the app palette:
 // emerald = positive, red = attention/negative, stone = neutral/brand.
 export type EmailAccent = "brand" | "positive" | "danger" | "neutral";
-
-const ACCENT_BAR: Record<EmailAccent, string> = {
-  brand: "#0c0a09", // stone-950 — brand default
-  positive: "#059669", // emerald-600
-  danger: "#dc2626", // red-600
-  neutral: "#a8a29e", // stone-400
-};
 
 const BUTTON_BG: Record<EmailAccent, string> = {
   brand: "#0c0a09",
@@ -37,7 +29,6 @@ const BUTTON_BG: Record<EmailAccent, string> = {
 
 export function EmailLayout({
   preview,
-  accent = "brand",
   children,
 }: {
   preview: string;
@@ -74,11 +65,8 @@ export function EmailLayout({
               </Link>
             </Section>
 
-            {/* Card with a colored status bar on top. */}
-            <Section
-              className="overflow-hidden rounded-2xl border border-stone-200 bg-white"
-              style={{ borderTop: `4px solid ${ACCENT_BAR[accent]}` }}
-            >
+            {/* Card */}
+            <Section className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
               <Section className="px-7 py-8">{children}</Section>
             </Section>
 
