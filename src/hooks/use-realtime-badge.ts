@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -19,6 +19,8 @@ const WATCHED_TABLES = ["booking_requests", "profiles"] as const;
 // throttled so a burst of changes triggers at most one refresh per interval.
 export function useAttentionRefresh() {
   const router = useRouter();
+  const channelId = useId();
+  const channelName = `admin-attention-${channelId.replaceAll(":", "")}`;
   const lastRefresh = useRef(0);
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -43,7 +45,7 @@ export function useAttentionRefresh() {
       }, MIN_INTERVAL_MS - elapsed);
     }
 
-    const channel = supabase.channel("admin-attention");
+    const channel = supabase.channel(channelName);
     for (const table of WATCHED_TABLES) {
       channel.on(
         "postgres_changes",
@@ -57,5 +59,5 @@ export function useAttentionRefresh() {
       if (pending.current) clearTimeout(pending.current);
       supabase.removeChannel(channel);
     };
-  }, [router]);
+  }, [router, channelName]);
 }

@@ -32,6 +32,13 @@ test("sidebar attention refresh cleans up its realtime channel on unmount", () =
   assert.match(realtimeBadge, /removeChannel/);
 });
 
+test("sidebar attention refresh uses a per-mount realtime channel", () => {
+  assert.match(realtimeBadge, /useId/);
+  assert.match(realtimeBadge, /const channelName = `admin-attention-\$\{channelId\.replaceAll\(":", ""\)\}`/);
+  assert.match(realtimeBadge, /supabase\.channel\(channelName\)/);
+  assert.doesNotMatch(realtimeBadge, /supabase\.channel\("admin-attention"\)/);
+});
+
 test("exit animation classes are defined for overlays, modals, and drawers", () => {
   for (const className of [
     "ss-overlay-out",
