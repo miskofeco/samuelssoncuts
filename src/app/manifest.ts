@@ -13,6 +13,7 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#f4f4f5",
     theme_color: "#0c0a09",
     icons: [
+      { src: "/iphone_icon.png", sizes: "600x602", type: "image/png" },
       { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
       { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
       // Same asset flagged maskable so Android can crop it to the platform shape.

@@ -20,7 +20,7 @@ export async function generateMetadata(): Promise<Metadata> {
     manifest: "/manifest.webmanifest",
     icons: {
       icon: "/favicon.png",
-      apple: "/icon-192.png",
+      apple: "/iphone_icon.png",
     },
     appleWebApp: {
       capable: true,
