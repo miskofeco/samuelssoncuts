@@ -93,6 +93,12 @@ export function getBarberEmail(): string {
   return process.env.BARBER_EMAIL ?? "barber@samuelssoncuts.com";
 }
 
+// Secret for the Supabase "Send Email Hook" (Standard Webhooks). Value looks
+// like "v1,whsec_<base64>"; Supabase generates it when you enable the hook.
+export function getSendEmailHookSecret(): string | null {
+  return process.env.SEND_EMAIL_HOOK_SECRET ?? null;
+}
+
 // ─── Cron ─────────────────────────────────────────────────────────────────────
 
 export function getCronSecret(): string | null {
