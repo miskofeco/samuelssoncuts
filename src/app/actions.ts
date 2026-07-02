@@ -38,6 +38,7 @@ import {
 } from "@/server/booking-guards";
 import { dashboardPathFor, getCurrentProfile, requireAdmin, requireApprovedClient, requireProfile } from "@/server/auth";
 import { recordAdminAction } from "@/server/audit";
+import { notificationOrFilter } from "@/server/dashboard-data";
 import { enforceRateLimit } from "@/server/rate-limit";
 import type { ActionResult } from "@/domain/types";
 import { getDict } from "@/i18n/server";
@@ -2391,17 +2392,51 @@ export async function markNotificationsReadAction(): Promise<ActionResult> {
   const profile = await requireApprovedClient();
   const t = await getDict();
   const supabase = await createClient();
+  const orFilter = notificationOrFilter(profile);
 
-  const { error } = await supabase
+  let query = supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
-    .eq("user_id", profile.id)
     .is("read_at", null);
+  query = orFilter ? query.or(orFilter) : query.eq("user_id", profile.id);
+
+  const { error } = await query;
 
   if (error) {
     return { ok: false, error: error.message };
   }
 
   revalidatePath("/client", "layout");
+  revalidatePath("/client/notifications");
+  return { ok: true, message: t.feedback.notificationsMarkedRead };
+}
+
+export async function markNotificationReadAction(notificationId: string): Promise<ActionResult> {
+  const profile = await requireApprovedClient();
+  const t = await getDict();
+  const parsed = z.uuid().safeParse(notificationId);
+
+  if (!parsed.success) {
+    return { ok: false, error: t.feedback.couldNotMarkNotificationsRead };
+  }
+
+  const supabase = await createClient();
+  const orFilter = notificationOrFilter(profile);
+
+  let query = supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", notificationId)
+    .is("read_at", null);
+  query = orFilter ? query.or(orFilter) : query.eq("user_id", profile.id);
+
+  const { error } = await query;
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/client", "layout");
+  revalidatePath("/client/notifications");
   return { ok: true, message: t.feedback.notificationsMarkedRead };
 }

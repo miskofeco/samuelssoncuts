@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { markNotificationsReadAction } from "@/app/actions";
+import { markNotificationReadAction, markNotificationsReadAction } from "@/app/actions";
 import { Button } from "@/components/shared/button";
 import { useT } from "@/i18n/provider";
 
@@ -28,6 +28,29 @@ export function MarkReadButton({ hasUnread }: { hasUnread: boolean }) {
       }
     >
       {t.client.markAllRead}
+    </Button>
+  );
+}
+
+export function MarkNotificationReadButton({ notificationId }: { notificationId: string }) {
+  const t = useT();
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      className="min-h-7 px-2 text-xs"
+      disabled={pending}
+      onClick={() =>
+        startTransition(async () => {
+          await markNotificationReadAction(notificationId);
+          router.refresh();
+        })
+      }
+    >
+      {t.client.markRead}
     </Button>
   );
 }

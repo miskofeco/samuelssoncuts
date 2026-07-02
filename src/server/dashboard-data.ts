@@ -252,7 +252,7 @@ export async function loadBlockedDays(): Promise<{
 // containing those characters would corrupt the expression. Emails are already
 // validated at registration, but we defensively fall back to the safe user_id
 // filter if the address contains any delimiter the filter grammar reserves.
-function notificationOrFilter(profile: AuthProfile): string | null {
+export function notificationOrFilter(profile: AuthProfile): string | null {
   const email = profile.email;
   if (!email || /[,()"']/.test(email)) return null;
   return `user_id.eq.${profile.id},recipient.eq.${email}`;

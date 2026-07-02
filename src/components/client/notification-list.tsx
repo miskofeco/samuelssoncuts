@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { MarkNotificationReadButton } from "@/components/client/mark-read-button";
 import { Card, SectionHeader } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusPill } from "@/components/shared/status-pill";
@@ -47,7 +48,10 @@ export async function NotificationList({
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   {!notification.read ? (
-                    <StatusPill tone="info">{t.client.unreadLabel}</StatusPill>
+                    <>
+                      <StatusPill tone="info">{t.client.unreadLabel}</StatusPill>
+                      <MarkNotificationReadButton notificationId={notification.id} />
+                    </>
                   ) : (
                     <StatusPill tone={notification.channel === "SMS" ? "info" : "neutral"}>
                       {notification.channel}
