@@ -79,6 +79,38 @@ export function getErrorReportWebhookUrl(): string | null {
   return process.env.ERROR_REPORT_WEBHOOK_URL ?? null;
 }
 
+// ─── Web Push ────────────────────────────────────────────────────────────────
+
+export type WebPushEnv = {
+  publicKey: string;
+  privateKey: string;
+  subject: string;
+};
+
+export function getWebPushPublicKey(): string | null {
+  return process.env.WEB_PUSH_PUBLIC_KEY ?? null;
+}
+
+export function getWebPushPrivateKey(): string | null {
+  return process.env.WEB_PUSH_PRIVATE_KEY ?? null;
+}
+
+export function getWebPushSubject(): string | null {
+  return process.env.WEB_PUSH_SUBJECT ?? null;
+}
+
+export function getWebPushEnv(): WebPushEnv | null {
+  const publicKey = getWebPushPublicKey();
+  const privateKey = getWebPushPrivateKey();
+  const subject = getWebPushSubject();
+
+  if (!publicKey || !privateKey || !subject) {
+    return null;
+  }
+
+  return { publicKey, privateKey, subject };
+}
+
 // ─── Email ────────────────────────────────────────────────────────────────────
 
 export function getResendApiKey(): string | null {

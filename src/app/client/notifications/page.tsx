@@ -1,6 +1,7 @@
 import { MarkReadButton } from "@/components/client/mark-read-button";
 import { NotificationList } from "@/components/client/notification-list";
 import { PageHeader } from "@/components/shared/page-header";
+import { PushNotificationCard } from "@/components/shared/push-notification-card";
 import { getDict } from "@/i18n/server";
 import { requireApprovedClient } from "@/server/auth";
 import { loadClientNotifications } from "@/server/dashboard-data";
@@ -20,6 +21,7 @@ export default async function ClientNotificationsPage() {
         title={t.client.notificationsTitle}
         description={t.client.notificationsDescription}
       />
+      <PushNotificationCard />
       <NotificationList
         notifications={notifications}
         title={t.client.allNotifications}

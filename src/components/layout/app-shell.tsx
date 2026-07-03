@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { LanguageToggle } from "@/components/shared/language-toggle";
+import { PushBadgeSync } from "@/components/shared/push-badge-sync";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import type { AuthProfile } from "@/server/auth";
 import type { AttentionCounts } from "@/server/dashboard-data";
@@ -25,9 +26,14 @@ export function AppShell({
   children: ReactNode;
 }) {
   const sections = role === "admin" ? adminNav : clientNav;
+  const badgeCount =
+    role === "admin"
+      ? (attention?.requests ?? 0) + (attention?.approvals ?? 0)
+      : (unreadNotifications ?? 0);
 
   return (
     <div className="desktop-zoom app-surface min-h-screen text-stone-950 dark:text-stone-100">
+      <PushBadgeSync badgeCount={badgeCount} />
       {/* Mobile top bar + drawer */}
       <MobileNav
         sections={sections}

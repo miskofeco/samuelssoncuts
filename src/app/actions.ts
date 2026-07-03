@@ -40,6 +40,7 @@ import { dashboardPathFor, getCurrentProfile, requireAdmin, requireApprovedClien
 import { recordAdminAction } from "@/server/audit";
 import { notificationOrFilter } from "@/server/dashboard-data";
 import { enforceRateLimit } from "@/server/rate-limit";
+import { createAdminNotification, createNotification, createNotifications } from "@/server/notifications";
 import type { ActionResult } from "@/domain/types";
 import { getDict } from "@/i18n/server";
 
@@ -486,11 +487,11 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
   }
 
   const barberEmail = getBarberEmail();
-  await supabase.from("notifications").insert({
-    user_id: profile.id,
+  await createAdminNotification({
     channel: "email",
     recipient: barberEmail,
     subject: `${profile.full_name} requested ${parsed.data.date} at ${parsed.data.time}`,
+    pushUrl: "/admin/requests",
   });
   await sendEmail({
     to: barberEmail,
@@ -507,12 +508,13 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
   // Acknowledge to the client too (they used to hear nothing until confirmation).
   if (profile.email) {
     const clientSubject = "We received your booking request";
-    await supabase.from("notifications").insert({
+    await createNotification(supabase, {
       user_id: profile.id,
       channel: "email",
       recipient: profile.email,
       subject: clientSubject,
       body: `Your request for ${service.name} on ${parsed.data.date} at ${parsed.data.time} was received. The barber will confirm shortly.`,
+      pushUrl: "/client/reservations",
     });
     await sendEmail({
       to: profile.email,
@@ -567,12 +569,13 @@ export async function approveClientAction(clientId: string): Promise<ActionResul
     return { ok: false, error: error?.message ?? t.feedback.couldNotApprove };
   }
 
-  await supabase.from("notifications").insert({
+  await createNotification(supabase, {
     user_id: profile.id,
     channel: "email",
     recipient: profile.email,
     subject: "Your Samuelsson Cuts account was approved",
     body: `Hi ${profile.full_name}, your account is approved. You can now request appointments.`,
+    pushUrl: "/client",
   });
   await sendEmail({
     to: profile.email,
@@ -603,12 +606,13 @@ export async function rejectClientAction(clientId: string): Promise<ActionResult
     return { ok: false, error: error?.message ?? t.feedback.couldNotUpdateClient };
   }
 
-  await supabase.from("notifications").insert({
+  await createNotification(supabase, {
     user_id: profile.id,
     channel: "email",
     recipient: profile.email,
     subject: "Update on your Samuelsson Cuts account",
     body: `Hi ${profile.full_name}, we are unable to approve your account at this time.`,
+    pushUrl: "/client/notifications",
   });
   await sendEmail({
     to: profile.email,
@@ -655,11 +659,12 @@ export async function blockClientAction(clientId: string): Promise<ActionResult>
     .eq("client_id", clientId)
     .gt("starts_at", now);
 
-  await supabase.from("notifications").insert({
+  await createNotification(supabase, {
     user_id: profile.id,
     channel: "email",
     recipient: profile.email,
     subject: "Your Samuelsson Cuts account access has been removed",
+    pushUrl: "/client/notifications",
   });
   await sendEmail({
     to: profile.email,
@@ -890,12 +895,13 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
     .update({ status: "proposed", selected_proposal_id: proposal.id })
     .eq("id", parsed.data.requestId);
 
-  await supabase.from("notifications").insert({
+  await createNotification(supabase, {
     user_id: request.client_id,
     channel: "email",
     recipient: clientProfile?.email ?? "client",
     subject: `Appointment proposed for ${parsed.data.date} at ${parsed.data.time}`,
     body: parsed.data.note ?? null,
+    pushUrl: "/client/reservations",
   });
   if (clientProfile?.email) {
     await sendEmail({
@@ -1031,12 +1037,14 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
       .select("id, email, full_name")
       .in("id", siblingIds);
 
-    await supabase.from("notifications").insert(
+    await createNotifications(
+      supabase,
       siblings.map((s) => ({
         user_id: s.client_id,
         channel: "email" as const,
         recipient: siblingProfiles?.find((p) => p.id === s.client_id)?.email ?? "client",
         subject: "Your requested time was just booked — please pick another",
+        pushUrl: "/client/book",
       })),
     );
 
@@ -1052,11 +1060,12 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
     }
   }
 
-  await supabase.from("notifications").insert({
+  await createNotification(supabase, {
     user_id: request.client_id,
     channel: "email",
     recipient: confirmedClient?.email ?? "client",
     subject: "Your appointment is confirmed",
+    pushUrl: "/client/reservations",
   });
   if (confirmedClient?.email) {
     await sendEmail({
@@ -1212,12 +1221,13 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
     .update({ status: "proposed", selected_proposal_id: proposal.id })
     .eq("id", appointment.request_id);
 
-  await supabase.from("notifications").insert({
+  await createNotification(supabase, {
     user_id: appointment.client_id,
     channel: "email",
     recipient: clientProfile?.email ?? "client",
     subject: `Your appointment was moved — new time proposed for ${parsed.data.date} at ${parsed.data.time}`,
     body: parsed.data.note ?? null,
+    pushUrl: "/client/reservations",
   });
   if (clientProfile?.email) {
     await sendEmail({
@@ -1300,12 +1310,13 @@ export async function cancelAppointmentAdminAction(input: unknown): Promise<Acti
   if (appointment.client_id && clientProfile?.email) {
     const cancelDate = dateInShopTimeZone(appointment.starts_at);
     const cancelTime = timeFromIso(appointment.starts_at);
-    await supabase.from("notifications").insert({
+    await createNotification(supabase, {
       user_id: appointment.client_id,
       channel: "email",
       recipient: clientProfile.email,
       subject: "Your appointment was cancelled",
       body: parsed.data.note ?? null,
+      pushUrl: "/client/reservations",
     });
     await sendEmail({
       to: clientProfile.email,
@@ -1536,11 +1547,11 @@ export async function respondToProposalAction(
     ? `${profile.full_name} confirmed the appointment`
     : `${profile.full_name} declined the proposed time`;
 
-  await supabase.from("notifications").insert({
-    user_id: profile.id,
+  await createAdminNotification({
     channel: "email",
     recipient: barberEmailForResponse,
     subject: respondSubject,
+    pushUrl: "/admin/requests",
   });
   await sendEmail({
     to: barberEmailForResponse,
@@ -2160,11 +2171,11 @@ export async function cancelConfirmedAppointmentAction(
     .eq("id", appointment.service_id)
     .single();
   const cancelSubject = `${profile.full_name} cancelled ${cancelDate} at ${cancelTime}`;
-  await supabase.from("notifications").insert({
-    user_id: profile.id,
+  await createAdminNotification({
     channel: "email",
     recipient: barberEmail,
     subject: cancelSubject,
+    pushUrl: "/admin/calendar",
   });
   await sendEmail({
     to: barberEmail,
@@ -2269,11 +2280,11 @@ export async function requestRescheduleAction(
     .eq("id", appointment.service_id)
     .single();
   const rescheduleSubject = `${profile.full_name} asked to move to ${date} at ${time}`;
-  await supabase.from("notifications").insert({
-    user_id: profile.id,
+  await createAdminNotification({
     channel: "email",
     recipient: barberEmail,
     subject: rescheduleSubject,
+    pushUrl: "/admin/requests",
   });
   await sendEmail({
     to: barberEmail,

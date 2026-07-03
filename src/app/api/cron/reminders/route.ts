@@ -14,6 +14,7 @@ import { sendEmail } from "@/lib/email";
 import { AppointmentReminderEmail } from "@/emails/appointment-reminder";
 import { BarberAgendaEmail, type AgendaItem } from "@/emails/barber-agenda";
 import { enforceRateLimit } from "@/server/rate-limit";
+import { createNotification } from "@/server/notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -106,11 +107,12 @@ export async function GET(request: NextRequest) {
       .update({ reminded_at: new Date().toISOString() })
       .eq("id", appt.id);
 
-    await supabase.from("notifications").insert({
+    await createNotification(supabase, {
       user_id: appt.client_id,
       channel: "email",
       recipient: profile.email,
       subject: `Reminder: your appointment tomorrow at ${time}`,
+      pushUrl: "/client/reservations",
     });
 
     sent += 1;

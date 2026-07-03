@@ -265,6 +265,40 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;
         Relationships: [];
       };
+      push_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          expiration_time: string | null;
+          user_agent: string | null;
+          enabled: boolean;
+          failure_count: number;
+          last_success_at: string | null;
+          last_failure_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          expiration_time?: string | null;
+          user_agent?: string | null;
+          enabled?: boolean;
+          failure_count?: number;
+          last_success_at?: string | null;
+          last_failure_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["push_subscriptions"]["Insert"]>;
+        Relationships: [];
+      };
       rate_limits: {
         Row: {
           key: string;

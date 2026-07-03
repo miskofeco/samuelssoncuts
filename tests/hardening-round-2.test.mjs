@@ -29,7 +29,7 @@ test("admin audit log table, RLS, and definer writer exist", () => {
   assert.match(migrations, /create or replace function public\.record_admin_action/);
   assert.match(migrations, /if not public\.is_admin\(\) then/);
   // No direct INSERT policy — writes only via the definer function.
-  assert.doesNotMatch(migrations, /admin_audit_log[\s\S]*for insert/);
+  assert.doesNotMatch(migrations, /on public\.admin_audit_log for insert/);
 });
 
 test("privileged actions record an audit entry", () => {

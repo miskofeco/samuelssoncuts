@@ -2,6 +2,7 @@ import { ServiceManager } from "@/components/admin/service-manager";
 import { OpenPreferencesCard } from "@/components/consent/open-preferences-button";
 import { PageHeader } from "@/components/shared/page-header";
 import { ProfileForm } from "@/components/shared/profile-form";
+import { PushNotificationCard } from "@/components/shared/push-notification-card";
 import { getDict } from "@/i18n/server";
 import { requireAdmin } from "@/server/auth";
 import { loadAllServices } from "@/server/dashboard-data";
@@ -29,6 +30,7 @@ export default async function AdminSettingsPage() {
             email={profile.email}
             avatarUrl={profile.avatar_url}
           />
+          <PushNotificationCard />
           <OpenPreferencesCard />
         </div>
       </div>
