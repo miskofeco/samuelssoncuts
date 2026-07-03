@@ -80,6 +80,15 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Smooth color transitions when toggling theme. */
 * {
   transition-property: background-color, border-color;

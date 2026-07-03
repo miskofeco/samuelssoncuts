@@ -1,9 +1,7 @@
 import Link from "next/link";
 
-import { Avatar } from "@/components/shared/avatar";
 import { ButtonLink } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
-import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusPill } from "@/components/shared/status-pill";
 import { localeFor } from "@/i18n/config";
@@ -20,6 +18,9 @@ import type {
   ClientProfile,
   Service,
 } from "@/domain/types";
+import { AdminUpcomingAppointments } from "./admin-upcoming-appointments";
+import type { AdminUpcomingAppointmentItem } from "./admin-upcoming-appointments";
+import type { BookedSlotInput } from "./admin-booking-carousel";
 
 export async function AdminOverview({
   clients,
@@ -60,6 +61,49 @@ export async function AdminOverview({
       services,
     ) / 100,
   );
+  const bookedSlots: BookedSlotInput[] = appointments.map((appointment) => ({
+    id: appointment.id,
+    date: appointment.date,
+    time: appointment.time,
+    durationMinutes: serviceById(appointment.serviceId, services).duration,
+  }));
+  const upcomingItems: AdminUpcomingAppointmentItem[] = upcoming.slice(0, 6).map((appointment) => {
+    const client = clients.find((c) => c.id === appointment.clientId);
+    const service = serviceById(appointment.serviceId, services);
+    const request = appointment.requestId ? requestsById.get(appointment.requestId) : undefined;
+    const servicePriceCents = Math.round(service.price * 100);
+    const bookedPriceCents = appointment.requestId
+      ? request?.priceCents ?? servicePriceCents
+      : servicePriceCents;
+    const clientName = client?.name ?? appointment.clientName ?? t.admin.clientFallback;
+
+    return {
+      id: appointment.id,
+      clientName,
+      clientAvatarUrl: client?.avatarUrl,
+      serviceName: service.name,
+      when: `${formatFullDay(appointment.date, locale)} · ${appointment.time}`,
+      calendarItem: {
+        id: appointment.id,
+        title: clientName,
+        service: service.name,
+        servicePrice: service.price,
+        finalPriceCents: bookedPriceCents,
+        surcharge: request?.surcharge,
+        time: appointment.time,
+        date: appointment.date,
+        durationMinutes: service.duration,
+        type: appointment.requestId ? "Confirmed" : "Barber",
+        appointmentId: appointment.id,
+        requestId: appointment.requestId,
+        clientId: appointment.clientId,
+        clientEmail: client?.email,
+        clientPhone: client?.phone,
+        clientAvatarUrl: client?.avatarUrl,
+        outcome: appointment.outcome,
+      },
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -78,40 +122,11 @@ export async function AdminOverview({
             title={t.admin.upcomingAppointments}
             action={<ButtonLink href="/admin/calendar" variant="secondary">{t.admin.viewCalendar}</ButtonLink>}
           />
-          <div className="mt-4 space-y-2">
-            {upcoming.length === 0 ? (
-              <EmptyState title={t.admin.noUpcoming} />
-            ) : (
-              upcoming.slice(0, 6).map((appointment) => {
-                const client = clients.find((c) => c.id === appointment.clientId);
-                return (
-                  <div
-                    key={appointment.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-black/5 px-3 py-2.5 dark:border-white/5"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <Avatar
-                        size="sm"
-                        name={client?.name ?? appointment.clientName ?? t.admin.clientFallback}
-                        src={client?.avatarUrl}
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-black dark:text-white">
-                          {client?.name ?? appointment.clientName ?? t.admin.clientFallback}
-                        </p>
-                        <p className="truncate text-xs text-stone-500 dark:text-stone-400">
-                          {serviceById(appointment.serviceId, services).name}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="shrink-0 text-sm font-medium tabular-nums text-stone-600 dark:text-stone-300">
-                      {formatFullDay(appointment.date, locale)} · {appointment.time}
-                    </p>
-                  </div>
-                );
-              })
-            )}
-          </div>
+          <AdminUpcomingAppointments
+            items={upcomingItems}
+            bookedSlots={bookedSlots}
+            emptyTitle={t.admin.noUpcoming}
+          />
         </Card>
 
         <Card className="rounded-2xl p-5">

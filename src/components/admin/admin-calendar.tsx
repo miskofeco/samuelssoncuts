@@ -43,6 +43,8 @@ export type CalendarItem = {
   title: string;
   service: string;
   servicePrice: number;
+  finalPriceCents: number;
+  surcharge?: boolean;
   time: string;
   date: string;
   durationMinutes: number;
@@ -96,6 +98,7 @@ export function AdminCalendar({
 
   const itemsByDate = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
+    const requestsById = new Map(requests.map((request) => [request.id, request]));
     const push = (date: string, item: CalendarItem) => {
       const list = map.get(date) ?? [];
       list.push(item);
@@ -105,11 +108,16 @@ export function AdminCalendar({
     for (const appointment of appointments) {
       const service = serviceById(appointment.serviceId, services);
       const client = clients.find((c) => c.id === appointment.clientId);
+      const bookedPriceCents = appointment.requestId
+        ? requestsById.get(appointment.requestId)?.priceCents ?? Math.round(service.price * 100)
+        : Math.round(service.price * 100);
       push(appointment.date, {
         id: appointment.id,
         title: client?.name ?? appointment.clientName ?? t.admin.clientFallback,
         service: service.name,
         servicePrice: service.price,
+        finalPriceCents: bookedPriceCents,
+        surcharge: appointment.requestId ? requestsById.get(appointment.requestId)?.surcharge : undefined,
         time: appointment.time,
         date: appointment.date,
         durationMinutes: service.duration,
@@ -128,11 +136,14 @@ export function AdminCalendar({
       const request = requests.find((r) => r.id === proposal.requestId);
       const client = clients.find((c) => c.id === request?.clientId);
       const service = request ? serviceById(request.serviceId, services) : undefined;
+      const bookedPriceCents = request?.priceCents ?? Math.round((service?.price ?? 0) * 100);
       push(proposal.date, {
         id: proposal.id,
         title: client?.name ?? t.admin.clientFallback,
         service: service?.name ?? t.admin.proposalFallback,
         servicePrice: service?.price ?? 0,
+        finalPriceCents: bookedPriceCents,
+        surcharge: request?.surcharge,
         time: proposal.time,
         date: proposal.date,
         durationMinutes: service?.duration ?? 30,

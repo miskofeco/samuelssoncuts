@@ -1,4 +1,5 @@
 import { AdminAnalytics } from "@/components/admin/admin-analytics";
+import { AdminBookingStrip } from "@/components/admin/admin-booking-strip";
 import { AdminOverview } from "@/components/admin/admin-overview";
 import { PageHeader } from "@/components/shared/page-header";
 import { getDict } from "@/i18n/server";
@@ -18,6 +19,12 @@ export default async function AdminHomePage() {
         eyebrow={t.admin.dashboardEyebrow}
         title={t.admin.dashboardTitle}
         description={t.admin.dashboardDescription}
+      />
+      <AdminBookingStrip
+        clients={data.clients}
+        requests={data.requests}
+        appointments={data.appointments}
+        services={data.services}
       />
       <AdminOverview
         clients={data.clients}

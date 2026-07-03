@@ -100,6 +100,7 @@ function DetailBody({
   const isWalkIn = !item.clientId;
   const isConfirmed = item.type === "Confirmed";
   const endTime = addMinutesToTime(item.time, item.durationMinutes);
+  const finalPrice = Math.round(item.finalPriceCents / 100);
 
   const timeOptions = useMemo(
     () =>
@@ -175,7 +176,6 @@ function DetailBody({
               <p className="text-lg font-semibold text-black dark:text-white">{item.title}</p>
               <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
                 {item.service} · {item.durationMinutes} {t.admin.minutesShort}
-                {item.servicePrice ? ` · ${item.servicePrice} €` : ""}
               </p>
             </div>
           </div>
@@ -200,6 +200,20 @@ function DetailBody({
           )}
           {item.note ? <Row label={t.admin.note}>{item.note}</Row> : null}
         </dl>
+
+        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-500/25 dark:bg-emerald-500/10">
+          <p className="text-xs font-medium uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
+            {t.admin.finalPrice}
+          </p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-950 dark:text-emerald-50">
+            {finalPrice} €
+          </p>
+          {item.surcharge ? (
+            <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+              {t.admin.surcharge}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {mode === "view" ? (
