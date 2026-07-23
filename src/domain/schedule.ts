@@ -424,6 +424,7 @@ export function clientSlotsForService(
   if (closes <= opens) return [];
 
   const starts = new Set<number>();
+  starts.add(opens);
 
   for (let start = OPEN_MINUTES; start <= LAST_BOOK_MINUTES; start += 60) {
     starts.add(start);
@@ -477,9 +478,12 @@ export function isPreferredClientStart(
   startMin: number,
   durationMin: number,
   confirmed: SlotAppt[],
+  businessHours?: SlotBusinessHoursDay[],
 ): boolean {
+  const dayHours = businessHoursForDate(date, businessHours);
+  const openingMin = dayHours ? minutesOf(dayHours.opensAt) : OPEN_MINUTES;
   const dayBookings = confirmed.filter((booking) => booking.date === date);
-  if (dayBookings.length === 0) return startMin === OPEN_MINUTES;
+  if (dayBookings.length === 0) return startMin === openingMin;
 
   return dayBookings.some((booking) => {
     const bookingStart = minutesOf(booking.time);
@@ -499,11 +503,13 @@ export function isVipStart(time: string): boolean {
 }
 
 export function priceKindForSlot(preferred: boolean, options: SlotPricingOptions = {}): SlotPriceKind {
+  if (preferred) return "base";
   if (options.startsAt && isVipStart(options.startsAt)) return "vip";
-  return preferred ? "base" : "gap";
+  return "gap";
 }
 
-// Whole-euro price; VIP starts (17:00+) override gap pricing.
+// Whole-euro price; best-price starts keep base pricing, then VIP starts
+// (17:00+) override gap pricing.
 export function priceForSlot(
   basePrice: number,
   preferred: boolean,

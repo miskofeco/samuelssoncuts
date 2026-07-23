@@ -99,7 +99,7 @@ export function SlotPicker({
       .map((time) => {
         const startMin = minutesOf(time);
         const status = slotStatusFor(date, startMin, service.duration, confirmed, pendingStarts);
-        const preferred = isPreferredClientStart(date, startMin, service.duration, confirmed);
+        const preferred = isPreferredClientStart(date, startMin, service.duration, confirmed, businessHours);
         const priceKind = priceKindForSlot(preferred, { startsAt: time });
         return {
           time,

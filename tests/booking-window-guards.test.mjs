@@ -102,13 +102,23 @@ test("best-price client slots use green borders", () => {
   assert.match(schedule, /startMin \+ durationMin === bookingStart/);
   assert.match(schedule, /startMin === bookingEnd/);
   assert.match(slotPicker, /slot\.preferred/);
-  assert.match(slotPicker, /isPreferredClientStart\(date, startMin, service\.duration, confirmed\)/);
+  assert.match(slotPicker, /isPreferredClientStart\(date, startMin, service\.duration, confirmed, businessHours\)/);
   assert.match(
     actions,
-    /isPreferredClientStart\(\s*parsed\.data\.date,\s*startMin,\s*service\.duration_minutes,\s*confirmedForDay,\s*\)/,
+    /isPreferredClientStart\(\s*parsed\.data\.date,\s*startMin,\s*service\.duration_minutes,\s*confirmedForDay,\s*businessHours,\s*\)/,
   );
   assert.match(slotPicker, /border-emerald-500/);
   assert.match(slotPicker, /bg-emerald-50/);
+});
+
+test("first client booking of the day uses configured opening time as best price", () => {
+  assert.match(
+    schedule,
+    /isPreferredClientStart\(\s*date: string,\s*startMin: number,\s*durationMin: number,\s*confirmed: SlotAppt\[],\s*businessHours\?: SlotBusinessHoursDay\[]/,
+  );
+  assert.match(schedule, /const dayHours = businessHoursForDate\(date, businessHours\)/);
+  assert.match(schedule, /const openingMin = dayHours \? minutesOf\(dayHours\.opensAt\) : OPEN_MINUTES/);
+  assert.match(schedule, /if \(dayBookings\.length === 0\) return startMin === openingMin/);
 });
 
 test("admin add booking date input cannot submit past starts from the UI", () => {

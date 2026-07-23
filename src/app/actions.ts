@@ -480,6 +480,7 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
     startMin,
     service.duration_minutes,
     confirmedForDay,
+    businessHours,
   );
   const pricingSettings = await loadPricingSettings();
   const basePrice = Math.round(service.price_cents / 100);

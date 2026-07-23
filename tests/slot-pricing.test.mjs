@@ -19,6 +19,12 @@ test("VIP pricing starts at 17:00, defaults to 20 percent, and overrides gap pri
   assert.match(actions, /priceForSlot\(basePrice, preferred,[\s\S]*startsAt: parsed\.data\.time/);
 });
 
+test("best-price starts stay base price even when they are after VIP start", () => {
+  assert.match(schedule, /export function priceKindForSlot/);
+  assert.match(schedule, /if \(preferred\) return "base"/);
+  assert.match(schedule, /if \(options\.startsAt && isVipStart\(options\.startsAt\)\) return "vip"/);
+});
+
 test("barber can manage pricing surcharges from admin settings", () => {
   const settingsPage = readFileSync("src/app/admin/settings/page.tsx", "utf8");
   assert.equal(existsSync("supabase/migrations/0023_pricing_settings.sql"), true);
