@@ -46,9 +46,11 @@ export default async function ReservationsPage() {
       <UpcomingAppointments
         appointments={data.upcomingAppointments}
         services={data.services}
+        pricingSettings={bookingData.pricingSettings}
         bookedSlots={bookingData.appointments}
         pendingRequests={bookingData.pendingRequests}
         blockedDates={bookingData.blockedDates}
+        businessHours={bookingData.businessHours}
       />
       <ReservationsView
         requests={data.requests}

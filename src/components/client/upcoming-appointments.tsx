@@ -17,7 +17,9 @@ import type {
   ActionResult,
   Appointment,
   BookingRequest,
+  BusinessHoursDay,
   ClientAppointment,
+  PricingSettings,
   Service,
 } from "@/domain/types";
 import { localeFor } from "@/i18n/config";
@@ -30,16 +32,20 @@ import { SlotPicker, type SlotChoice } from "./slot-picker";
 export function UpcomingAppointments({
   appointments,
   services,
+  pricingSettings,
   bookedSlots,
   pendingRequests,
   blockedDates,
+  businessHours,
 }: {
   appointments: ClientAppointment[];
   services: Service[];
+  pricingSettings: PricingSettings;
   // Confirmed slots (from confirmed_appointment_slots) shaped for the picker.
   bookedSlots: Appointment[];
   pendingRequests: BookingRequest[];
   blockedDates: ReadonlySet<string>;
+  businessHours: BusinessHoursDay[];
 }) {
   const t = useT();
   if (appointments.length === 0) return null;
@@ -53,9 +59,11 @@ export function UpcomingAppointments({
             key={appointment.id}
             appointment={appointment}
             services={services}
+            pricingSettings={pricingSettings}
             bookedSlots={bookedSlots}
             pendingRequests={pendingRequests}
             blockedDates={blockedDates}
+            businessHours={businessHours}
           />
         ))}
       </div>
@@ -66,15 +74,19 @@ export function UpcomingAppointments({
 function UpcomingCard({
   appointment,
   services,
+  pricingSettings,
   bookedSlots,
   pendingRequests,
   blockedDates,
+  businessHours,
 }: {
   appointment: ClientAppointment;
   services: Service[];
+  pricingSettings: PricingSettings;
   bookedSlots: Appointment[];
   pendingRequests: BookingRequest[];
   blockedDates: ReadonlySet<string>;
+  businessHours: BusinessHoursDay[];
 }) {
   const t = useT();
   const locale = localeFor(useLang());
@@ -201,6 +213,7 @@ function UpcomingCard({
         <SlotPicker
           service={service}
           services={services}
+          pricingSettings={pricingSettings}
           date={date}
           onDateChange={(next) => {
             setDate(next);
@@ -211,6 +224,7 @@ function UpcomingCard({
           appointments={bookedSlots}
           pendingRequests={pendingRequests}
           blockedDates={blockedDates}
+          businessHours={businessHours}
         />
         <div className="mt-4 flex justify-end">
           <Button

@@ -1,4 +1,11 @@
-import type { AppState, AvailabilityDay, DayWindow, Service } from "./types";
+import type {
+  AppState,
+  AvailabilityDay,
+  BusinessHoursDay,
+  DayWindow,
+  PricingSettings,
+  Service,
+} from "./types";
 import { dateInShopTimeZone } from "../lib/time-zone";
 
 export const services: Service[] = [
@@ -51,8 +58,18 @@ export const OPEN_MINUTES = 7 * 60; // 07:00
 const LAST_BOOK_MINUTES = 20 * 60; // 20:00 — last bookable start
 export const CLOSE_MINUTES = 21 * 60; // 21:00 — shop closes (a visit may run to here)
 
-// 10% surcharge for a slot that leaves a gap (doesn't extend the opening block).
-export const GAP_SURCHARGE = 0.1;
+// Default surcharges, stored as whole percentages so barber settings can use
+// the same values the UI displays.
+export const DEFAULT_GAP_SURCHARGE_PERCENT = 10;
+export const DEFAULT_VIP_SURCHARGE_PERCENT = 20;
+export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
+  gapSurchargePercent: DEFAULT_GAP_SURCHARGE_PERCENT,
+  vipSurchargePercent: DEFAULT_VIP_SURCHARGE_PERCENT,
+};
+export const VIP_START_MINUTES = 17 * 60;
+
+// Kept for legacy callers/tests that still reason about the old decimal value.
+export const GAP_SURCHARGE = DEFAULT_GAP_SURCHARGE_PERCENT / 100;
 
 export const workingHours = buildSlots(OPEN_MINUTES, LAST_BOOK_MINUTES, 30);
 
@@ -354,6 +371,28 @@ export function overlaps(startA: number, durA: number, startB: number, durB: num
 }
 
 type SlotAppt = { date: string; time: string; durationMinutes: number };
+export type SlotBusinessHoursDay = Pick<
+  BusinessHoursDay,
+  "weekday" | "opensAt" | "closesAt" | "closed"
+>;
+
+function weekdayForDate(date: string) {
+  return new Date(`${date}T12:00:00`).getDay();
+}
+
+export function businessHoursForDate(
+  date: string,
+  businessHours?: SlotBusinessHoursDay[],
+): SlotBusinessHoursDay | undefined {
+  return businessHours?.find((day) => day.weekday === weekdayForDate(date));
+}
+
+export function isDateClosedForBusinessHours(
+  date: string,
+  businessHours?: SlotBusinessHoursDay[],
+): boolean {
+  return businessHoursForDate(date, businessHours)?.closed === true;
+}
 
 // A slot is taken only by CONFIRMED appointments that overlap it. Pending
 // requests never block (concurrency is intentional until the barber confirms).
@@ -375,7 +414,15 @@ export function clientSlotsForService(
   date: string,
   durationMin: number,
   confirmed: SlotAppt[],
+  businessHours?: SlotBusinessHoursDay[],
 ): string[] {
+  const dayHours = businessHoursForDate(date, businessHours);
+  if (dayHours?.closed) return [];
+
+  const opens = dayHours ? minutesOf(dayHours.opensAt) : OPEN_MINUTES;
+  const closes = dayHours ? minutesOf(dayHours.closesAt) : CLOSE_MINUTES;
+  if (closes <= opens) return [];
+
   const starts = new Set<number>();
 
   for (let start = OPEN_MINUTES; start <= LAST_BOOK_MINUTES; start += 60) {
@@ -394,7 +441,9 @@ export function clientSlotsForService(
     .filter(
       (start) =>
         start >= OPEN_MINUTES &&
+        start >= opens &&
         start <= LAST_BOOK_MINUTES &&
+        start + durationMin <= closes &&
         start + durationMin <= CLOSE_MINUTES &&
         isSlotFree(date, start, durationMin, confirmed),
     )
@@ -439,9 +488,35 @@ export function isPreferredClientStart(
   });
 }
 
-// Whole-euro price; +10% (rounded) when the slot isn't preferred.
-export function priceForSlot(basePrice: number, preferred: boolean): number {
-  return preferred ? basePrice : Math.round(basePrice * (1 + GAP_SURCHARGE));
+export type SlotPricingOptions = Partial<PricingSettings> & {
+  startsAt?: string;
+};
+
+export type SlotPriceKind = "base" | "gap" | "vip";
+
+export function isVipStart(time: string): boolean {
+  return minutesOf(time) >= VIP_START_MINUTES;
+}
+
+export function priceKindForSlot(preferred: boolean, options: SlotPricingOptions = {}): SlotPriceKind {
+  if (options.startsAt && isVipStart(options.startsAt)) return "vip";
+  return preferred ? "base" : "gap";
+}
+
+// Whole-euro price; VIP starts (17:00+) override gap pricing.
+export function priceForSlot(
+  basePrice: number,
+  preferred: boolean,
+  options: SlotPricingOptions = {},
+): number {
+  const kind = priceKindForSlot(preferred, options);
+  if (kind === "base") return basePrice;
+
+  const surchargePercent =
+    kind === "vip"
+      ? options.vipSurchargePercent ?? DEFAULT_VIP_SURCHARGE_PERCENT
+      : options.gapSurchargePercent ?? DEFAULT_GAP_SURCHARGE_PERCENT;
+  return Math.round(basePrice * (1 + surchargePercent / 100));
 }
 
 export type SlotStatus = "taken" | "requested" | "free";

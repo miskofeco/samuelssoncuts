@@ -77,6 +77,10 @@ function ReservationCard({
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
   const meta = statusMeta(t)[request.status];
   const liveProposal = proposal && proposal.status === "sent" ? proposal : undefined;
+  const pendingExactSlot =
+    request.status === "pending" && Boolean(request.requestedDate && request.requestedTime);
+  const confirmedExactSlot =
+    request.status === "confirmed" && Boolean(request.requestedDate && request.requestedTime);
 
   function respond(accepted: boolean) {
     if (!liveProposal) return;
@@ -113,14 +117,14 @@ function ReservationCard({
         <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
       </div>
 
-      {/* New flow: the client picked an exact slot, awaiting barber confirmation. */}
-      {request.requestedDate && request.requestedTime ? (
+      {pendingExactSlot ? (
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
             {t.client.awaitingConfirmation}
           </p>
           <p className="mt-0.5 font-semibold text-amber-950 dark:text-amber-200">
-            {formatFullDay(request.requestedDate, locale)} · {request.requestedTime}
+            {formatFullDay(request.requestedDate as string, locale)} ·{" "}
+            {request.requestedTime as string}
             {typeof request.priceCents === "number"
               ? ` · ${Math.round(request.priceCents / 100)} €`
               : ""}
@@ -173,9 +177,12 @@ function ReservationCard({
         </div>
       ) : null}
 
-      {request.status === "confirmed" && proposal ? (
+      {request.status === "confirmed" && (proposal || confirmedExactSlot) ? (
         <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-300">
-          {t.client.bookedFor(formatFullDay(proposal.date, locale), proposal.time)}
+          {t.client.bookedFor(
+            formatFullDay(proposal ? proposal.date : request.requestedDate as string, locale),
+            proposal ? proposal.time : request.requestedTime as string,
+          )}
         </p>
       ) : null}
 

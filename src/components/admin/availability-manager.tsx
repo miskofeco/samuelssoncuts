@@ -131,7 +131,7 @@ export function AvailabilityManager({
               cell.date < today
                 ? "cursor-not-allowed border-dashed !border-stone-400 !bg-stone-200 dark:!border-stone-700 dark:!bg-stone-800"
                 : blockedDates.has(cell.date)
-                  ? "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15"
+                  ? "border-2 border-red-300 bg-red-50 dark:border-red-500/60 dark:bg-red-500/15"
                 : ""
             }
             dayNumberClassName={(cell) =>
@@ -145,11 +145,10 @@ export function AvailabilityManager({
               blockedDates.has(cell.date) ? (
                 <span
                   aria-label={t.admin.off}
-                  className="mt-1 block h-2 rounded-full bg-red-200 px-0 py-0 text-center text-[0.6rem] font-semibold uppercase sm:h-auto sm:rounded sm:px-1 sm:py-0.5 dark:bg-red-500/30"
+                  className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 dark:bg-red-500/20 dark:text-red-200"
                 >
-                  <span className="sr-only sm:not-sr-only text-red-700 dark:text-red-300">
-                    {t.admin.off}
-                  </span>
+                  <span aria-hidden="true">x</span>
+                  <span className="sr-only">{t.admin.off}</span>
                 </span>
               ) : null
             }

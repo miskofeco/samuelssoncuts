@@ -9,8 +9,6 @@ export type MetricBarChartItem = {
   ariaLabel: string;
 };
 
-const fills = ["#ff8a1f", "#ffad4f", "#ffc06f", "#ffd5aa"];
-
 export function MetricBarChart({
   items,
   className,
@@ -25,7 +23,7 @@ export function MetricBarChart({
   return (
     <div
       className={cn(
-        "grid h-full grid-cols-[2rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 sm:gap-x-4",
+        "grid h-full grid-cols-[2rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 text-stone-950 sm:gap-x-4 dark:text-white",
         className,
       )}
     >
@@ -39,7 +37,7 @@ export function MetricBarChart({
         className="col-start-2 row-start-1 grid min-h-0 min-w-0 gap-3 sm:gap-4"
         style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
       >
-        {items.map((item, index) => {
+        {items.map((item) => {
           const height =
             scaleMax > 0 ? Math.max((item.value / scaleMax) * 100, item.value > 0 ? 3 : 0) : 0;
 
@@ -51,10 +49,9 @@ export function MetricBarChart({
               aria-label={item.ariaLabel}
             >
               <div
-                className="absolute bottom-0 left-0 right-0 rounded-lg"
+                className="absolute bottom-0 left-0 right-0 rounded-lg bg-current"
                 style={{
                   height: `${height}%`,
-                  backgroundColor: fills[index % fills.length],
                 }}
               />
             </div>

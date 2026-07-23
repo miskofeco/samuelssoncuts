@@ -1,4 +1,4 @@
-import { eachDate } from "@/domain/schedule";
+import { DEFAULT_PRICING_SETTINGS, eachDate } from "@/domain/schedule";
 import type {
   Appointment,
   BookingRequest,
@@ -6,6 +6,7 @@ import type {
   ClientAppointment,
   ClientProfile,
   Notification,
+  PricingSettings,
   Proposal,
   Service,
 } from "@/domain/types";
@@ -18,6 +19,10 @@ type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type AppointmentRow = Database["public"]["Tables"]["appointments"]["Row"];
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
+type PricingSettingsRow = Pick<
+  Database["public"]["Tables"]["pricing_settings"]["Row"],
+  "gap_surcharge_percent" | "vip_surcharge_percent"
+>;
 type BusySlotRow = Database["public"]["Functions"]["confirmed_appointment_slots"]["Returns"][number];
 
 // booking_requests with embedded preferences + proposals (FK-hinted).
@@ -68,6 +73,13 @@ export function mapServiceRow(row: ServiceRow): Service {
     duration: row.duration_minutes,
     price: Math.round(row.price_cents / 100),
     imageUrl: row.image_url,
+  };
+}
+
+function mapPricingSettingsRow(row: PricingSettingsRow): PricingSettings {
+  return {
+    gapSurchargePercent: row.gap_surcharge_percent,
+    vipSurchargePercent: row.vip_surcharge_percent,
   };
 }
 
@@ -217,6 +229,23 @@ export async function loadAllServices(): Promise<
     description: row.description,
     imageUrl: row.image_url,
   }));
+}
+
+export async function loadPricingSettings(barberId?: string): Promise<PricingSettings> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("pricing_settings")
+    .select("gap_surcharge_percent, vip_surcharge_percent")
+    .limit(1);
+
+  if (barberId) {
+    query = query.eq("barber_id", barberId);
+  }
+
+  const { data, error } = await query;
+  if (error || !data || data.length === 0) return DEFAULT_PRICING_SETTINGS;
+
+  return mapPricingSettingsRow(data[0]);
 }
 
 /** Blocked calendar days expanded from blocked_times ranges. */
@@ -463,6 +492,8 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
 /** Services + blocked days + booked/pending context for the booking picker. */
 export async function loadBookingData(): Promise<{
   services: Service[];
+  pricingSettings: PricingSettings;
+  businessHours: BusinessHoursDay[];
   blockedDates: Set<string>;
   appointments: Appointment[];
   proposals: Proposal[];
@@ -471,7 +502,7 @@ export async function loadBookingData(): Promise<{
   pendingRequests: BookingRequest[];
 }> {
   const supabase = await createClient();
-  const [servicesResult, appointmentsResult, requestsResult, blocked] =
+  const [servicesResult, appointmentsResult, requestsResult, blocked, pricingSettings, businessHours] =
     await Promise.all([
       supabase.from("services").select("*").eq("active", true).order("duration_minutes"),
       supabase.rpc("confirmed_appointment_slots"),
@@ -480,6 +511,8 @@ export async function loadBookingData(): Promise<{
         .select(REQUEST_SELECT)
         .order("created_at", { ascending: false }),
       loadBlockedDays(),
+      loadPricingSettings(),
+      loadBusinessHours(),
     ]);
 
   fail("services", servicesResult.error);
@@ -490,6 +523,8 @@ export async function loadBookingData(): Promise<{
   const requests = rows.map(mapRequestRow);
   return {
     services: (servicesResult.data ?? []).map(mapServiceRow),
+    pricingSettings,
+    businessHours,
     blockedDates: blocked.dates,
     appointments: (appointmentsResult.data ?? []).map(mapBusySlotRow),
     proposals: proposalsFromRequests(rows),
@@ -837,20 +872,27 @@ const DEFAULT_HOURS: BusinessHoursDay[] = Array.from({ length: 7 }, (_, w) => ({
   closed: w === 0, // Sunday closed by default
 }));
 
-export async function loadBusinessHours(barberId: string): Promise<BusinessHoursDay[]> {
+export async function loadBusinessHours(barberId?: string): Promise<BusinessHoursDay[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("business_hours")
-    .select("weekday, opens_at, closes_at, closed")
-    .eq("barber_id", barberId)
+    .select("barber_id, weekday, opens_at, closes_at, closed")
     .order("weekday");
+
+  if (barberId) {
+    query = query.eq("barber_id", barberId);
+  }
+
+  const { data, error } = await query;
 
   if (error || !data || data.length === 0) return DEFAULT_HOURS;
 
+  const rows = barberId ? data : data.filter((row) => row.barber_id === data[0]?.barber_id);
+
   // Fill in any missing weekdays with defaults.
   return DEFAULT_HOURS.map((def) => {
-    const row = data.find((r) => r.weekday === def.weekday);
+    const row = rows.find((r) => r.weekday === def.weekday);
     if (!row) return def;
     return {
       weekday: row.weekday,

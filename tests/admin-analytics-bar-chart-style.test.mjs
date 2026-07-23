@@ -29,3 +29,26 @@ test("revenue by service uses a ranked share breakdown instead of vertical bars"
   assert.match(revenue, /width: `\$\{share\}%`/);
   assert.match(revenue, /const shareLabel = `\$\{Math\.round\(share\)\}%`/);
 });
+
+test("non-pie analytics charts use monochrome fills and strokes", () => {
+  const monochromeCharts = [
+    "src/components/charts/bookings-trend-chart.tsx",
+    "src/components/charts/revenue-trend-chart.tsx",
+    "src/components/charts/metric-bar-chart.tsx",
+    "src/components/charts/revenue-by-service-chart.tsx",
+  ];
+  const orangePalette = /#ff8a1f|#ffad4f|#ffc06f|#ffd5aa/i;
+
+  for (const file of monochromeCharts) {
+    assert.doesNotMatch(readFileSync(file, "utf8"), orangePalette, file);
+  }
+
+  const pieCharts = [
+    "src/components/charts/requests-by-status-chart.tsx",
+    "src/components/charts/outcomes-chart.tsx",
+  ];
+
+  for (const file of pieCharts) {
+    assert.match(readFileSync(file, "utf8"), /#[0-9a-f]{6}/i, file);
+  }
+});

@@ -38,7 +38,7 @@ import {
 } from "@/server/booking-guards";
 import { dashboardPathFor, getCurrentProfile, requireAdmin, requireApprovedClient, requireProfile } from "@/server/auth";
 import { recordAdminAction } from "@/server/audit";
-import { notificationOrFilter } from "@/server/dashboard-data";
+import { loadBusinessHours, loadPricingSettings, notificationOrFilter } from "@/server/dashboard-data";
 import { enforceRateLimit } from "@/server/rate-limit";
 import { createAdminNotification, createNotification, createNotifications } from "@/server/notifications";
 import type { ActionResult } from "@/domain/types";
@@ -117,6 +117,11 @@ const serviceSchema = z.object({
   durationMinutes: z.number().int().min(5).max(600),
   priceCents: z.number().int().min(0).max(1_000_000),
   imageUrl: z.string().max(500).optional(),
+});
+
+const pricingSettingsSchema = z.object({
+  gapSurchargePercent: z.number().int().min(0).max(500),
+  vipSurchargePercent: z.number().int().min(0).max(500),
 });
 
 const blockDateSchema = z.object({
@@ -459,7 +464,15 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
         (new Date(a.ends_at).getTime() - new Date(a.starts_at).getTime()) / 60000,
       ),
     }));
-  if (!clientSlotsForService(parsed.data.date, service.duration_minutes, confirmedForDay).includes(parsed.data.time)) {
+  const businessHours = await loadBusinessHours();
+  if (
+    !clientSlotsForService(
+      parsed.data.date,
+      service.duration_minutes,
+      confirmedForDay,
+      businessHours,
+    ).includes(parsed.data.time)
+  ) {
     return { ok: false, error: t.feedback.pickGeneratedSlot };
   }
   const preferred = isPreferredClientStart(
@@ -468,8 +481,12 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
     service.duration_minutes,
     confirmedForDay,
   );
+  const pricingSettings = await loadPricingSettings();
   const basePrice = Math.round(service.price_cents / 100);
-  const priceCents = priceForSlot(basePrice, preferred) * 100;
+  const priceCents = priceForSlot(basePrice, preferred, {
+    startsAt: parsed.data.time,
+    ...pricingSettings,
+  }) * 100;
 
   const { error: requestError } = await supabase.from("booking_requests").insert({
     client_id: profile.id,
@@ -1819,6 +1836,45 @@ export async function updateServiceAction(
 
   revalidatePath("/admin", "layout");
   return { ok: true, message: t.feedback.serviceUpdated };
+}
+
+export async function savePricingSettingsAction(input: {
+  gapSurchargePercent: number;
+  vipSurchargePercent: number;
+}): Promise<ActionResult> {
+  const profile = await requireAdmin();
+  const t = await getDict();
+  const parsed = pricingSettingsSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { ok: false, error: t.feedback.checkPricingSettings };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("pricing_settings")
+    .upsert(
+      {
+        barber_id: profile.id,
+        gap_surcharge_percent: parsed.data.gapSurchargePercent,
+        vip_surcharge_percent: parsed.data.vipSurchargePercent,
+      },
+      { onConflict: "barber_id" },
+    );
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  await recordAdminAction("pricing_settings.update", {
+    targetType: "pricing_settings",
+    targetId: profile.id,
+    detail: parsed.data,
+  });
+
+  revalidatePath("/admin", "layout");
+  revalidatePath("/client", "layout");
+  return { ok: true, message: t.feedback.pricingSettingsSaved };
 }
 
 export async function toggleServiceActiveAction(

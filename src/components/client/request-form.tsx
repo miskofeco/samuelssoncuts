@@ -15,7 +15,14 @@ import {
   orderClientServices,
   serviceById,
 } from "@/domain/schedule";
-import type { ActionResult, Appointment, BookingRequest, Service } from "@/domain/types";
+import type {
+  ActionResult,
+  Appointment,
+  BookingRequest,
+  BusinessHoursDay,
+  PricingSettings,
+  Service,
+} from "@/domain/types";
 import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
 
@@ -23,15 +30,19 @@ import { SlotPicker, type SlotChoice } from "./slot-picker";
 
 export function RequestForm({
   services,
+  pricingSettings,
   appointments,
   pendingRequests,
   blockedDates,
+  businessHours,
   initialServiceId,
 }: {
   services: Service[];
+  pricingSettings: PricingSettings;
   appointments: Appointment[];
   pendingRequests: BookingRequest[];
   blockedDates: ReadonlySet<string>;
+  businessHours: BusinessHoursDay[];
   /** Preselected service for one-tap rebooking (?service=<id>). */
   initialServiceId?: string;
 }) {
@@ -47,6 +58,13 @@ export function RequestForm({
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
 
   const service = serviceById(serviceId, services);
+  const priceCalculation = slot
+    ? slot.priceKind === "vip"
+      ? `${service.price} € + ${pricingSettings.vipSurchargePercent}%`
+      : slot.priceKind === "gap"
+        ? `${service.price} € + ${pricingSettings.gapSurchargePercent}%`
+        : `${service.price} €`
+    : null;
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -129,6 +147,7 @@ export function RequestForm({
             <SlotPicker
               service={service}
               services={services}
+              pricingSettings={pricingSettings}
               date={date}
               onDateChange={(next) => {
                 setDate(next);
@@ -139,12 +158,17 @@ export function RequestForm({
               appointments={appointments}
               pendingRequests={pendingRequests}
               blockedDates={blockedDates}
+              businessHours={businessHours}
             />
 
-            {/* Surcharge warning when the chosen slot leaves a gap. */}
-            {slot?.surcharge ? (
+            {slot?.priceKind === "gap" ? (
               <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-300">
-                {t.client.surchargeWarning}
+                {t.client.surchargeWarning(pricingSettings.gapSurchargePercent)}
+              </p>
+            ) : null}
+            {slot?.priceKind === "vip" ? (
+              <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-500/10 dark:text-sky-200">
+                {t.client.vipWarning}
               </p>
             ) : null}
           </div>
@@ -166,8 +190,14 @@ export function RequestForm({
 
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {slot ? (
-            <p className="text-sm font-medium text-black dark:text-white">
-              {t.client.youPay(`${slot.price} €`)}
+            <p className="text-sm font-medium text-stone-700 dark:text-stone-300">
+              {t.client.youPayPrefix}:{" "}
+              <span className="ml-3 text-2xl font-bold tabular-nums text-black dark:text-white">
+                {slot.price} €
+              </span>
+              <span className="ml-2 text-sm font-medium text-stone-500 dark:text-stone-400">
+                {priceCalculation ? `(${priceCalculation})` : null}
+              </span>
             </p>
           ) : (
             <span />

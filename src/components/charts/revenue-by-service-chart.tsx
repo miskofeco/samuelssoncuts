@@ -19,10 +19,9 @@ export function RevenueByServiceChart({
 
   return (
     <div className="flex h-full flex-col justify-center gap-4">
-      {data.map((item, index) => {
+      {data.map((item) => {
         const share = total > 0 ? (item.revenue / total) * 100 : 0;
         const shareLabel = `${Math.round(share)}%`;
-        const fill = index % 2 === 0 ? "#ff8a1f" : "#ffad4f";
 
         return (
           <div key={item.label} className="min-w-0">
@@ -44,10 +43,7 @@ export function RevenueByServiceChart({
               role="img"
               aria-label={`${item.label}: ${item.revenue} €, ${shareLabel} of service revenue`}
             >
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${share}%`, backgroundColor: fill }}
-              />
+              <div className="h-full rounded-full bg-stone-950 dark:bg-white" style={{ width: `${share}%` }} />
             </div>
           </div>
         );

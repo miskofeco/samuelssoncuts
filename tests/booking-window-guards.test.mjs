@@ -5,6 +5,7 @@ import test from "node:test";
 const schedule = readFileSync("src/domain/schedule.ts", "utf8");
 const actions = readFileSync("src/app/actions.ts", "utf8");
 const slotPicker = readFileSync("src/components/client/slot-picker.tsx", "utf8");
+const requestForm = readFileSync("src/components/client/request-form.tsx", "utf8");
 const addBookingModal = readFileSync("src/components/admin/add-booking-modal.tsx", "utf8");
 
 test("domain exposes a single client booking window of today through 14 days ahead", () => {
@@ -64,13 +65,35 @@ test("client booking slots are hourly by default and adjusted around booked even
   assert.match(schedule, /starts\.add\(bookingStart - durationMin\)/);
   assert.match(schedule, /starts\.add\(bookingEnd\)/);
   assert.match(schedule, /isSlotFree\(date, start, durationMin, confirmed\)/);
-  assert.match(slotPicker, /clientSlotsForService\(date, service\.duration, confirmed\)/);
+  assert.match(slotPicker, /clientSlotsForService\(date, service\.duration, confirmed, businessHours\)/);
   assert.doesNotMatch(slotPicker, /slotsForService\(service\.duration\)/);
+});
+
+test("client booking slots respect configured closed weekdays and opening hours", () => {
+  assert.match(schedule, /type SlotBusinessHoursDay/);
+  assert.match(schedule, /export function businessHoursForDate/);
+  assert.match(schedule, /export function isDateClosedForBusinessHours/);
+  assert.match(schedule, /clientSlotsForService\(\s*date: string,\s*durationMin: number,\s*confirmed: SlotAppt\[],\s*businessHours\?: SlotBusinessHoursDay\[]/);
+  assert.match(schedule, /const dayHours = businessHoursForDate\(date, businessHours\)/);
+  assert.match(schedule, /if \(dayHours\?\.closed\) return \[\]/);
+  assert.match(schedule, /start >= opens/);
+  assert.match(schedule, /start \+ durationMin <= closes/);
+});
+
+test("client booking calendar disables configured closed weekdays", () => {
+  assert.match(slotPicker, /businessHours/);
+  assert.match(slotPicker, /isDateClosedForBusinessHours\(cell\.date, businessHours\)/);
+  assert.match(slotPicker, /closedForBusinessHours/);
+  assert.match(requestForm, /businessHours: BusinessHoursDay\[]/);
+  assert.match(requestForm, /businessHours=\{businessHours\}/);
 });
 
 test("server rejects client booking requests outside generated client slots", () => {
   assert.match(actions, /clientSlotsForService/);
-  assert.match(actions, /!clientSlotsForService\(parsed\.data\.date, service\.duration_minutes, confirmedForDay\)\.includes\(parsed\.data\.time\)/);
+  assert.match(
+    actions,
+    /!clientSlotsForService\(\s*parsed\.data\.date,\s*service\.duration_minutes,\s*confirmedForDay,\s*businessHours,\s*\)\.includes\(parsed\.data\.time\)/,
+  );
   assert.match(actions, /t\.feedback\.pickGeneratedSlot/);
 });
 

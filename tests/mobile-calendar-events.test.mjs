@@ -19,9 +19,9 @@ test("admin month calendar renders event dots without visible event labels", () 
   assert.doesNotMatch(adminCalendar, /items\.length > 2/);
 });
 
-test("availability month calendar hides blocked-day label text on mobile while keeping colored pills", () => {
-  assert.match(availabilityManager, /h-2[^"]*sm:h-auto/);
-  assert.match(availabilityManager, /sr-only sm:not-sr-only/);
+test("availability month calendar shows compact blocked-day markers", () => {
+  assert.match(availabilityManager, /h-5 w-5/);
+  assert.match(availabilityManager, />x<\/span>/);
 });
 
 test("month calendars can color the whole blocked day cell red", () => {
@@ -30,6 +30,28 @@ test("month calendars can color the whole blocked day cell red", () => {
   assert.match(availabilityManager, /dayClassName=\{\(cell\) =>/);
   assert.match(adminCalendar, /bg-red-50[^"]*dark:bg-red-500\/15/);
   assert.match(availabilityManager, /bg-red-50[^"]*dark:bg-red-500\/15/);
+});
+
+test("blocked date cells use a wider red border", () => {
+  assert.match(slotPicker, /border-2 border-red-300[^"]*bg-red-50/);
+  assert.match(adminCalendar, /border-2 border-red-300[^"]*bg-red-50/);
+  assert.match(availabilityManager, /border-2 border-red-300[^"]*bg-red-50/);
+});
+
+test("blocked date cells show a small x marker", () => {
+  assert.match(slotPicker, /renderDay=\{\(cell\) => \{/);
+  assert.match(slotPicker, /blockedDates\.has\(cell\.date\) \|\| isDateClosedForBusinessHours\(cell\.date, businessHours\)/);
+  assert.match(slotPicker, />x<\/span>/);
+  assert.match(adminCalendar, />x<\/span>/);
+  assert.match(availabilityManager, />x<\/span>/);
+});
+
+test("client booking hides blocked x marker on disabled dates", () => {
+  assert.match(slotPicker, /const disabledForBookingMarker =/);
+  assert.match(slotPicker, /!isDateInClientBookingWindow\(cell\.date\)/);
+  assert.match(slotPicker, /cell\.date < today/);
+  assert.match(slotPicker, /cell\.date > latestDate/);
+  assert.match(slotPicker, /return unavailable && !disabledForBookingMarker \? \(/);
 });
 
 test("adjacent month calendar cells remain clickable and renderable", () => {
@@ -49,7 +71,7 @@ test("past month cells use disabled grey cell styling without crossed numbers", 
 });
 
 test("past blocked dates use disabled stone styling before blocked red styling", () => {
-  assert.match(slotPicker, /if \(outOfWindow\)[\s\S]*if \(blockedDates\.has\(cell\.date\)\)/);
+  assert.match(slotPicker, /if \(outOfWindow\)[\s\S]*if \(blockedDates\.has\(cell\.date\) \|\| closedForBusinessHours\)/);
   assert.match(adminCalendar, /cell\.date < today[\s\S]*blockedDates\.has\(cell\.date\)/);
   assert.match(availabilityManager, /cell\.date < today[\s\S]*blockedDates\.has\(cell\.date\)/);
 });

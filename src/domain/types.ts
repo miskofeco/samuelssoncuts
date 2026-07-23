@@ -35,6 +35,11 @@ export type Service = {
   imageUrl?: string | null;
 };
 
+export type PricingSettings = {
+  gapSurchargePercent: number;
+  vipSurchargePercent: number;
+};
+
 export type Preference = {
   id: string;
   rank: number;

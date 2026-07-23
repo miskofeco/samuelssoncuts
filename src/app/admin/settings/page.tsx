@@ -1,3 +1,4 @@
+import { PricingSettingsForm } from "@/components/admin/pricing-settings-form";
 import { ServiceManager } from "@/components/admin/service-manager";
 import { OpenPreferencesCard } from "@/components/consent/open-preferences-button";
 import { PageHeader } from "@/components/shared/page-header";
@@ -5,13 +6,16 @@ import { ProfileForm } from "@/components/shared/profile-form";
 import { PushNotificationCard } from "@/components/shared/push-notification-card";
 import { getDict } from "@/i18n/server";
 import { requireAdmin } from "@/server/auth";
-import { loadAllServices } from "@/server/dashboard-data";
+import { loadAllServices, loadPricingSettings } from "@/server/dashboard-data";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminSettingsPage() {
   const profile = await requireAdmin();
-  const services = await loadAllServices();
+  const [services, pricingSettings] = await Promise.all([
+    loadAllServices(),
+    loadPricingSettings(profile.id),
+  ]);
   const t = await getDict();
 
   return (
@@ -24,6 +28,7 @@ export default async function AdminSettingsPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
         <ServiceManager services={services} />
         <div className="space-y-6">
+          <PricingSettingsForm initialSettings={pricingSettings} />
           <ProfileForm
             fullName={profile.full_name}
             phone={profile.phone ?? ""}

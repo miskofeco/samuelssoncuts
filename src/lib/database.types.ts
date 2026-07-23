@@ -83,6 +83,24 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["business_hours"]["Insert"]>;
         Relationships: [];
       };
+      pricing_settings: {
+        Row: {
+          barber_id: string;
+          gap_surcharge_percent: number;
+          vip_surcharge_percent: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          barber_id: string;
+          gap_surcharge_percent?: number;
+          vip_surcharge_percent?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["pricing_settings"]["Insert"]>;
+        Relationships: [];
+      };
       blocked_times: {
         Row: {
           id: string;

@@ -28,9 +28,11 @@ export default async function BookPage({
       />
       <RequestForm
         services={data.services}
+        pricingSettings={data.pricingSettings}
         appointments={data.appointments}
         pendingRequests={data.pendingRequests}
         blockedDates={data.blockedDates}
+        businessHours={data.businessHours}
         initialServiceId={initialServiceId}
       />
     </div>

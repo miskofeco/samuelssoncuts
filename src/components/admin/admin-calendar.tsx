@@ -259,7 +259,7 @@ export function AdminCalendar({
                 return "cursor-not-allowed border-dashed !border-stone-400 !bg-stone-200 text-stone-500 dark:!border-stone-700 dark:!bg-stone-800 dark:text-stone-500";
               }
               if (blockedDates.has(cell.date)) {
-                return "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15";
+                return "border-2 border-red-300 bg-red-50 dark:border-red-500/60 dark:bg-red-500/15";
               }
               return "";
             }}
@@ -273,18 +273,17 @@ export function AdminCalendar({
             renderDay={(cell) => {
               const items = itemsByDate.get(cell.date) ?? [];
               const blocked = blockedDates.has(cell.date);
-              if (blocked) {
-                return (
-                  <span
-                    aria-label={t.admin.off}
-                    className="mt-1 block h-2 rounded-full bg-red-200 px-0 py-0 text-center text-[0.6rem] font-semibold uppercase sm:h-auto sm:rounded sm:px-1 sm:py-0.5 dark:bg-red-500/30"
-                  >
-                    <span className="sr-only text-red-700 sm:not-sr-only dark:text-red-300">
-                      {t.admin.off}
-                    </span>
-                  </span>
-                );
-              }
+	              if (blocked) {
+	                return (
+	                  <span
+	                    aria-label={t.admin.off}
+	                    className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 dark:bg-red-500/20 dark:text-red-200"
+	                  >
+	                    <span aria-hidden="true">x</span>
+	                    <span className="sr-only">{t.admin.off}</span>
+	                  </span>
+	                );
+	              }
               if (items.length === 0) return null;
               return (
                 <span className="mt-1 flex flex-row flex-wrap gap-1">
@@ -699,7 +698,7 @@ function WeekGrid({
               className={cn(
                 "rounded-xl border bg-white p-3 dark:bg-stone-900",
                 isBlocked
-                  ? "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/15"
+                  ? "border-2 border-red-300 bg-red-50 dark:border-red-500/60 dark:bg-red-500/15"
                   : isToday
                     ? "border-stone-900 dark:border-white"
                     : "border-black/10 dark:border-white/10",
