@@ -5,14 +5,14 @@ import { getSiteUrl } from "@/lib/env";
 
 export function SlotTakenEmail({ clientName }: { clientName: string }) {
   return (
-    <EmailLayout preview="Your requested time was just booked by someone else" accent="danger">
-      <EmailHeading>Time slot no longer available</EmailHeading>
-      <EmailParagraph>Hi {clientName},</EmailParagraph>
+    <EmailLayout preview="Požadovaný termín už nie je dostupný" accent="danger">
+      <EmailHeading>Termín už nie je dostupný</EmailHeading>
+      <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
-        Unfortunately the time you requested was just confirmed for another
-        client. Please choose a different slot.
+        Požadovaný čas bol práve potvrdený pre inú rezerváciu. Vyberte si,
+        prosím, nový termín.
       </EmailParagraph>
-      <EmailButton href={`${getSiteUrl()}/client/book`}>Pick a new time</EmailButton>
+      <EmailButton href={`${getSiteUrl()}/client/book`}>Vybrať nový termín</EmailButton>
     </EmailLayout>
   );
 }

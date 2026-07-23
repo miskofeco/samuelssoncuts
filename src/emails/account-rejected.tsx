@@ -3,15 +3,15 @@ import { EmailHeading, EmailLayout, EmailParagraph } from "./layout";
 
 export function AccountRejectedEmail({ clientName }: { clientName: string }) {
   return (
-    <EmailLayout preview="Update on your Samuelsson Cuts account" accent="danger">
-      <EmailHeading>Account update</EmailHeading>
-      <EmailParagraph>Hi {clientName},</EmailParagraph>
+    <EmailLayout preview="Informácia k vášmu účtu Samuelsson Cuts" accent="danger">
+      <EmailHeading>Účet nebol schválený</EmailHeading>
+      <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
-        Thank you for registering with Samuelsson Cuts. Unfortunately we are
-        unable to approve your account at this time.
+        Ďakujeme za registráciu v Samuelsson Cuts. Váš účet momentálne nevieme
+        schváliť.
       </EmailParagraph>
       <EmailParagraph>
-        If you think this is a mistake, please reply to this email.
+        Ak si myslíte, že ide o omyl, odpovedzte na tento email.
       </EmailParagraph>
     </EmailLayout>
   );

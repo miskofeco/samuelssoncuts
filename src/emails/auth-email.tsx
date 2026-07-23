@@ -1,8 +1,5 @@
-// Auth emails (signup confirmation, password recovery, magic link, email change)
-// sent via the Supabase "Send Email Hook" so they use our branded EmailLayout
-// and go out through Resend from the barber's domain — instead of Supabase's
-// built-in plain template. English only: the hook has no access to the user's
-// `lang` cookie, matching the other transactional emails.
+// Auth emails sent via the Supabase "Send Email Hook" so they use our branded
+// EmailLayout and go out through Resend from the barber's domain.
 import { Link, Text } from "@react-email/components";
 
 import { EmailButton, EmailHeading, EmailLayout, EmailParagraph } from "./layout";
@@ -16,34 +13,34 @@ const COPY: Record<
   { preview: string; heading: string; body: string; cta: string }
 > = {
   signup: {
-    preview: "Confirm your email to finish signing up",
-    heading: "Confirm your email",
-    body: "Thanks for registering with Samuelsson Cuts. Confirm your email address to activate your account — the barber will then approve you for booking.",
-    cta: "Confirm my email",
+    preview: "Potvrďte email a dokončite registráciu",
+    heading: "Potvrďte email",
+    body: "Ďakujeme za registráciu v Samuelsson Cuts. Po potvrdení emailu môže byť váš účet schválený na rezervácie.",
+    cta: "Potvrdiť email",
   },
   recovery: {
-    preview: "Reset your Samuelsson Cuts password",
-    heading: "Reset your password",
-    body: "We received a request to reset your password. Click below to choose a new one. If you didn't request this, you can safely ignore this email.",
-    cta: "Set a new password",
+    preview: "Obnova hesla k účtu Samuelsson Cuts",
+    heading: "Obnova hesla",
+    body: "Prišla žiadosť o obnovu hesla. Cez tlačidlo nižšie si nastavíte nové heslo. Ak ste o zmenu nežiadali, email môžete ignorovať.",
+    cta: "Nastaviť nové heslo",
   },
   magiclink: {
-    preview: "Your sign-in link for Samuelsson Cuts",
-    heading: "Sign in",
-    body: "Click below to sign in to your Samuelsson Cuts account. This link works once and expires shortly.",
-    cta: "Sign in",
+    preview: "Prihlasovací odkaz do Samuelsson Cuts",
+    heading: "Prihlásenie",
+    body: "Cez tlačidlo nižšie sa prihlásite do účtu Samuelsson Cuts. Odkaz funguje iba raz a po krátkom čase vyprší.",
+    cta: "Prihlásiť sa",
   },
   email_change: {
-    preview: "Confirm your new email address",
-    heading: "Confirm your new email",
-    body: "Confirm this address to finish updating the email on your Samuelsson Cuts account.",
-    cta: "Confirm email change",
+    preview: "Potvrďte novú emailovú adresu",
+    heading: "Potvrďte nový email",
+    body: "Potvrďte túto adresu a dokončite zmenu emailu vo vašom účte Samuelsson Cuts.",
+    cta: "Potvrdiť zmenu emailu",
   },
   email: {
-    preview: "Verify your email for Samuelsson Cuts",
-    heading: "Verify your email",
-    body: "Click below to verify your email address for Samuelsson Cuts.",
-    cta: "Verify email",
+    preview: "Overenie emailu pre Samuelsson Cuts",
+    heading: "Overte email",
+    body: "Kliknite na tlačidlo nižšie a overte emailovú adresu pre Samuelsson Cuts.",
+    cta: "Overiť email",
   },
 };
 
@@ -65,7 +62,7 @@ export function AuthEmail({
         {copy.cta}
       </EmailButton>
       <Text className="mb-0 mt-5 text-xs leading-relaxed text-stone-500">
-        If the button doesn&apos;t work, copy and paste this link into your browser:
+        Ak tlačidlo nefunguje, skopírujte tento odkaz do prehliadača:
         <br />
         <Link href={confirmUrl} className="break-all text-xs text-stone-500 underline">
           {confirmUrl}

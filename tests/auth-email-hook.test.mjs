@@ -51,6 +51,6 @@ test("auth email template reuses the shared EmailLayout and covers signup + reco
 
 test("auth email fallback link is rendered in smaller text", () => {
   assert.match(email, /text-xs/);
-  assert.match(email, /If the button doesn&apos;t work/);
+  assert.match(email, /Ak tlačidlo nefunguje/);
   assert.match(email, /break-all/);
 });

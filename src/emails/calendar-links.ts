@@ -17,8 +17,8 @@ export function buildCalendarLinks({
   endIso: string;
 }) {
   const siteUrl = getSiteUrl();
-  const title = service ? `Samuelsson Cuts - ${service}` : "Samuelsson Cuts appointment";
-  const details = "Confirmed appointment at Samuelsson Cuts.";
+  const title = service ? `Samuelsson Cuts - ${service}` : "Samuelsson Cuts termín";
+  const details = "Potvrdený termín v Samuelsson Cuts.";
   const params = new URLSearchParams({
     action: "TEMPLATE",
     text: title,

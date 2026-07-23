@@ -19,20 +19,19 @@ export function BookingReceivedEmail({
   const formattedDate = formatEmailDate(date);
 
   return (
-    <EmailLayout preview="We received your booking request" accent="brand">
-      <EmailHeading>Request received</EmailHeading>
-      <EmailParagraph>Hi {clientName},</EmailParagraph>
+    <EmailLayout preview="Vašu rezerváciu sme prijali" accent="brand">
+      <EmailHeading>Rezervácia je prijatá</EmailHeading>
+      <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
-        Thanks for your request — we&rsquo;ve got it and the barber will confirm your
-        time shortly. You&rsquo;ll get another email once it&rsquo;s confirmed.
+        Žiadosť o termín sme prijali. Po potvrdení dostanete ďalší email.
       </EmailParagraph>
       <EmailDetails>
-        <EmailDetail label="Service" value={service} />
-        <EmailDetail label="Requested date" value={formattedDate} />
-        <EmailDetail label="Requested time" value={time} />
+        <EmailDetail label="Služba" value={service} />
+        <EmailDetail label="Požadovaný dátum" value={formattedDate} />
+        <EmailDetail label="Požadovaný čas" value={time} />
       </EmailDetails>
       <EmailButton href={`${getSiteUrl()}/client/reservations`} accent="brand">
-        View my reservations
+        Zobraziť rezervácie
       </EmailButton>
     </EmailLayout>
   );

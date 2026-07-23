@@ -19,21 +19,21 @@ export function AppointmentProposedEmail({
   const formattedDate = formatEmailDate(date);
 
   return (
-    <EmailLayout preview={`Appointment proposed for ${formattedDate} at ${time}`}>
-      <EmailHeading>New time proposed</EmailHeading>
-      <EmailParagraph>Hi {clientName},</EmailParagraph>
+    <EmailLayout preview={`Navrhnutý termín: ${formattedDate} o ${time}`}>
+      <EmailHeading>Navrhnutý nový termín</EmailHeading>
+      <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
-        Your barber has proposed a time for your appointment. Please review and
-        accept or decline.
+        Pre vašu rezerváciu bol navrhnutý konkrétny termín. Prosím, potvrďte
+        ho alebo odmietnite v klientskom účte.
       </EmailParagraph>
       <EmailDetails>
-        <EmailDetail label="Service" value={service} />
-        <EmailDetail label="Proposed date" value={formattedDate} />
-        <EmailDetail label="Proposed time" value={time} />
+        <EmailDetail label="Služba" value={service} />
+        <EmailDetail label="Navrhnutý dátum" value={formattedDate} />
+        <EmailDetail label="Navrhnutý čas" value={time} />
       </EmailDetails>
       {note ? <EmailNote>{note}</EmailNote> : null}
       <EmailButton href={`${getSiteUrl()}/client/reservations`}>
-        View &amp; respond
+        Zobraziť a odpovedať
       </EmailButton>
     </EmailLayout>
   );

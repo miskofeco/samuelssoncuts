@@ -19,12 +19,14 @@ export function BarberAgendaEmail({
 }) {
   const formattedDate = formatEmailDate(date);
   const count = items.length;
+  const termText = count === 1 ? "termín" : count > 1 && count < 5 ? "termíny" : "termínov";
+  const confirmedText = count === 1 ? "potvrdený" : "potvrdené";
 
   return (
-    <EmailLayout preview={`Your day: ${count} appointment${count === 1 ? "" : "s"}`} accent="brand">
-      <EmailHeading>Today&rsquo;s schedule</EmailHeading>
+    <EmailLayout preview={`Dnes: ${count} ${termText}`} accent="brand">
+      <EmailHeading>Dnešný prehľad</EmailHeading>
       <EmailParagraph>
-        {formattedDate} — you have {count} confirmed appointment{count === 1 ? "" : "s"}.
+        {formattedDate} - máte {count} {confirmedText} {termText}.
       </EmailParagraph>
       {count > 0 ? (
         <EmailDetails>
@@ -37,10 +39,10 @@ export function BarberAgendaEmail({
           ))}
         </EmailDetails>
       ) : (
-        <EmailParagraph>No appointments booked for today. Enjoy the quiet!</EmailParagraph>
+        <EmailParagraph>Na dnes nie sú rezervované žiadne termíny.</EmailParagraph>
       )}
       <EmailButton href={`${getSiteUrl()}/admin/calendar`} accent="brand">
-        Open calendar
+        Otvoriť kalendár
       </EmailButton>
     </EmailLayout>
   );

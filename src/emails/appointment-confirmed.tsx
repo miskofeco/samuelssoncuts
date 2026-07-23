@@ -30,23 +30,23 @@ export function AppointmentConfirmedEmail({
   });
 
   return (
-    <EmailLayout preview="Your appointment is confirmed" accent="positive">
-      <EmailHeading>Appointment confirmed</EmailHeading>
-      <EmailParagraph>Hi {clientName},</EmailParagraph>
-      <EmailParagraph>Your appointment has been confirmed. See you soon!</EmailParagraph>
+    <EmailLayout preview="Váš termín je potvrdený" accent="positive">
+      <EmailHeading>Termín je potvrdený</EmailHeading>
+      <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
+      <EmailParagraph>Rezervácia je potvrdená. Vidíme sa v dohodnutom čase.</EmailParagraph>
       <EmailDetails>
-        <EmailDetail label="Service" value={service} />
-        <EmailDetail label="Date" value={formattedDate} />
-        <EmailDetail label="Time" value={time} />
+        <EmailDetail label="Služba" value={service} />
+        <EmailDetail label="Dátum" value={formattedDate} />
+        <EmailDetail label="Čas" value={time} />
       </EmailDetails>
       <EmailButton href={`${getSiteUrl()}/client/reservations`} accent="positive">
-        View my appointments
+        Zobraziť rezervácie
       </EmailButton>
       <EmailButton href={calendarLinks.google} accent="positive">
-        Add to Google Calendar
+        Pridať do Google Kalendára
       </EmailButton>
       <EmailButton href={calendarLinks.apple} accent="brand">
-        Add to Apple Calendar
+        Pridať do Apple Kalendára
       </EmailButton>
     </EmailLayout>
   );

@@ -17,9 +17,15 @@ export function ConsentBanner() {
   const pathname = usePathname();
   const { bannerOpen, acceptAll, rejectAll, openPreferences } = useConsent();
 
-  // Hide on the legal/policy pages so it doesn't cover the content the user came
-  // to read — it reappears when they navigate back.
-  if (pathname === "/cookies" || pathname === "/privacy" || pathname === "/terms") return null;
+  // Hide on pages where the fixed banner would cover the content being reviewed.
+  if (
+    pathname === "/cookies" ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
+    pathname === "/email-preview"
+  ) {
+    return null;
+  }
   if (!bannerOpen) return null;
 
   return (

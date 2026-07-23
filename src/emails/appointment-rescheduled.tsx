@@ -19,21 +19,21 @@ export function AppointmentRescheduledEmail({
   const formattedDate = formatEmailDate(date);
 
   return (
-    <EmailLayout preview={`Your appointment was moved — new time ${formattedDate} at ${time}`}>
-      <EmailHeading>Appointment rescheduled</EmailHeading>
-      <EmailParagraph>Hi {clientName},</EmailParagraph>
+    <EmailLayout preview={`Termín bol presunutý: ${formattedDate} o ${time}`}>
+      <EmailHeading>Termín bol presunutý</EmailHeading>
+      <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
-        Your barber has moved your appointment to a new time. Please accept or
-        decline the new proposal.
+        Váš termín bol presunutý na nový návrh. Prosím, potvrďte ho alebo
+        odmietnite v klientskom účte.
       </EmailParagraph>
       <EmailDetails>
-        <EmailDetail label="Service" value={service} />
-        <EmailDetail label="New date" value={formattedDate} />
-        <EmailDetail label="New time" value={time} />
+        <EmailDetail label="Služba" value={service} />
+        <EmailDetail label="Nový dátum" value={formattedDate} />
+        <EmailDetail label="Nový čas" value={time} />
       </EmailDetails>
       {note ? <EmailNote>{note}</EmailNote> : null}
       <EmailButton href={`${getSiteUrl()}/client/reservations`}>
-        View &amp; respond
+        Zobraziť a odpovedať
       </EmailButton>
     </EmailLayout>
   );

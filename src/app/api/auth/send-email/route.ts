@@ -107,11 +107,11 @@ export async function POST(request: NextRequest) {
   if (redirectTo) confirmUrl.searchParams.set("redirect_to", redirectTo);
 
   const subjectByType: Record<string, string> = {
-    signup: "Confirm your email — Samuelsson Cuts",
-    recovery: "Reset your password — Samuelsson Cuts",
-    magiclink: "Your sign-in link — Samuelsson Cuts",
-    email_change: "Confirm your new email — Samuelsson Cuts",
-    email: "Verify your email — Samuelsson Cuts",
+    signup: "Potvrďte email - Samuelsson Cuts",
+    recovery: "Obnova hesla - Samuelsson Cuts",
+    magiclink: "Prihlasovací odkaz - Samuelsson Cuts",
+    email_change: "Potvrďte nový email - Samuelsson Cuts",
+    email: "Overenie emailu - Samuelsson Cuts",
   };
 
   try {

@@ -23,24 +23,24 @@ export function ClientRespondedEmail({
       accent={accepted ? "positive" : "danger"}
       preview={
         accepted
-          ? `${clientName} confirmed the appointment`
-          : `${clientName} declined the proposed time`
+          ? `${clientName} potvrdil termín`
+          : `${clientName} termín nepotvrdil`
       }
     >
       <EmailHeading>
-        {accepted ? "Appointment confirmed by client" : "Client declined proposed time"}
+        {accepted ? "Klient potvrdil termín" : "Klient termín nepotvrdil"}
       </EmailHeading>
       <EmailParagraph>
-        <strong>{clientName}</strong> has{" "}
-        {accepted ? "accepted" : "declined"} the proposed appointment.
+        <strong>{clientName}</strong>{" "}
+        {accepted ? "potvrdil navrhnutý termín." : "nepotvrdil navrhnutý termín."}
       </EmailParagraph>
       <EmailDetails>
-        <EmailDetail label="Service" value={service} />
-        <EmailDetail label="Date" value={formattedDate} />
-        <EmailDetail label="Time" value={time} />
+        <EmailDetail label="Služba" value={service} />
+        <EmailDetail label="Dátum" value={formattedDate} />
+        <EmailDetail label="Čas" value={time} />
       </EmailDetails>
       <EmailButton href={`${getSiteUrl()}/admin/calendar`}>
-        View calendar
+        Otvoriť kalendár
       </EmailButton>
     </EmailLayout>
   );

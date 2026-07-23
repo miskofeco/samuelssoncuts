@@ -19,20 +19,19 @@ export function AppointmentCancelledEmail({
   const formattedDate = formatEmailDate(date);
 
   return (
-    <EmailLayout preview="Your appointment has been cancelled" accent="danger">
-      <EmailHeading>Appointment cancelled</EmailHeading>
-      <EmailParagraph>Hi {clientName},</EmailParagraph>
+    <EmailLayout preview="Váš termín bol zrušený" accent="danger">
+      <EmailHeading>Termín bol zrušený</EmailHeading>
+      <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
-        The following appointment has been cancelled. We apologise for the
-        inconvenience.
+        Tento termín bol zrušený. Ospravedlňujeme sa za nepríjemnosť.
       </EmailParagraph>
       <EmailDetails>
-        <EmailDetail label="Service" value={service} />
-        <EmailDetail label="Date" value={formattedDate} />
-        <EmailDetail label="Time" value={time} />
+        <EmailDetail label="Služba" value={service} />
+        <EmailDetail label="Dátum" value={formattedDate} />
+        <EmailDetail label="Čas" value={time} />
       </EmailDetails>
       {note ? <EmailNote>{note}</EmailNote> : null}
-      <EmailButton href={`${getSiteUrl()}/client/book`}>Book a new appointment</EmailButton>
+      <EmailButton href={`${getSiteUrl()}/client/book`}>Vybrať nový termín</EmailButton>
     </EmailLayout>
   );
 }

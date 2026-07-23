@@ -17,19 +17,19 @@ export function AppointmentReminderEmail({
   const formattedDate = formatEmailDate(date);
 
   return (
-    <EmailLayout preview={`Reminder: your appointment tomorrow at ${time}`}>
-      <EmailHeading>Appointment reminder</EmailHeading>
-      <EmailParagraph>Hi {clientName},</EmailParagraph>
+    <EmailLayout preview={`Pripomienka: termín zajtra o ${time}`}>
+      <EmailHeading>Pripomienka termínu</EmailHeading>
+      <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
-        Just a reminder that you have an appointment coming up tomorrow.
+        Pripomíname váš termín, ktorý máte naplánovaný na zajtra.
       </EmailParagraph>
       <EmailDetails>
-        <EmailDetail label="Service" value={service} />
-        <EmailDetail label="Date" value={formattedDate} />
-        <EmailDetail label="Time" value={time} />
+        <EmailDetail label="Služba" value={service} />
+        <EmailDetail label="Dátum" value={formattedDate} />
+        <EmailDetail label="Čas" value={time} />
       </EmailDetails>
       <EmailButton href={`${getSiteUrl()}/client/reservations`}>
-        View my appointments
+        Zobraziť rezervácie
       </EmailButton>
     </EmailLayout>
   );

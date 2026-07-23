@@ -490,12 +490,12 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
   await createAdminNotification({
     channel: "email",
     recipient: barberEmail,
-    subject: `${profile.full_name} requested ${parsed.data.date} at ${parsed.data.time}`,
+    subject: `${profile.full_name} žiada termín ${parsed.data.date} o ${parsed.data.time}`,
     pushUrl: "/admin/requests",
   });
   await sendEmail({
     to: barberEmail,
-    subject: `${profile.full_name} requested ${parsed.data.date} at ${parsed.data.time}`,
+    subject: `${profile.full_name} žiada termín ${parsed.data.date} o ${parsed.data.time}`,
     react: BookingRequestEmail({
       clientName: profile.full_name,
       service: service.name,
@@ -507,13 +507,13 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
 
   // Acknowledge to the client too (they used to hear nothing until confirmation).
   if (profile.email) {
-    const clientSubject = "We received your booking request";
+    const clientSubject = "Vašu rezerváciu sme prijali";
     await createNotification(supabase, {
       user_id: profile.id,
       channel: "email",
       recipient: profile.email,
       subject: clientSubject,
-      body: `Your request for ${service.name} on ${parsed.data.date} at ${parsed.data.time} was received. The barber will confirm shortly.`,
+      body: `Žiadosť o ${service.name} na ${parsed.data.date} o ${parsed.data.time} sme prijali. Termín bude ešte potvrdený.`,
       pushUrl: "/client/reservations",
     });
     await sendEmail({
@@ -573,13 +573,13 @@ export async function approveClientAction(clientId: string): Promise<ActionResul
     user_id: profile.id,
     channel: "email",
     recipient: profile.email,
-    subject: "Your Samuelsson Cuts account was approved",
-    body: `Hi ${profile.full_name}, your account is approved. You can now request appointments.`,
+    subject: "Váš účet Samuelsson Cuts bol schválený",
+    body: `Dobrý deň, ${profile.full_name}, váš účet je schválený. Môžete si rezervovať termín.`,
     pushUrl: "/client",
   });
   await sendEmail({
     to: profile.email,
-    subject: "Your Samuelsson Cuts account was approved",
+    subject: "Váš účet Samuelsson Cuts bol schválený",
     react: AccountApprovedEmail({ clientName: profile.full_name }),
   });
 
@@ -610,13 +610,13 @@ export async function rejectClientAction(clientId: string): Promise<ActionResult
     user_id: profile.id,
     channel: "email",
     recipient: profile.email,
-    subject: "Update on your Samuelsson Cuts account",
-    body: `Hi ${profile.full_name}, we are unable to approve your account at this time.`,
+    subject: "Informácia k účtu Samuelsson Cuts",
+    body: `Dobrý deň, ${profile.full_name}, váš účet momentálne nevieme schváliť.`,
     pushUrl: "/client/notifications",
   });
   await sendEmail({
     to: profile.email,
-    subject: "Update on your Samuelsson Cuts account",
+    subject: "Informácia k účtu Samuelsson Cuts",
     react: AccountRejectedEmail({ clientName: profile.full_name }),
   });
 
@@ -663,12 +663,12 @@ export async function blockClientAction(clientId: string): Promise<ActionResult>
     user_id: profile.id,
     channel: "email",
     recipient: profile.email,
-    subject: "Your Samuelsson Cuts account access has been removed",
+    subject: "Prístup k účtu Samuelsson Cuts bol zrušený",
     pushUrl: "/client/notifications",
   });
   await sendEmail({
     to: profile.email,
-    subject: "Your Samuelsson Cuts account access has been removed",
+    subject: "Prístup k účtu Samuelsson Cuts bol zrušený",
     react: AccountBlockedEmail({ clientName: profile.full_name }),
   });
 
@@ -899,16 +899,16 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
     user_id: request.client_id,
     channel: "email",
     recipient: clientProfile?.email ?? "client",
-    subject: `Appointment proposed for ${parsed.data.date} at ${parsed.data.time}`,
+    subject: `Navrhnutý termín ${parsed.data.date} o ${parsed.data.time}`,
     body: parsed.data.note ?? null,
     pushUrl: "/client/reservations",
   });
   if (clientProfile?.email) {
     await sendEmail({
       to: clientProfile.email,
-      subject: `Appointment proposed for ${parsed.data.date} at ${parsed.data.time}`,
+      subject: `Navrhnutý termín ${parsed.data.date} o ${parsed.data.time}`,
       react: AppointmentProposedEmail({
-        clientName: clientProfile.full_name ?? "there",
+        clientName: clientProfile.full_name ?? "klient",
         service: service.name,
         date: parsed.data.date,
         time: parsed.data.time,
@@ -1043,7 +1043,7 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
         user_id: s.client_id,
         channel: "email" as const,
         recipient: siblingProfiles?.find((p) => p.id === s.client_id)?.email ?? "client",
-        subject: "Your requested time was just booked — please pick another",
+        subject: "Požadovaný termín už nie je dostupný",
         pushUrl: "/client/book",
       })),
     );
@@ -1053,8 +1053,8 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
       if (sibling.email) {
         await sendEmail({
           to: sibling.email,
-          subject: "Your requested time was just booked — please pick another",
-          react: SlotTakenEmail({ clientName: sibling.full_name ?? "there" }),
+          subject: "Požadovaný termín už nie je dostupný",
+          react: SlotTakenEmail({ clientName: sibling.full_name ?? "klient" }),
         });
       }
     }
@@ -1064,15 +1064,15 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
     user_id: request.client_id,
     channel: "email",
     recipient: confirmedClient?.email ?? "client",
-    subject: "Your appointment is confirmed",
+    subject: "Váš termín je potvrdený",
     pushUrl: "/client/reservations",
   });
   if (confirmedClient?.email) {
     await sendEmail({
       to: confirmedClient.email,
-      subject: "Your appointment is confirmed",
+      subject: "Váš termín je potvrdený",
       react: AppointmentConfirmedEmail({
-        clientName: confirmedClient.full_name ?? "there",
+        clientName: confirmedClient.full_name ?? "klient",
         service: confirmedService?.name ?? "",
         date: requestedDate,
         time: requestedTime,
@@ -1225,16 +1225,16 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
     user_id: appointment.client_id,
     channel: "email",
     recipient: clientProfile?.email ?? "client",
-    subject: `Your appointment was moved — new time proposed for ${parsed.data.date} at ${parsed.data.time}`,
+    subject: `Termín bol presunutý: ${parsed.data.date} o ${parsed.data.time}`,
     body: parsed.data.note ?? null,
     pushUrl: "/client/reservations",
   });
   if (clientProfile?.email) {
     await sendEmail({
       to: clientProfile.email,
-      subject: `Your appointment was moved — new time proposed for ${parsed.data.date} at ${parsed.data.time}`,
+      subject: `Termín bol presunutý: ${parsed.data.date} o ${parsed.data.time}`,
       react: AppointmentRescheduledEmail({
-        clientName: clientProfile.full_name ?? "there",
+        clientName: clientProfile.full_name ?? "klient",
         service: rescheduleService?.name ?? "",
         date: parsed.data.date,
         time: parsed.data.time,
@@ -1314,15 +1314,15 @@ export async function cancelAppointmentAdminAction(input: unknown): Promise<Acti
       user_id: appointment.client_id,
       channel: "email",
       recipient: clientProfile.email,
-      subject: "Your appointment was cancelled",
+      subject: "Váš termín bol zrušený",
       body: parsed.data.note ?? null,
       pushUrl: "/client/reservations",
     });
     await sendEmail({
       to: clientProfile.email,
-      subject: "Your appointment was cancelled",
+      subject: "Váš termín bol zrušený",
       react: AppointmentCancelledEmail({
-        clientName: clientProfile.full_name ?? "there",
+        clientName: clientProfile.full_name ?? "klient",
         service: cancelService?.name ?? "",
         date: cancelDate,
         time: cancelTime,
@@ -1544,8 +1544,8 @@ export async function respondToProposalAction(
   const respondDate = dateInShopTimeZone(proposal.starts_at);
   const respondTime = timeFromIso(proposal.starts_at);
   const respondSubject = accepted
-    ? `${profile.full_name} confirmed the appointment`
-    : `${profile.full_name} declined the proposed time`;
+    ? `${profile.full_name} potvrdil termín`
+    : `${profile.full_name} odmietol navrhnutý termín`;
 
   await createAdminNotification({
     channel: "email",
@@ -2170,7 +2170,7 @@ export async function cancelConfirmedAppointmentAction(
     .select("name")
     .eq("id", appointment.service_id)
     .single();
-  const cancelSubject = `${profile.full_name} cancelled ${cancelDate} at ${cancelTime}`;
+  const cancelSubject = `${profile.full_name} zrušil termín ${cancelDate} o ${cancelTime}`;
   await createAdminNotification({
     channel: "email",
     recipient: barberEmail,
@@ -2279,7 +2279,7 @@ export async function requestRescheduleAction(
     .select("name")
     .eq("id", appointment.service_id)
     .single();
-  const rescheduleSubject = `${profile.full_name} asked to move to ${date} at ${time}`;
+  const rescheduleSubject = `${profile.full_name} žiada presun na ${date} o ${time}`;
   await createAdminNotification({
     channel: "email",
     recipient: barberEmail,

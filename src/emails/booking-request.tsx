@@ -19,19 +19,19 @@ export function BookingRequestEmail({
   const formattedDate = formatEmailDate(date);
 
   return (
-    <EmailLayout preview={`${clientName} requested ${formattedDate} at ${time}`}>
-      <EmailHeading>New booking request</EmailHeading>
+    <EmailLayout preview={`${clientName} žiada termín ${formattedDate} o ${time}`}>
+      <EmailHeading>Nová rezervácia</EmailHeading>
       <EmailParagraph>
-        <strong>{clientName}</strong> has requested an appointment.
+        <strong>{clientName}</strong> poslal žiadosť o termín.
       </EmailParagraph>
       <EmailDetails>
-        <EmailDetail label="Service" value={service} />
-        <EmailDetail label="Date" value={formattedDate} />
-        <EmailDetail label="Time" value={time} />
+        <EmailDetail label="Služba" value={service} />
+        <EmailDetail label="Dátum" value={formattedDate} />
+        <EmailDetail label="Čas" value={time} />
       </EmailDetails>
       {note ? <EmailNote>{note}</EmailNote> : null}
       <EmailButton href={`${getSiteUrl()}/admin/requests`}>
-        Review in admin panel
+        Otvoriť žiadosti
       </EmailButton>
     </EmailLayout>
   );

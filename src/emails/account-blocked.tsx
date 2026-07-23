@@ -3,15 +3,15 @@ import { EmailHeading, EmailLayout, EmailParagraph } from "./layout";
 
 export function AccountBlockedEmail({ clientName }: { clientName: string }) {
   return (
-    <EmailLayout preview="Your Samuelsson Cuts account access has been removed" accent="danger">
-      <EmailHeading>Account access removed</EmailHeading>
-      <EmailParagraph>Hi {clientName},</EmailParagraph>
+    <EmailLayout preview="Prístup k účtu Samuelsson Cuts bol zrušený" accent="danger">
+      <EmailHeading>Prístup bol zrušený</EmailHeading>
+      <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
-        Your access to Samuelsson Cuts has been removed. Any pending appointments
-        have been cancelled.
+        Prístup k účtu Samuelsson Cuts bol zrušený. Všetky rozpracované
+        rezervácie a budúce termíny boli zrušené.
       </EmailParagraph>
       <EmailParagraph>
-        If you believe this is a mistake, please contact us directly.
+        Ak si myslíte, že ide o omyl, kontaktujte nás priamo odpoveďou na tento email.
       </EmailParagraph>
     </EmailLayout>
   );

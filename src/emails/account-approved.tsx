@@ -4,15 +4,15 @@ import { getSiteUrl } from "@/lib/env";
 
 export function AccountApprovedEmail({ clientName }: { clientName: string }) {
   return (
-    <EmailLayout preview="Your Samuelsson Cuts account is approved" accent="positive">
-      <EmailHeading>You&apos;re approved!</EmailHeading>
-      <EmailParagraph>Hi {clientName},</EmailParagraph>
+    <EmailLayout preview="Váš účet v Samuelsson Cuts bol schválený" accent="positive">
+      <EmailHeading>Účet je schválený</EmailHeading>
+      <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
-        Your Samuelsson Cuts account has been approved. You can now book
-        appointments directly.
+        Váš účet v Samuelsson Cuts je aktívny. Odteraz si môžete rezervovať
+        termín priamo v klientskom účte.
       </EmailParagraph>
       <EmailButton href={`${getSiteUrl()}/client/book`} accent="positive">
-        Book your first appointment
+        Rezervovať termín
       </EmailButton>
     </EmailLayout>
   );

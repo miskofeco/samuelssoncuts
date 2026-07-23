@@ -19,6 +19,12 @@ import { createNotification } from "@/server/notifications";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function termCountLabel(count: number) {
+  if (count === 1) return "termín";
+  if (count > 1 && count < 5) return "termíny";
+  return "termínov";
+}
+
 export async function GET(request: NextRequest) {
   const secret = getCronSecret();
   const authHeader = request.headers.get("authorization");
@@ -92,9 +98,9 @@ export async function GET(request: NextRequest) {
 
     await sendEmail({
       to: profile.email,
-      subject: `Reminder: your appointment tomorrow at ${time}`,
+      subject: `Pripomienka: termín zajtra o ${time}`,
       react: AppointmentReminderEmail({
-        clientName: profile.full_name ?? "there",
+        clientName: profile.full_name ?? "klient",
         service: service?.name ?? "",
         date,
         time,
@@ -111,7 +117,7 @@ export async function GET(request: NextRequest) {
       user_id: appt.client_id,
       channel: "email",
       recipient: profile.email,
-      subject: `Reminder: your appointment tomorrow at ${time}`,
+      subject: `Pripomienka: termín zajtra o ${time}`,
       pushUrl: "/client/reservations",
     });
 
@@ -158,7 +164,7 @@ export async function GET(request: NextRequest) {
 
       await sendEmail({
         to: barberEmail,
-        subject: `Today: ${items.length} appointment${items.length === 1 ? "" : "s"}`,
+        subject: `Dnes: ${items.length} ${termCountLabel(items.length)}`,
         react: BarberAgendaEmail({ date: todayShop, items }),
       });
       agendaSent = true;
