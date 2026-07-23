@@ -5,9 +5,9 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 // Donut of recorded appointment outcomes. Emerald = completed (good),
 // red = no-show, stone = cancelled — reads at a glance in both themes.
 const colors: Record<string, string> = {
-  completed: "#10b981",
+  completed: "#34a853",
   no_show: "#ef4444",
-  cancelled: "#a8a29e",
+  cancelled: "#d6d3d1",
 };
 
 export function OutcomesChart({
@@ -61,7 +61,7 @@ export function OutcomesChart({
         {data.map((entry) => (
           <li key={entry.key} className="flex items-center gap-2 text-sm">
             <span
-              className="h-2.5 w-2.5 rounded-full"
+              className="h-2.5 w-2.5 rounded-sm"
               style={{ backgroundColor: colors[entry.key] }}
             />
             <span className="text-stone-600 dark:text-stone-300">{entry.label}</span>

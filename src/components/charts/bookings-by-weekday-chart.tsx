@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { MetricBarChart } from "./metric-bar-chart";
 
 export function BookingsByWeekdayChart({
   data,
@@ -16,23 +8,14 @@ export function BookingsByWeekdayChart({
   data: { label: string; bookings: number }[];
 }) {
   return (
-    <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 600, height: 256 }}>
-      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.08} vertical={false} />
-        <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "currentColor", opacity: 0.6 }} />
-        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} tick={{ fontSize: 12, fill: "currentColor", opacity: 0.7 }} />
-        <Tooltip
-          cursor={{ fill: "currentColor", fillOpacity: 0.06 }}
-          contentStyle={{
-            borderRadius: 12,
-            border: "1px solid rgba(120,120,120,0.2)",
-            background: "var(--surface)",
-            color: "var(--foreground)",
-            fontSize: 12,
-          }}
-        />
-        <Bar dataKey="bookings" fill="currentColor" radius={[6, 6, 0, 0]} maxBarSize={36} />
-      </BarChart>
-    </ResponsiveContainer>
+    <MetricBarChart
+      items={data.map((item) => ({
+        key: item.label,
+        label: item.label,
+        value: item.bookings,
+        valueLabel: String(item.bookings),
+        ariaLabel: `${item.label}: ${item.bookings} bookings`,
+      }))}
+    />
   );
 }

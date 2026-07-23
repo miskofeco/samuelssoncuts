@@ -1,8 +1,43 @@
-import type { Appointment, BookingRequest, Service } from "./types";
+import type { Appointment, BookingRequest, ClientProfile, Service } from "./types";
 
 // Labels are passed in by the caller so charts can be localized. `locale` drives
 // month names; `weekdayLabels`/`statusLabels` come from the active dictionary.
 type StatusLabels = { new: string; proposed: string; confirmed: string; closed: string };
+export type TrendDirection = "up" | "down" | "flat";
+export type PercentageTrend = { direction: TrendDirection; percent: number };
+export type AdminOverviewMetricTrends = {
+  todayAppointments: PercentageTrend;
+  todayRevenue: PercentageTrend;
+  revenueThisMonth: PercentageTrend;
+  pendingApprovals: PercentageTrend;
+  openRequests: PercentageTrend;
+  awaitingClient: PercentageTrend;
+};
+
+function shiftIsoDate(date: string, days: number): string {
+  const value = new Date(`${date}T12:00:00`);
+  value.setDate(value.getDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function shiftMonthKey(key: string, delta: number): string {
+  const [year, month] = key.split("-").map(Number);
+  const value = new Date(year, month - 1 + delta, 1);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function isInIsoRange(date: string | undefined, start: string, end: string): boolean {
+  if (!date) return false;
+  const iso = date.slice(0, 10);
+  return iso >= start && iso <= end;
+}
+
+export function percentageTrend(current: number, previous: number): PercentageTrend {
+  if (current === previous) return { direction: "flat", percent: 0 };
+  const direction: TrendDirection = current > previous ? "up" : "down";
+  if (previous === 0) return { direction, percent: 100 };
+  return { direction, percent: Math.round((Math.abs(current - previous) / previous) * 100) };
+}
 
 // ---------------------------------------------------------------------------
 // Revenue — money is never stored on `appointments`. It lives on the
@@ -59,6 +94,71 @@ export function totalRevenueCents(
     (sum, a) => sum + appointmentRevenueCents(a, requestsById, servicesById),
     0,
   );
+}
+
+export function adminOverviewMetricTrends({
+  appointments,
+  requests,
+  services,
+  clients,
+  today,
+}: {
+  appointments: Appointment[];
+  requests: BookingRequest[];
+  services: Service[];
+  clients: ClientProfile[];
+  today: string;
+}): AdminOverviewMetricTrends {
+  const { requestsById, servicesById } = revenueLookups(requests, services);
+  const yesterday = shiftIsoDate(today, -1);
+  const monthKey = today.slice(0, 7);
+  const previousMonthKey = shiftMonthKey(monthKey, -1);
+  const currentWindowStart = shiftIsoDate(today, -29);
+  const previousWindowStart = shiftIsoDate(today, -59);
+  const previousWindowEnd = shiftIsoDate(today, -30);
+
+  const todays = appointments.filter((a) => a.date === today);
+  const yesterdays = appointments.filter((a) => a.date === yesterday);
+  const currentMonthAppointments = appointments.filter((a) => a.date.slice(0, 7) === monthKey);
+  const previousMonthAppointments = appointments.filter(
+    (a) => a.date.slice(0, 7) === previousMonthKey,
+  );
+  const appointmentRevenue = (items: Appointment[]) =>
+    items.reduce(
+      (sum, a) => sum + appointmentRevenueCents(a, requestsById, servicesById),
+      0,
+    );
+  const pendingClientInflow = (start: string, end: string) =>
+    clients.filter(
+      (c) =>
+        c.role !== "admin" &&
+        c.status === "pending" &&
+        c.emailConfirmed &&
+        isInIsoRange(c.createdAt, start, end),
+    ).length;
+  const requestInflow = (status: BookingRequest["status"], start: string, end: string) =>
+    requests.filter((r) => r.status === status && isInIsoRange(r.createdAt, start, end)).length;
+
+  return {
+    todayAppointments: percentageTrend(todays.length, yesterdays.length),
+    todayRevenue: percentageTrend(appointmentRevenue(todays), appointmentRevenue(yesterdays)),
+    revenueThisMonth: percentageTrend(
+      appointmentRevenue(currentMonthAppointments),
+      appointmentRevenue(previousMonthAppointments),
+    ),
+    pendingApprovals: percentageTrend(
+      pendingClientInflow(currentWindowStart, today),
+      pendingClientInflow(previousWindowStart, previousWindowEnd),
+    ),
+    openRequests: percentageTrend(
+      requestInflow("pending", currentWindowStart, today),
+      requestInflow("pending", previousWindowStart, previousWindowEnd),
+    ),
+    awaitingClient: percentageTrend(
+      requestInflow("proposed", currentWindowStart, today),
+      requestInflow("proposed", previousWindowStart, previousWindowEnd),
+    ),
+  };
 }
 
 /** Revenue (in euros, rounded) per month for the last `months` months. */

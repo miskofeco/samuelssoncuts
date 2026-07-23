@@ -80,6 +80,11 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.9;
+}
+
 .scrollbar-none {
   scrollbar-width: none;
   -ms-overflow-style: none;

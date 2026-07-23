@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   appointmentRevenueCents,
+  adminOverviewMetricTrends,
   outcomeSummary,
+  percentageTrend,
   revenueByService,
   revenueLookups,
   revenueTrend,
@@ -104,4 +106,92 @@ test("outcomeSummary tallies and computes no-show rate ignoring cancellations", 
 test("outcomeSummary reports zero rate when nothing attended", () => {
   const s = outcomeSummary([appt({ outcome: "cancelled" }), appt({ outcome: null })]);
   assert.equal(s.noShowRate, 0);
+});
+
+test("percentageTrend returns direction and whole percent change", () => {
+  assert.deepEqual(percentageTrend(12, 10), { direction: "up", percent: 20 });
+  assert.deepEqual(percentageTrend(8, 10), { direction: "down", percent: 20 });
+  assert.deepEqual(percentageTrend(10, 10), { direction: "flat", percent: 0 });
+  assert.deepEqual(percentageTrend(3, 0), { direction: "up", percent: 100 });
+  assert.deepEqual(percentageTrend(0, 0), { direction: "flat", percent: 0 });
+});
+
+test("adminOverviewMetricTrends compares current metrics with previous periods", () => {
+  const clients = [
+    {
+      id: "c-new",
+      name: "New Pending",
+      email: "new@example.com",
+      phone: "",
+      status: "pending",
+      role: "client",
+      emailConfirmed: true,
+      createdAt: "2026-06-25",
+    },
+    {
+      id: "c-old",
+      name: "Old Pending",
+      email: "old@example.com",
+      phone: "",
+      status: "pending",
+      role: "client",
+      emailConfirmed: true,
+      createdAt: "2026-05-25",
+    },
+  ];
+  const trendRequests = [
+    {
+      id: "r-new",
+      clientId: "c-new",
+      serviceId: "svc-cut",
+      note: "",
+      preferences: [],
+      status: "pending",
+      createdAt: "2026-06-25",
+      priceCents: 2000,
+    },
+    {
+      id: "r-old",
+      clientId: "c-old",
+      serviceId: "svc-cut",
+      note: "",
+      preferences: [],
+      status: "pending",
+      createdAt: "2026-05-25",
+      priceCents: 2000,
+    },
+    {
+      id: "r-awaiting-new",
+      clientId: "c-new",
+      serviceId: "svc-cut",
+      note: "",
+      preferences: [],
+      status: "proposed",
+      createdAt: "2026-07-01",
+      priceCents: 2000,
+    },
+  ];
+  const trendAppointments = [
+    appt({ id: "today-1", date: "2026-07-23", requestId: "r-new" }),
+    appt({ id: "today-2", date: "2026-07-23", requestId: "r-new" }),
+    appt({ id: "yesterday-1", date: "2026-07-22", requestId: "r-old" }),
+    appt({ id: "month-1", date: "2026-07-05", requestId: "r-new" }),
+    appt({ id: "prev-month-1", date: "2026-06-05", requestId: "r-old" }),
+    appt({ id: "prev-month-2", date: "2026-06-06", requestId: "r-old" }),
+  ];
+
+  const trends = adminOverviewMetricTrends({
+    appointments: trendAppointments,
+    requests: trendRequests,
+    services,
+    clients,
+    today: "2026-07-23",
+  });
+
+  assert.deepEqual(trends.todayAppointments, { direction: "up", percent: 100 });
+  assert.deepEqual(trends.todayRevenue, { direction: "up", percent: 100 });
+  assert.deepEqual(trends.revenueThisMonth, { direction: "up", percent: 100 });
+  assert.deepEqual(trends.pendingApprovals, { direction: "flat", percent: 0 });
+  assert.deepEqual(trends.openRequests, { direction: "flat", percent: 0 });
+  assert.deepEqual(trends.awaitingClient, { direction: "up", percent: 100 });
 });

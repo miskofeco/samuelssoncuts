@@ -6,10 +6,10 @@ import { useT } from "@/i18n/provider";
 
 // Monochrome-friendly: distinct stone/emerald/sky/amber so it reads in both themes.
 const colors: Record<string, string> = {
-  pending: "#f59e0b",
-  proposed: "#0ea5e9",
-  confirmed: "#10b981",
-  declined: "#a8a29e",
+  pending: "#ff8a1f",
+  proposed: "#ffbd70",
+  confirmed: "#34a853",
+  declined: "#d6d3d1",
 };
 
 export function RequestsByStatusChart({
@@ -62,7 +62,7 @@ export function RequestsByStatusChart({
         {data.map((entry) => (
           <li key={entry.key} className="flex items-center gap-2 text-sm">
             <span
-              className="h-2.5 w-2.5 rounded-full"
+              className="h-2.5 w-2.5 rounded-sm"
               style={{ backgroundColor: colors[entry.key] }}
             />
             <span className="text-stone-600 dark:text-stone-300">{entry.label}</span>

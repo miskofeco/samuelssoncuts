@@ -15,22 +15,25 @@ export function BookingsTrendChart({
 }: {
   data: { label: string; bookings: number }[];
 }) {
+  const accent = "#ff8a1f";
+  const grid = "#e7e5e4";
+
   return (
     <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 600, height: 256 }}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="bookingsFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="currentColor" stopOpacity={0.25} />
-            <stop offset="100%" stopColor="currentColor" stopOpacity={0} />
+            <stop offset="0%" stopColor={accent} stopOpacity={0.3} />
+            <stop offset="100%" stopColor={accent} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.08} vertical={false} />
-        <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "currentColor", opacity: 0.6 }} />
-        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} tick={{ fontSize: 12, fill: "currentColor", opacity: 0.7 }} />
+        <CartesianGrid stroke={grid} strokeOpacity={0.8} vertical={false} />
+        <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#78716c" }} />
+        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} tick={{ fontSize: 12, fill: "#78716c" }} />
         <Tooltip
-          cursor={{ stroke: "currentColor", strokeOpacity: 0.15 }}
+          cursor={{ stroke: accent, strokeOpacity: 0.2 }}
           contentStyle={{
-            borderRadius: 12,
+            borderRadius: 8,
             border: "1px solid rgba(120,120,120,0.2)",
             background: "var(--surface)",
             color: "var(--foreground)",
@@ -40,7 +43,7 @@ export function BookingsTrendChart({
         <Area
           type="monotone"
           dataKey="bookings"
-          stroke="currentColor"
+          stroke={accent}
           strokeWidth={2}
           fill="url(#bookingsFill)"
         />
