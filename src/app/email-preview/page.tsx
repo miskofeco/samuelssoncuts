@@ -231,7 +231,7 @@ export default async function EmailPreviewPage() {
   );
 
   return (
-    <main className="min-h-screen bg-[#f4f1ec] px-5 py-8 text-stone-950">
+    <main className="min-h-screen bg-[#f5f5f5] px-5 py-8 text-stone-950">
       <div className="mx-auto max-w-7xl">
         <header className="mb-8">
           <p className="m-0 text-sm font-semibold uppercase text-stone-500">

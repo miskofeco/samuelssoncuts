@@ -51,6 +51,32 @@ test("email layout avoids visible bordered containers", () => {
   assert.doesNotMatch(detailsBody, /border/);
 });
 
+test("email backgrounds use only white or neutral gray surfaces", () => {
+  const emailSources = [
+    "src/app/email-preview/page.tsx",
+    "src/emails/layout.tsx",
+    ...[
+      "account-approved",
+      "account-blocked",
+      "account-rejected",
+      "appointment-cancelled",
+      "appointment-confirmed",
+      "appointment-proposed",
+      "appointment-reminder",
+      "appointment-rescheduled",
+      "auth-email",
+      "barber-agenda",
+      "booking-received",
+      "booking-request",
+      "client-responded",
+      "slot-taken",
+    ].map((name) => `src/emails/${name}.tsx`),
+  ].map((file) => readFileSync(file, "utf8")).join("\n");
+
+  assert.doesNotMatch(emailSources, /#f4f1ec|#ebe5dc/i);
+  assert.match(layout, /bg-\[#f5f5f5\]/);
+});
+
 test("transactional email templates are localized to Slovak", () => {
   const sources = [
     "src/emails/account-approved.tsx",

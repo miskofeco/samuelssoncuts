@@ -43,7 +43,7 @@ export function EmailLayout({
       </Head>
       <Preview>{preview}</Preview>
       <Tailwind>
-        <Body className="m-0 bg-[#f4f1ec] p-0 font-sans">
+        <Body className="m-0 bg-[#f5f5f5] p-0 font-sans">
           <Container className="mx-auto w-full max-w-[600px] px-5 py-9">
             <Section className="pb-8 text-left">
               <Link href={siteUrl}>
@@ -96,7 +96,7 @@ export function EmailParagraph({ children }: { children: ReactNode }) {
 
 export function EmailNote({ children }: { children: ReactNode }) {
   return (
-    <Section className="my-6 rounded-xl bg-[#ebe5dc] px-5 py-4">
+    <Section className="my-6 rounded-xl bg-white px-5 py-4">
       <Text className="m-0 text-sm italic leading-6 text-stone-700">
         &ldquo;{children}&rdquo;
       </Text>
@@ -106,7 +106,7 @@ export function EmailNote({ children }: { children: ReactNode }) {
 
 export function EmailDetails({ children }: { children: ReactNode }) {
   return (
-    <Section className="my-6 rounded-2xl bg-[#ebe5dc] px-5 py-2">
+    <Section className="my-6 rounded-2xl bg-white px-5 py-2">
       {children}
     </Section>
   );
