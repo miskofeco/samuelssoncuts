@@ -495,7 +495,7 @@ const en = {
     confirmRequest: "Confirm this time",
     chosenTime: "Requested time",
     surcharge: "+10% (gap)",
-    orProposeAnother: "Or propose another time",
+    orProposeAnother: "Or propose different time",
     rescheduleNotePlaceholder:
       "Sorry, I need to move this — does the new time work?",
     cancelConfirmBase: "Cancel this appointment? This frees the slot",
@@ -1365,7 +1365,7 @@ const sk: Dict = {
     confirmRequest: "Potvrdiť tento čas",
     chosenTime: "Požadovaný čas",
     surcharge: "+10 % (medzera)",
-    orProposeAnother: "Alebo navrhnite iný čas",
+    orProposeAnother: "Alebo navrhnúť iný čas",
     rescheduleNotePlaceholder:
       "Prepáčte, potrebujem to presunúť — vyhovuje vám nový čas?",
     cancelConfirmBase: "Zrušiť tento termín? Toto uvoľní časový úsek",

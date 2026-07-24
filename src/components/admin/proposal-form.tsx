@@ -90,7 +90,7 @@ export function ProposalComposer({
     : 0;
 
   const [open, setOpen] = useState(request.status === "pending");
-  const [mobileProposalOpen, setMobileProposalOpen] = useState(false);
+  const [proposalControlsOpen, setProposalControlsOpen] = useState(false);
   const initialDate = request.preferences[0]?.date ?? addDays(1);
   const [date, setDate] = useState(initialDate);
   const [windowFilter, setWindowFilter] = useState<DayWindow | "all">(
@@ -299,29 +299,22 @@ export function ProposalComposer({
 
           {canPropose ? (
             <>
-              {hasChosenSlot ? (
-                <>
-                  <div className="mt-4 md:hidden">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="w-full"
-                      aria-controls={proposalControlsId}
-                      aria-expanded={mobileProposalOpen}
-                      onClick={() => setMobileProposalOpen((value) => !value)}
-                    >
-                      {mobileProposalOpen ? t.admin.hide : t.admin.orProposeAnother}
-                    </Button>
-                  </div>
-                  <p className="mb-1 mt-4 hidden text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400 md:block">
-                    {t.admin.orProposeAnother}
-                  </p>
-                </>
+              {hasChosenSlot && !proposalControlsOpen ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="mt-4 w-full"
+                  aria-controls={proposalControlsId}
+                  aria-expanded={proposalControlsOpen}
+                  onClick={() => setProposalControlsOpen(true)}
+                >
+                  {t.admin.orProposeAnother}
+                </Button>
               ) : null}
 
               <div
                 id={proposalControlsId}
-                className={cn(hasChosenSlot && !mobileProposalOpen && "hidden md:block")}
+                className={cn(hasChosenSlot && !proposalControlsOpen && "hidden")}
               >
                 <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
                   <AvailabilityCalendar
