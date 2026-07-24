@@ -82,12 +82,15 @@ export function ProposalComposer({
   const tone = statusTone[request.status];
   const label = statusLabel(t, request.status);
   const canPropose = request.status === "pending" || request.status === "declined";
+  // The client picked an exact slot (new flow) and it's awaiting confirmation.
+  const hasChosenSlot = Boolean(request.requestedDate && request.requestedTime);
   // Reliability signal at decision time: how many times this client no-showed.
   const clientNoShows = client
     ? appointments.filter((a) => a.clientId === client.id && a.outcome === "no_show").length
     : 0;
 
   const [open, setOpen] = useState(request.status === "pending");
+  const [mobileProposalOpen, setMobileProposalOpen] = useState(false);
   const initialDate = request.preferences[0]?.date ?? addDays(1);
   const [date, setDate] = useState(initialDate);
   const [windowFilter, setWindowFilter] = useState<DayWindow | "all">(
@@ -97,6 +100,7 @@ export function ProposalComposer({
   const [note, setNote] = useState(t.admin.defaultProposalNote);
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
+  const proposalControlsId = `proposal-controls-${request.id}`;
 
   function takenAt(targetDate: string, targetTime: string) {
     return appointments.some(
@@ -153,8 +157,6 @@ export function ProposalComposer({
   }
 
   const conflict = takenAt(date, time);
-  // The client picked an exact slot (new flow) and it's awaiting confirmation.
-  const hasChosenSlot = Boolean(request.requestedDate && request.requestedTime);
 
   return (
     <article
@@ -298,136 +300,152 @@ export function ProposalComposer({
           {canPropose ? (
             <>
               {hasChosenSlot ? (
-                <p className="mb-1 mt-4 text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                  {t.admin.orProposeAnother}
-                </p>
+                <>
+                  <div className="mt-4 md:hidden">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-full"
+                      aria-controls={proposalControlsId}
+                      aria-expanded={mobileProposalOpen}
+                      onClick={() => setMobileProposalOpen((value) => !value)}
+                    >
+                      {mobileProposalOpen ? t.admin.hide : t.admin.orProposeAnother}
+                    </Button>
+                  </div>
+                  <p className="mb-1 mt-4 hidden text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400 md:block">
+                    {t.admin.orProposeAnother}
+                  </p>
+                </>
               ) : null}
-              <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-                {/* Availability calendar */}
-                <AvailabilityCalendar
-                  t={t}
-                  locale={locale}
-                  appointments={appointments}
-                  blockedDates={blockedDates}
-                  preferences={request.preferences}
-                  selectedDate={date}
-                  onPickDate={chooseDate}
-                />
 
-                {/* Date + window + slot controls */}
-                <div>
-              {/* Date + window controls */}
-              <div className="grid gap-2 sm:grid-cols-2">
-                <label className="block">
+              <div
+                id={proposalControlsId}
+                className={cn(hasChosenSlot && !mobileProposalOpen && "hidden md:block")}
+              >
+                <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
+                  <AvailabilityCalendar
+                    t={t}
+                    locale={locale}
+                    appointments={appointments}
+                    blockedDates={blockedDates}
+                    preferences={request.preferences}
+                    selectedDate={date}
+                    onPickDate={chooseDate}
+                  />
+
+                  <div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                          {t.admin.date}
+                        </span>
+                        <input
+                          type="date"
+                          value={date}
+                          min={addDays(0)}
+                          onChange={(event) => chooseDate(event.target.value)}
+                          className="mt-1.5 h-11 w-full rounded-lg border border-black/10 px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white dark:[color-scheme:dark]"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                          {t.admin.timeOfDay}
+                        </span>
+                        <select
+                          value={windowFilter}
+                          onChange={(event) =>
+                            setWindowFilter(event.target.value as DayWindow | "all")
+                          }
+                          className="mt-1.5 h-11 w-full rounded-lg border border-black/10 px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white"
+                        >
+                          <option value="all">{t.admin.allHours}</option>
+                          <option value="Morning">{t.windows.Morning}</option>
+                          <option value="Midday">{t.windows.Midday}</option>
+                          <option value="Afternoon">{t.windows.Afternoon}</option>
+                          <option value="Evening">{t.windows.Evening}</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="mt-3">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                        {t.admin.pickSlot}
+                      </span>
+                      <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+                        {slots.map(({ hour, taken }) => {
+                          const selected = hour === time;
+                          return (
+                            <button
+                              key={hour}
+                              type="button"
+                              disabled={taken}
+                              onClick={() => setTime(hour)}
+                              title={taken ? t.admin.alreadyBooked : t.windows[windowForTime(hour)]}
+                              className={cn(
+                                "h-10 rounded-lg border text-sm font-semibold tabular-nums transition",
+                                taken &&
+                                  "cursor-not-allowed border-black/5 bg-stone-100 text-stone-300 line-through dark:border-white/5 dark:bg-stone-800 dark:text-stone-600",
+                                !taken &&
+                                  selected &&
+                                  "border-black bg-black text-white shadow-sm dark:border-white dark:bg-white dark:text-black",
+                                !taken &&
+                                  !selected &&
+                                  "border-black/10 bg-white text-stone-700 hover:border-black dark:border-white/15 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-white",
+                              )}
+                            >
+                              {hour}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.7rem] text-stone-400 dark:text-stone-500">
+                        <span className="flex items-center gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded border border-black/10 bg-white dark:border-white/15 dark:bg-stone-900" />
+                          {t.admin.legendOpen}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded border border-black/5 bg-stone-100 dark:bg-stone-800" />
+                          {t.admin.legendBooked}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Note */}
+                <label className="mt-3 block">
                   <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                    {t.admin.date}
+                    {t.admin.messageToClient}
                   </span>
-                  <input
-                    type="date"
-                    value={date}
-                    min={addDays(0)}
-                    onChange={(event) => chooseDate(event.target.value)}
-                    className="mt-1.5 h-11 w-full rounded-lg border border-black/10 px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white dark:[color-scheme:dark]"
+                  <textarea
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    rows={2}
+                    className="mt-1.5 w-full resize-none rounded-lg border border-black/10 px-3 py-2 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white"
                   />
                 </label>
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                    {t.admin.timeOfDay}
-                  </span>
-                  <select
-                    value={windowFilter}
-                    onChange={(event) =>
-                      setWindowFilter(event.target.value as DayWindow | "all")
-                    }
-                    className="mt-1.5 h-11 w-full rounded-lg border border-black/10 px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white"
-                  >
-                    <option value="all">{t.admin.allHours}</option>
-                    <option value="Morning">{t.windows.Morning}</option>
-                    <option value="Midday">{t.windows.Midday}</option>
-                    <option value="Afternoon">{t.windows.Afternoon}</option>
-                    <option value="Evening">{t.windows.Evening}</option>
-                  </select>
-                </label>
+
+                {conflict ? (
+                  <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-500/10 dark:text-red-300">
+                    {t.admin.slotTakenShort}
+                  </p>
+                ) : null}
+                <Feedback result={feedback && !feedback.ok ? feedback : null} className="mt-2" />
+
+                <Button
+                  type="button"
+                  onClick={submit}
+                  disabled={conflict || pending}
+                  className="mt-3 w-full"
+                >
+                  {pending
+                    ? t.common.sending
+                    : request.status === "declined"
+                      ? t.admin.reproposeAt(formatDay(date, locale), time)
+                      : t.admin.proposeAt(formatDay(date, locale), time)}
+                </Button>
               </div>
-
-              {/* Time slot grid */}
-              <div className="mt-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                  {t.admin.pickSlot}
-                </span>
-                <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
-                  {slots.map(({ hour, taken }) => {
-                    const selected = hour === time;
-                    return (
-                      <button
-                        key={hour}
-                        type="button"
-                        disabled={taken}
-                        onClick={() => setTime(hour)}
-                        title={taken ? t.admin.alreadyBooked : t.windows[windowForTime(hour)]}
-                        className={cn(
-                          "h-10 rounded-lg border text-sm font-semibold tabular-nums transition",
-                          taken &&
-                            "cursor-not-allowed border-black/5 bg-stone-100 text-stone-300 line-through dark:border-white/5 dark:bg-stone-800 dark:text-stone-600",
-                          !taken &&
-                            selected &&
-                            "border-black bg-black text-white shadow-sm dark:border-white dark:bg-white dark:text-black",
-                          !taken &&
-                            !selected &&
-                            "border-black/10 bg-white text-stone-700 hover:border-black dark:border-white/15 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-white",
-                        )}
-                      >
-                        {hour}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.7rem] text-stone-400 dark:text-stone-500">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded border border-black/10 bg-white dark:border-white/15 dark:bg-stone-900" />
-                    {t.admin.legendOpen}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded border border-black/5 bg-stone-100 dark:bg-stone-800" />
-                    {t.admin.legendBooked}
-                  </span>
-                </div>
-              </div>
-                </div>
-              </div>
-
-              {/* Note */}
-              <label className="mt-3 block">
-                <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                  {t.admin.messageToClient}
-                </span>
-                <textarea
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  rows={2}
-                  className="mt-1.5 w-full resize-none rounded-lg border border-black/10 px-3 py-2 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white"
-                />
-              </label>
-
-              {conflict ? (
-                <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-500/10 dark:text-red-300">
-                  {t.admin.slotTakenShort}
-                </p>
-              ) : null}
-              <Feedback result={feedback && !feedback.ok ? feedback : null} className="mt-2" />
-
-              <Button
-                type="button"
-                onClick={submit}
-                disabled={conflict || pending}
-                className="mt-3 w-full"
-              >
-                {pending
-                  ? t.common.sending
-                  : request.status === "declined"
-                    ? t.admin.reproposeAt(formatDay(date, locale), time)
-                    : t.admin.proposeAt(formatDay(date, locale), time)}
-              </Button>
             </>
           ) : null}
         </div>
