@@ -88,6 +88,7 @@ API routes:
 - `/auth/callback`: OAuth/PKCE callback and recovery-session handoff.
 - `/auth/confirm`: token-hash auth email verification.
 - `/api/cron/reminders`: Vercel cron reminder job, authorized by `CRON_SECRET`.
+- `/api/cron/complete-appointments`: Vercel cron outcome sweep, authorized by `CRON_SECRET`; marks confirmed appointments `completed` after they ended at least two hours ago unless an outcome was already recorded.
 - `/api/calendar/export`: authenticated one-off ICS download.
 - `/api/calendar/feed/[token]`: token-authorized ICS subscription feed through a SECURITY DEFINER RPC.
 - `/api/calendar/event/[appointmentId]`: appointment ICS event.
@@ -226,3 +227,4 @@ Use risk-based verification. Do not create or run tests blindly for every cosmet
 - Database schema/RLS/RPC: add a migration and update `src/lib/database.types.ts`.
 - Email content: update `src/emails` and preview via `/email-preview` when running the app.
 - Push behavior: keep subscription APIs, `public/sw.js`, `src/server/notifications.ts`, and `src/server/push-payloads.ts` in sync.
+- Appointment outcome automation: keep `src/server/appointment-outcomes.ts`, `/api/cron/complete-appointments`, `vercel.json`, and the supporting Supabase index in sync.
