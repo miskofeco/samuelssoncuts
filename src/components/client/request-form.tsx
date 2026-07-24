@@ -85,15 +85,17 @@ export function RequestForm({
   }
 
   return (
-    <Card className="rounded-2xl p-3 sm:p-5">
+    <Card className="-mx-4 !rounded-none !border-0 !bg-transparent !p-0 !shadow-none sm:mx-0 sm:!rounded-2xl sm:!border sm:!border-black/10 sm:!bg-white sm:!p-5 sm:!shadow-[0_18px_70px_rgba(0,0,0,0.06)] dark:sm:!border-white/10 dark:sm:!bg-stone-900 dark:sm:!shadow-[0_18px_70px_rgba(0,0,0,0.4)]">
       <form onSubmit={onSubmit}>
-        <SectionHeader
-          eyebrow={t.client.newAppointment}
-          title={t.client.chooseService}
-        />
+        <div className="px-4 sm:px-0">
+          <SectionHeader
+            eyebrow={t.client.newAppointment}
+            title={t.client.chooseService}
+          />
+        </div>
 
         {orderedServices.length > 0 ? (
-          <div className="mt-4 grid gap-2 lg:grid-cols-3">
+          <div className="mt-4 grid gap-3 px-4 sm:gap-2 sm:px-0 lg:grid-cols-3">
             {orderedServices.map((service) => {
               const selected = service.id === serviceId;
               const imageSrc = defaultServiceImage(service);
@@ -162,12 +164,12 @@ export function RequestForm({
             />
 
             {slot?.priceKind === "gap" ? (
-              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-300">
+              <p className="mx-4 mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 sm:mx-0 dark:bg-amber-500/10 dark:text-amber-300">
                 {t.client.surchargeWarning(pricingSettings.gapSurchargePercent)}
               </p>
             ) : null}
             {slot?.priceKind === "vip" ? (
-              <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-500/10 dark:text-sky-200">
+              <p className="mx-4 mt-3 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 sm:mx-0 dark:bg-sky-500/10 dark:text-sky-200">
                 {t.client.vipWarning}
               </p>
             ) : null}
@@ -183,12 +185,12 @@ export function RequestForm({
           value={note}
           onChange={(event) => setNote(event.target.value)}
           placeholder={t.client.notesPlaceholder}
-          className="mt-4"
+          className="mx-4 mt-4 sm:mx-0"
         />
 
-        <Feedback result={feedback} className="mt-4" />
+        <Feedback result={feedback} className="mx-4 mt-4 sm:mx-0" />
 
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-4 mt-4 flex flex-col gap-3 sm:mx-0 sm:flex-row sm:items-center sm:justify-between">
           {slot ? (
             <p className="text-sm font-medium text-stone-700 dark:text-stone-300">
               {t.client.youPayPrefix}:{" "}

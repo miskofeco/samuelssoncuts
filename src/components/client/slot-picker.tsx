@@ -120,10 +120,12 @@ export function SlotPicker({
   }, [businessHours, date, confirmed, pendingStarts, pricingSettings, service.duration, service.price]);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+    <div className="grid gap-6 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       {/* Date */}
-      <div className="rounded-xl border border-black/10 p-3 dark:border-white/10">
-        <p className="mb-2 text-sm font-semibold text-black dark:text-white">{t.client.pickDate}</p>
+      <div className="px-4 sm:rounded-xl sm:border sm:border-black/10 sm:p-3 sm:dark:border-white/10">
+        <p className="mb-2 text-sm font-semibold text-black dark:text-white">
+          {t.client.pickDate}
+        </p>
         <MonthCalendar
           onDayClick={(cell) => {
             const closedForBusinessHours = isDateClosedForBusinessHours(cell.date, businessHours);
@@ -178,7 +180,7 @@ export function SlotPicker({
       </div>
 
       {/* Times */}
-      <div className="rounded-xl border border-black/10 p-3 dark:border-white/10">
+      <div className="px-4 sm:rounded-xl sm:border sm:border-black/10 sm:p-3 sm:dark:border-white/10">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-sm font-semibold text-black dark:text-white">{t.client.pickTime}</p>
           <span className="text-xs text-stone-500 dark:text-stone-400">

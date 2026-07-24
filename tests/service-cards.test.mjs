@@ -31,6 +31,13 @@ test("client booking uses service cards with public image defaults", () => {
   assert.doesNotMatch(requestForm, /SelectField/);
 });
 
+test("client booking form is full-width and unframed on mobile only", () => {
+  assert.match(requestForm, /-mx-4/);
+  assert.match(requestForm, /!rounded-none !border-0 !bg-transparent !p-0 !shadow-none/);
+  assert.match(requestForm, /sm:mx-0 sm:!rounded-2xl sm:!border/);
+  assert.match(requestForm, /mt-4 grid gap-3 px-4 sm:gap-2 sm:px-0/);
+});
+
 test("services carry descriptions into client booking cards", () => {
   assert.match(schedule, /description: "Detailed haircut with consultation and styling\."/);
   assert.match(dashboardData, /description: row\.description/);

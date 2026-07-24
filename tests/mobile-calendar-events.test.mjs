@@ -54,6 +54,15 @@ test("client booking hides blocked x marker on disabled dates", () => {
   assert.match(slotPicker, /return unavailable && !disabledForBookingMarker \? \(/);
 });
 
+test("client booking picker removes nested panel framing on mobile only", () => {
+  assert.match(slotPicker, /grid gap-6 sm:gap-4/);
+  assert.match(
+    slotPicker,
+    /px-4 sm:rounded-xl sm:border sm:border-black\/10 sm:p-3 sm:dark:border-white\/10/,
+  );
+  assert.doesNotMatch(slotPicker, /<div className="rounded-xl border border-black\/10 p-3/);
+});
+
 test("adjacent month calendar cells remain clickable and renderable", () => {
   assert.doesNotMatch(monthCalendar, /cell\.inMonth && dayClassName/);
   assert.doesNotMatch(monthCalendar, /onDayClick && cell\.inMonth/);
