@@ -76,6 +76,8 @@ export type Proposal = {
 
 export type AppointmentOutcome = "completed" | "no_show" | "cancelled";
 
+export type AppointmentStatus = "confirmed" | "cancelled";
+
 export type Appointment = {
   id: string;
   requestId: string | null;
@@ -85,6 +87,11 @@ export type Appointment = {
   serviceId: string;
   date: string;
   time: string;
+  /**
+   * `cancelled` rows keep the slot's history (outcome analytics) but must never
+   * render as booked. Operational loaders return confirmed rows only.
+   */
+  status: AppointmentStatus;
   outcome?: AppointmentOutcome | null;
 };
 

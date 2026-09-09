@@ -16,7 +16,7 @@ const tones: Record<Tone, string> = {
 
 // A small icon in a rounded chip with a hover/focus tooltip. The tooltip is a
 // CSS-only popover (group-hover / focus-within) positioned relative to the chip,
-// so it needs no portal and scales correctly inside the desktop-zoom layout
+// so it needs no portal and scales with the root font size
 // (unlike fixed-position tooltips). The label is always exposed to assistive
 // tech via aria-label + a visually-hidden span.
 export function IconBadge({

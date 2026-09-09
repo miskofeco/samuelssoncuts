@@ -1,15 +1,20 @@
 "use client";
 
+import { Switch } from "radix-ui";
+
 import { cn } from "@/lib/classnames";
 
-// Accessible on/off switch. Styled to match the segmented-control / button
-// language (black fill in light mode, white in dark). When `disabled` it renders
-// as a fixed "on" pill (used for the always-on Necessary category).
+/**
+ * Accessible on/off switch (Radix Switch: `role="switch"`, `aria-checked`,
+ * Space/Enter toggling, form integration via `name`). Black fill in light mode,
+ * white in dark, matching the button language.
+ */
 export function Toggle({
   checked,
   onChange,
   disabled,
   label,
+  name,
   size = "md",
   className,
 }: {
@@ -18,41 +23,35 @@ export function Toggle({
   disabled?: boolean;
   /** Accessible label for the switch (the visible label sits next to it). */
   label: string;
+  name?: string;
   size?: "sm" | "md";
   className?: string;
 }) {
   const sm = size === "sm";
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
+    <Switch.Root
+      checked={checked}
+      onCheckedChange={onChange}
       disabled={disabled}
-      onClick={disabled ? undefined : () => onChange?.(!checked)}
+      aria-label={label}
+      name={name}
       className={cn(
-        "relative inline-flex shrink-0 items-center rounded-full border transition focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 dark:focus:ring-white dark:focus:ring-offset-stone-900",
+        "relative inline-flex shrink-0 items-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 dark:focus-visible:ring-white dark:focus-visible:ring-offset-stone-900",
         sm ? "h-5 w-9" : "h-6 w-11",
-        checked
-          ? "border-transparent bg-black dark:bg-white"
-          : "border-black/15 bg-stone-200 dark:border-white/15 dark:bg-stone-700",
+        "data-[state=checked]:border-transparent data-[state=checked]:bg-black dark:data-[state=checked]:bg-white",
+        "data-[state=unchecked]:border-black/15 data-[state=unchecked]:bg-stone-200 dark:data-[state=unchecked]:border-white/15 dark:data-[state=unchecked]:bg-stone-700",
         disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
         className,
       )}
     >
-      <span
+      <Switch.Thumb
         className={cn(
-          "inline-block transform rounded-full bg-white shadow transition dark:bg-stone-900",
-          sm ? "h-4 w-4" : "h-5 w-5",
+          "block rounded-full bg-white shadow transition-transform dark:bg-stone-900",
           sm
-            ? checked
-              ? "translate-x-[1.125rem]"
-              : "translate-x-0.5"
-            : checked
-              ? "translate-x-[1.375rem]"
-              : "translate-x-0.5",
+            ? "size-4 data-[state=checked]:translate-x-[1.125rem] data-[state=unchecked]:translate-x-0.5"
+            : "size-5 data-[state=checked]:translate-x-[1.375rem] data-[state=unchecked]:translate-x-0.5",
         )}
       />
-    </button>
+    </Switch.Root>
   );
 }

@@ -1,6 +1,8 @@
 // Daily reminder cron — called by Vercel Cron at 08:00 every morning.
-// Finds confirmed appointments starting 23–25 hours from now that haven't been
+// Finds every confirmed appointment on the NEXT shop-local day that hasn't been
 // reminded yet, sends a reminder email to each client, and stamps reminded_at.
+// (A narrow "23–25h from now" band would only catch appointments starting near
+// the cron minute, so most clients never got a reminder.)
 //
 // Vercel Cron schedule: vercel.json → "0 8 * * *"
 
@@ -13,8 +15,10 @@ import { dateInShopTimeZone, timeInShopTimeZone } from "@/lib/time-zone";
 import { sendEmail } from "@/lib/email";
 import { AppointmentReminderEmail } from "@/emails/appointment-reminder";
 import { BarberAgendaEmail, type AgendaItem } from "@/emails/barber-agenda";
+import { isAuthorizedCronRequest } from "@/server/cron-auth";
 import { enforceRateLimit } from "@/server/rate-limit";
 import { createNotification } from "@/server/notifications";
+import { reminderWindowFor } from "@/server/reminder-window";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,7 +41,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (authHeader !== `Bearer ${secret}`) {
+  if (!isAuthorizedCronRequest(authHeader, secret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -55,8 +59,7 @@ export async function GET(request: NextRequest) {
   // anon client. Use the service-role admin client to read across all clients.
   const supabase = getSupabaseAdminClient();
   const now = new Date();
-  const windowStart = new Date(now.getTime() + 23 * 60 * 60 * 1000).toISOString();
-  const windowEnd = new Date(now.getTime() + 25 * 60 * 60 * 1000).toISOString();
+  const { startIso: windowStart, endIso: windowEnd } = reminderWindowFor(now);
 
   // Fetch appointments in the reminder window. We use individual profile/service
   // lookups to avoid TypeScript issues with the generated join types before the
@@ -66,7 +69,7 @@ export async function GET(request: NextRequest) {
     .select("id, starts_at, service_id, client_id")
     .eq("status", "confirmed")
     .gte("starts_at", windowStart)
-    .lte("starts_at", windowEnd)
+    .lt("starts_at", windowEnd)
     .is("reminded_at", null);
 
   if (error) {

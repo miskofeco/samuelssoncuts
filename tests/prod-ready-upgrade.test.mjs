@@ -64,17 +64,22 @@ test("client deletion is rate limited and returns a delete-specific message", ()
   assert.doesNotMatch(deleteBody, /return \{ ok: true, message: t\.feedback\.clientBlocked \}/);
 });
 
-test("modal traps focus and restores it on close", () => {
-  assert.match(modal, /FOCUSABLE_SELECTOR/);
-  assert.match(modal, /restoreFocusRef/);
-  assert.match(modal, /function handleKeyDown/);
-  assert.match(modal, /aria-describedby=/);
+test("modal traps focus and restores it on close (Radix Dialog)", () => {
+  // Radix Dialog.Content wraps FocusScope (trap + return focus), DismissableLayer
+  // (Escape/outside dismiss) and RemoveScroll (iOS-safe scroll lock), and wires
+  // aria-labelledby/aria-describedby from Title/Description automatically.
+  assert.match(modal, /<Dialog\.Content/);
+  assert.match(modal, /<Dialog\.Title/);
+  assert.match(modal, /<Dialog\.Description/);
+  assert.match(modal, /<Dialog\.Close/);
 });
 
-test("clickable data-table rows are keyboard accessible", () => {
-  assert.match(dataTable, /role=\{onRowClick \? "button" : undefined\}/);
-  assert.match(dataTable, /tabIndex=\{onRowClick \? 0 : undefined\}/);
-  assert.match(dataTable, /event\.key === "Enter" \|\| event\.key === " "/);
+test("clickable data-table rows are keyboard accessible without breaking table semantics", () => {
+  // A real <button> in the first cell gives a Tab stop + Enter/Space activation;
+  // `role="button"` on a <tr> is invalid ARIA and hides the row from table navigation.
+  assert.doesNotMatch(dataTable, /role=\{onRowClick \? "button" : undefined\}/);
+  assert.match(dataTable, /aria-label=\{rowLabel\?\.\(row\)\}/);
+  assert.match(dataTable, /mobileCard/);
 });
 
 test("oauth callback handles provider errors and failed code exchange", () => {

@@ -6,7 +6,7 @@ import { updateSession } from "@/lib/supabase/proxy";
 // 'strict-dynamic' (the real XSS defense); styles allow 'unsafe-inline' because
 // React/Recharts emit inline style attributes and there is no script-injection
 // risk from styles. The Supabase origin is allowed for REST, realtime
-// websockets (wss), and public Storage images.
+// websockets (wss), public Storage images, and OAuth form-action redirects.
 function buildCsp(nonce: string) {
   const isDev = process.env.NODE_ENV === "development";
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -33,7 +33,9 @@ function buildCsp(nonce: string) {
     `frame-ancestors 'none'`,
     `object-src 'none'`,
     `base-uri 'self'`,
-    `form-action 'self'`,
+    // Server actions that redirect to the OAuth provider hop through the
+    // Supabase auth host; Chrome applies form-action to that redirect.
+    `form-action 'self' ${supabaseHost}`.trim(),
     `upgrade-insecure-requests`,
   ];
 

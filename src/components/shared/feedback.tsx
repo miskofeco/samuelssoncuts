@@ -1,6 +1,8 @@
 import type { ActionResult } from "@/domain/types";
 import { cn } from "@/lib/classnames";
 
+import { LocalizedDone } from "./feedback-done";
+
 /** Renders an ActionResult (or a plain error string) as an inline banner. */
 export function Feedback({
   result,
@@ -12,7 +14,7 @@ export function Feedback({
   if (!result) return null;
 
   const ok = result.ok;
-  const text = ok ? (result.message ?? "Done.") : result.error;
+  const text = ok ? (result.message ?? <LocalizedDone />) : result.error;
 
   return (
     <p

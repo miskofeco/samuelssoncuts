@@ -6,6 +6,8 @@ import { ConsentBanner } from "@/components/consent/consent-banner";
 import { ConsentPreferences } from "@/components/consent/consent-preferences";
 import { ConsentProvider } from "@/components/consent/consent-provider";
 import { ThemeScript } from "@/components/shared/theme-script";
+import { Toaster } from "@/components/shared/toaster";
+import { TooltipProvider } from "@/components/shared/tooltip";
 import { LanguageProvider } from "@/i18n/provider";
 import { getConsent } from "@/lib/consent/server";
 import { getSiteUrl } from "@/lib/env";
@@ -33,6 +35,9 @@ export async function generateMetadata(): Promise<Metadata> {
 // theme-color adapts to the light/dark app surface (Next 16 requires this in the
 // dedicated viewport export, not in metadata).
 export const viewport: Viewport = {
+  // Let the layout extend under notches/home indicators so env(safe-area-inset-*)
+  // padding in sheets, the top bar and the toaster takes effect in the PWA.
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f4f4f5" },
     { media: "(prefers-color-scheme: dark)", color: "#0c0a09" },
@@ -61,9 +66,12 @@ export default async function RootLayout({
       <body className="flex min-h-full flex-col antialiased">
         <LanguageProvider lang={lang}>
           <ConsentProvider initial={consent}>
-            {children}
-            <ConsentBanner />
-            <ConsentPreferences />
+            <TooltipProvider>
+              {children}
+              <ConsentBanner />
+              <ConsentPreferences />
+              <Toaster />
+            </TooltipProvider>
           </ConsentProvider>
         </LanguageProvider>
       </body>

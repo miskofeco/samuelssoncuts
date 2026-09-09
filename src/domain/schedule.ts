@@ -6,7 +6,7 @@ import type {
   PricingSettings,
   Service,
 } from "./types";
-import { dateInShopTimeZone } from "../lib/time-zone";
+import { addDaysToDate, dateInShopTimeZone } from "../lib/time-zone";
 
 export const services: Service[] = [
   {
@@ -262,17 +262,27 @@ export function createCalendarDays(startOffset = 0, length = 21) {
 
 // Every yyyy-mm-dd from start to end inclusive. Used to expand blocked_times
 // ranges (timestamptz) into a flat set of blocked calendar days.
+// Shop-local calendar dates covered by an instant range. `end` is treated as
+// exclusive at the millisecond level, so a whole-day block stored as
+// [day 00:00, next day 00:00) yields only `day`, while legacy rows ending at
+// 23:59:59 and intra-day slices keep yielding their own day. Plain yyyy-mm-dd
+// inputs are accepted as-is.
 export function eachDate(start: string, end: string) {
-  const days: string[] = [];
-  const cursor = new Date(`${start.slice(0, 10)}T12:00:00`);
-  const last = new Date(`${end.slice(0, 10)}T12:00:00`);
+  const first = isoDateOnly(start) ? start : dateInShopTimeZone(start);
+  const last = isoDateOnly(end)
+    ? end
+    : dateInShopTimeZone(new Date(new Date(end).getTime() - 1).toISOString());
 
-  while (cursor <= last) {
-    days.push(cursor.toISOString().slice(0, 10));
-    cursor.setDate(cursor.getDate() + 1);
+  const days: string[] = [];
+  for (let cursor = first; cursor <= last; cursor = addDaysToDate(cursor, 1)) {
+    days.push(cursor);
   }
 
-  return days;
+  return days.length > 0 ? days : [first];
+}
+
+function isoDateOnly(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 export function todayIso() {
@@ -370,7 +380,7 @@ export function overlaps(startA: number, durA: number, startB: number, durB: num
   return startA < startB + durB && startB < startA + durA;
 }
 
-type SlotAppt = { date: string; time: string; durationMinutes: number };
+export type SlotAppt = { date: string; time: string; durationMinutes: number };
 export type SlotBusinessHoursDay = Pick<
   BusinessHoursDay,
   "weekday" | "opensAt" | "closesAt" | "closed"

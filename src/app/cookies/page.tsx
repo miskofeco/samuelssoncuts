@@ -24,7 +24,7 @@ export default async function CookiePolicyPage() {
   const policy = t.consent.policy;
 
   return (
-    <main className="desktop-zoom app-surface min-h-screen px-4 py-10">
+    <main className="app-surface min-h-screen px-4 py-10">
       <div className="absolute right-4 top-4 flex items-center gap-2">
         <LanguageToggle />
         <ThemeToggle />

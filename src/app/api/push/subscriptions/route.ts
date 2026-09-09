@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { requireProfile } from "@/server/auth";
+import { getCurrentProfile } from "@/server/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +25,17 @@ function assertSameOrigin(request: NextRequest) {
   return origin === request.nextUrl.origin;
 }
 
+// API routes answer JSON, not redirects: an unauthenticated fetch from the
+// service-worker opt-in flow must see a 401 rather than a 307 to /login.
+async function authenticatedProfile() {
+  const { configured, profile } = await getCurrentProfile();
+  return configured ? profile : null;
+}
+
+function unauthorized() {
+  return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+}
+
 function expirationIso(expirationTime: number | null | undefined) {
   if (!expirationTime) return null;
   const date = new Date(expirationTime);
@@ -36,7 +47,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
-  const profile = await requireProfile();
+  const profile = await authenticatedProfile();
+  if (!profile) {
+    return unauthorized();
+  }
   const parsed = subscriptionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: "Invalid subscription" }, { status: 400 });
@@ -70,7 +84,10 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
-  const profile = await requireProfile();
+  const profile = await authenticatedProfile();
+  if (!profile) {
+    return unauthorized();
+  }
   const parsed = deleteSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: "Invalid subscription" }, { status: 400 });

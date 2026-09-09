@@ -62,6 +62,7 @@ function mapBusySlotRow(row: BusySlotRow): Appointment {
     serviceId: row.service_id,
     date: dateFromIso(row.starts_at),
     time: timeFromIso(row.starts_at),
+    status: "confirmed",
   };
 }
 
@@ -144,8 +145,14 @@ export function mapAppointmentRow(row: AppointmentRow): Appointment {
     serviceId: row.service_id,
     date: dateFromIso(row.starts_at),
     time: timeFromIso(row.starts_at),
+    status: row.status,
     outcome: row.outcome,
   };
+}
+
+/** Confirmed appointments only — cancelled rows must never render as booked. */
+export function confirmedOnly(rows: AppointmentRow[] | null | undefined): AppointmentRow[] {
+  return (rows ?? []).filter((row) => row.status === "confirmed");
 }
 
 export function mapNotificationRow(row: NotificationRow): Notification {
@@ -262,14 +269,17 @@ export async function loadBlockedDays(): Promise<{
   fail("blocked_times", error);
 
   const dates = new Set<string>();
-    const ranges = (data ?? []).map((row) => {
-    for (const day of eachDate(row.starts_at, row.ends_at)) {
+  const ranges = (data ?? []).map((row) => {
+    // Whole-day blocks end at the NEXT shop day's midnight (exclusive), so the
+    // last covered day comes from eachDate rather than the raw end instant.
+    const days = eachDate(row.starts_at, row.ends_at);
+    for (const day of days) {
       dates.add(day);
     }
     return {
       id: row.id,
-      start: dateFromIso(row.starts_at),
-      end: dateFromIso(row.ends_at),
+      start: days[0] ?? dateFromIso(row.starts_at),
+      end: days[days.length - 1] ?? dateFromIso(row.ends_at),
       reason: row.reason,
     };
   });
@@ -461,6 +471,7 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
         .from("appointments")
         .select("*")
         .eq("client_id", profile.id)
+        .eq("status", "confirmed")
         .order("starts_at"),
       supabase.from("services").select("*"),
       (() => {
@@ -534,12 +545,17 @@ export async function loadBookingData(): Promise<{
   };
 }
 
-/** Admin overview metrics + recent activity. */
+/**
+ * Admin overview metrics + recent activity. `appointments` holds confirmed rows
+ * for the booking strip / upcoming list; `analyticsAppointments` also includes
+ * cancelled rows so outcome charts can count cancellations.
+ */
 export async function loadAdminOverview(): Promise<{
   clients: ClientProfile[];
   requests: BookingRequest[];
   proposals: Proposal[];
   appointments: Appointment[];
+  analyticsAppointments: Appointment[];
   notifications: Notification[];
   services: Service[];
 }> {
@@ -576,7 +592,8 @@ export async function loadAdminOverview(): Promise<{
     clients: (profilesResult.data ?? []).map(mapClientRow),
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
-    appointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
+    appointments: confirmedOnly(appointmentsResult.data).map(mapAppointmentRow),
+    analyticsAppointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
     notifications: (notificationsResult.data ?? []).map(mapNotificationRow),
   };
 }
@@ -613,7 +630,7 @@ export async function loadAdminCalendar(): Promise<{
     clients: (profilesResult.data ?? []).map(mapClientRow),
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
-    appointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
+    appointments: confirmedOnly(appointmentsResult.data).map(mapAppointmentRow),
     blockedDates: blocked.dates,
   };
 }
@@ -675,7 +692,7 @@ export async function loadRequestQueue(): Promise<{
     clients: (profilesResult.data ?? []).map(mapClientRow),
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
-    appointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
+    appointments: confirmedOnly(appointmentsResult.data).map(mapAppointmentRow),
     blockedDates: blocked.dates,
   };
 }

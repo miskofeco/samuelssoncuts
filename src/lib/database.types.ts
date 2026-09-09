@@ -232,7 +232,7 @@ export type Database = {
           service_id: string;
           starts_at: string;
           ends_at: string;
-          status: string;
+          status: "confirmed" | "cancelled";
           reminded_at: string | null;
           outcome: "completed" | "no_show" | "cancelled" | null;
           created_at: string;
@@ -247,7 +247,7 @@ export type Database = {
           service_id: string;
           starts_at: string;
           ends_at: string;
-          status?: string;
+          status?: "confirmed" | "cancelled";
           reminded_at?: string | null;
           outcome?: "completed" | "no_show" | "cancelled" | null;
           created_at?: string;
@@ -427,6 +427,28 @@ export type Database = {
         Args: {
           p_appointment_id: string;
           p_new_start: string;
+          p_price_cents?: number | null;
+          p_surcharge?: boolean | null;
+        };
+        Returns: string;
+      };
+      client_cancel_request: {
+        Args: { p_request_id: string };
+        Returns: string;
+      };
+      admin_cancel_appointment: {
+        Args: {
+          p_appointment_id: string;
+          p_allow_past?: boolean;
+        };
+        Returns: string | null;
+      };
+      admin_reschedule_appointment_to_proposal: {
+        Args: {
+          p_appointment_id: string;
+          p_new_start: string;
+          p_new_end: string;
+          p_note?: string | null;
         };
         Returns: string;
       };

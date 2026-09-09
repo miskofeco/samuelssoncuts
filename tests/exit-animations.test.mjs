@@ -7,24 +7,27 @@ const mobileNav = readFileSync("src/components/layout/mobile-nav.tsx", "utf8");
 const realtimeBadge = readFileSync("src/hooks/use-realtime-badge.ts", "utf8");
 const css = readFileSync("src/app/globals.css", "utf8");
 
-test("modal remains mounted while playing its close animation", () => {
-  assert.match(modal, /const \[mounted, setMounted\]/);
-  assert.match(modal, /onAnimationEnd/);
-  assert.match(modal, /ss-overlay-out/);
-  assert.match(modal, /ss-modal-panel-out/);
-  assert.doesNotMatch(modal, /if \(!open\) return null;/);
+const sheet = readFileSync("src/components/shared/sheet.tsx", "utf8");
+
+// Radix Presence keeps Dialog content mounted while the [data-state="closed"]
+// animation plays, so exit animations no longer need hand-rolled mounted state.
+test("modal is a Radix dialog with data-state driven enter/exit animations", () => {
+  assert.match(modal, /from "radix-ui"/);
+  assert.match(modal, /<Dialog\.Portal>/);
+  assert.match(modal, /<Dialog\.Overlay className="ss-overlay /);
+  assert.match(modal, /"ss-modal-panel /);
+  assert.doesNotMatch(modal, /const \[mounted, setMounted\]/);
+  assert.doesNotMatch(modal, /document\.body\.style\.overflow/);
 });
 
-test("mobile sidebar remains mounted while playing its close animation", () => {
-  assert.match(mobileNav, /const \[mounted, setMounted\]/);
-  assert.match(mobileNav, /onAnimationEnd/);
-  assert.match(mobileNav, /ss-overlay-out/);
-  assert.match(mobileNav, /ss-drawer-out/);
-  assert.match(mobileNav, /\{mounted \? \(/);
-  assert.doesNotMatch(
-    mobileNav,
-    /\n\s*\{open \? \(\n\s*<div className="fixed inset-0 z-50 lg:hidden">/,
-  );
+test("mobile sidebar drawer is a Radix sheet with a close button", () => {
+  assert.match(mobileNav, /<Sheet /);
+  assert.match(mobileNav, /onOpenChange=\{setOpen\}/);
+  assert.match(sheet, /from "radix-ui"/);
+  assert.match(sheet, /"ss-drawer /);
+  assert.match(sheet, /<Dialog\.Close/);
+  assert.match(sheet, /<Dialog\.Title className="sr-only">/);
+  assert.doesNotMatch(mobileNav, /document\.body\.style\.overflow/);
 });
 
 test("sidebar attention refresh cleans up its realtime channel on unmount", () => {
@@ -40,13 +43,12 @@ test("sidebar attention refresh uses a per-mount realtime channel", () => {
 });
 
 test("exit animation classes are defined for overlays, modals, and drawers", () => {
-  for (const className of [
-    "ss-overlay-out",
-    "ss-modal-panel-out",
-    "ss-drawer-out",
-  ]) {
-    assert.match(css, new RegExp(`\\.${className}\\b`));
+  for (const className of ["ss-overlay", "ss-modal-panel", "ss-drawer", "ss-popover"]) {
+    assert.match(css, new RegExp(`\\.${className}\\[data-state="open"\\]`));
+    assert.match(css, new RegExp(`\\.${className}\\[data-state="closed"\\]`));
   }
+  // Legacy animation classes are still used by the consent banner.
+  assert.match(css, /\.ss-banner-in\b/);
 });
 
 test("modal keeps the close button visible on mobile and caps height to the visible viewport", () => {
@@ -55,7 +57,7 @@ test("modal keeps the close button visible on mobile and caps height to the visi
   assert.match(modal, /sm:p-4/);
   assert.match(modal, /max-h-\[calc\(100dvh-env\(safe-area-inset-top\)-env\(safe-area-inset-bottom\)-1\.5rem\)\]/);
   assert.match(modal, /overflow-hidden/);
-  assert.match(modal, /sticky top-0 z-10/);
-  assert.match(modal, /overflow-y-auto/);
+  // Header and footer sit outside the scroll container so they stay visible.
+  assert.match(modal, /min-h-0 flex-1 overflow-y-auto/);
   assert.match(modal, /pb-\[max\(1\.25rem,env\(safe-area-inset-bottom\)\)\]/);
 });

@@ -24,7 +24,7 @@ export function AuthPanel({
   const t = useT();
 
   return (
-    <main className="desktop-zoom app-surface grid min-h-screen place-items-center px-4 py-10">
+    <main className="app-surface grid min-h-screen place-items-center px-4 py-10">
       <div className="absolute right-4 top-4 flex items-center gap-2">
         <LanguageToggle />
         <ThemeToggle />

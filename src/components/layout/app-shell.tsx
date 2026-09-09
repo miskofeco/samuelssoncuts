@@ -32,7 +32,7 @@ export function AppShell({
       : (unreadNotifications ?? 0);
 
   return (
-    <div className="desktop-zoom app-surface min-h-screen text-stone-950 dark:text-stone-100">
+    <div className="app-surface min-h-screen text-stone-950 dark:text-stone-100">
       <PushBadgeSync badgeCount={badgeCount} />
       {/* Mobile top bar + drawer */}
       <MobileNav

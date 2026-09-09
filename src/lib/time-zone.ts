@@ -1,4 +1,6 @@
-import { getShopTimeZone } from "@/lib/env";
+// Relative import keeps this module importable from the Node test runner
+// (which cannot resolve the "@/" alias).
+import { getShopTimeZone } from "./env";
 
 export const DEFAULT_SHOP_TIME_ZONE = "Europe/Bratislava";
 
@@ -47,6 +49,23 @@ export function zonedDateTimeToUtcIso(date: string, time: string, timeZone = sho
   return new Date(utcMs).toISOString();
 }
 
+/** Add whole days to a yyyy-mm-dd string without any time-zone drift. */
+export function addDaysToDate(date: string, days: number) {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days, 12)).toISOString().slice(0, 10);
+}
+
+/**
+ * Half-open UTC bounds [startIso, endIso) of one whole shop-local day. The end
+ * is the next day's midnight so DST transitions never shorten or extend it.
+ */
+export function shopDayRangeUtc(date: string, timeZone = shopTimeZone()) {
+  return {
+    startIso: zonedDateTimeToUtcIso(date, "00:00", timeZone),
+    endIso: zonedDateTimeToUtcIso(addDaysToDate(date, 1), "00:00", timeZone),
+  };
+}
+
 export function formatInShopTimeZone(
   iso: string,
   options: Intl.DateTimeFormatOptions,
@@ -55,8 +74,8 @@ export function formatInShopTimeZone(
   return new Intl.DateTimeFormat("en-GB", { ...options, timeZone }).format(new Date(iso));
 }
 
-export function dateInShopTimeZone(iso: string) {
-  const parts = partsFor(new Date(iso), shopTimeZone());
+export function dateInShopTimeZone(iso: string, timeZone = shopTimeZone()) {
+  const parts = partsFor(new Date(iso), timeZone);
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
@@ -66,4 +85,15 @@ export function timeInShopTimeZone(iso: string) {
     minute: "2-digit",
     hour12: false,
   });
+}
+
+/** Current wall-clock minutes since midnight in the shop's time zone (client-safe). */
+export function nowMinutesInShopTimeZone(now: Date = new Date(), timeZone = shopTimeZone()) {
+  const parts = partsFor(now, timeZone);
+  return Number(parts.hour) * 60 + Number(parts.minute);
+}
+
+/** Shop-local milliseconds for a shop-local yyyy-mm-dd + HH:MM (for comparisons with Date.now()). */
+export function shopDateTimeToEpochMs(date: string, time: string, timeZone = shopTimeZone()) {
+  return new Date(zonedDateTimeToUtcIso(date, time, timeZone)).getTime();
 }
