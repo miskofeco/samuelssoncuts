@@ -1,7 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { ArrowRight01Icon, CalendarCheckIn01Icon } from "@hugeicons/core-free-icons";
+
+import { ButtonLink } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
+import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
 import { formatFullDay, serviceById } from "@/domain/schedule";
 import type {
@@ -41,7 +44,7 @@ export function UpcomingAppointments({
   if (appointments.length === 0) return null;
 
   return (
-    <Card className="rounded-2xl p-5">
+    <Card className="rounded-2xl">
       <SectionHeader title={t.client.upcomingTitle} />
       <div className="mt-4 space-y-3">
         {appointments.map((appointment) => (
@@ -82,21 +85,31 @@ function UpcomingCard({
   const locale = localeFor(useLang());
   const service = serviceById(appointment.serviceId, services);
   return (
-    <article className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="font-semibold text-black dark:text-white">{service.name}</h3>
-          <p className="mt-0.5 text-sm font-medium text-emerald-900 dark:text-emerald-200">
+    <article className="rounded-xl bg-emerald-500/8 p-4 ring-1 ring-emerald-500/25 dark:bg-emerald-400/10">
+      <div className="flex items-start gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">
+          <Icon icon={CalendarCheckIn01Icon} className="size-5" strokeWidth={2} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="truncate font-semibold text-foreground">{service.name}</h3>
+            <StatusPill tone="success" dot className="shrink-0">
+              {t.client.upcomingConfirmed}
+            </StatusPill>
+          </div>
+          <p className="mt-0.5 text-sm font-medium text-emerald-800 tabular-nums dark:text-emerald-200">
             {formatFullDay(appointment.date, locale)} · {appointment.time}
           </p>
-          <Link
+          <ButtonLink
             href={`/client/reservations/${appointment.id}`}
-            className="mt-1 inline-block text-xs font-semibold text-emerald-800 underline underline-offset-4 dark:text-emerald-300"
+            variant="link"
+            size="sm"
+            className="mt-1 h-8 px-0 text-emerald-800 dark:text-emerald-300"
           >
             {t.client.detailTitle}
-          </Link>
+            <Icon icon={ArrowRight01Icon} className="size-3.5" strokeWidth={2} />
+          </ButtonLink>
         </div>
-        <StatusPill tone="success">{t.client.upcomingConfirmed}</StatusPill>
       </div>
 
       <ConfirmedAppointmentActions

@@ -1,5 +1,6 @@
 "use client";
 
+import { Add01Icon, Camera01Icon, PencilEdit01Icon, Scissor01Icon } from "@hugeicons/core-free-icons";
 import { useRef, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import Image from "next/image";
@@ -12,13 +13,18 @@ import {
 } from "@/app/actions";
 import { Button } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
 import { Field, TextAreaField } from "@/components/shared/form";
+import { Icon } from "@/components/shared/icon";
 import { Modal } from "@/components/shared/modal";
 import { StatusPill } from "@/components/shared/status-pill";
+import { Toggle } from "@/components/shared/toggle";
+import { Spinner } from "@/components/ui/spinner";
 import { defaultServiceImage } from "@/domain/schedule";
 import type { ActionResult } from "@/domain/types";
 import { useT } from "@/i18n/provider";
+import { cn } from "@/lib/classnames";
 
 type ServiceItem = {
   id: string;
@@ -50,11 +56,7 @@ const emptyDraft: Draft = {
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
 
 function ServiceImageLabel({ label }: { label: string }) {
-  return (
-    <span className="mb-2 block text-sm font-medium text-stone-700 dark:text-stone-300">
-      {label}
-    </span>
-  );
+  return <span className="mb-1.5 block text-sm font-medium text-foreground">{label}</span>;
 }
 
 export function ServiceManager({ services }: { services: ServiceItem[] }) {
@@ -188,61 +190,95 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
   }
 
   return (
-    <Card className="rounded-2xl p-5">
+    <Card className="rounded-2xl">
       <SectionHeader
         eyebrow={t.admin.catalogue}
         title={t.admin.services}
-        action={<Button type="button" onClick={openCreate}>{t.admin.addService}</Button>}
+        action={
+          <Button type="button" onClick={openCreate} className="w-full sm:w-auto">
+            <Icon icon={Add01Icon} strokeWidth={2.2} />
+            {t.admin.addService}
+          </Button>
+        }
       />
 
       <Feedback result={feedback} className="mt-4" />
 
-      <div className="mt-4 space-y-2">
-        {services.map((service) => {
-          const imageSrc = defaultServiceImage(service);
-          return (
-            <div
-              key={service.id}
-              className="flex items-center gap-3 rounded-xl border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-stone-900"
-            >
-              <span className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl">
-                <Image
-                  src={imageSrc}
-                  alt=""
-                  fill
-                  sizes="80px"
-                  unoptimized={imageIsExternal(imageSrc)}
-                  className="object-cover"
-                />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="truncate font-semibold text-black dark:text-white">
-                    {service.name}
-                  </p>
-                  {!service.active ? <StatusPill tone="neutral">{t.admin.hiddenLabel}</StatusPill> : null}
+      {services.length === 0 ? (
+        <EmptyState
+          className="mt-4"
+          title={t.admin.services}
+          icon={<Icon icon={Scissor01Icon} />}
+          action={
+            <Button type="button" variant="secondary" onClick={openCreate}>
+              <Icon icon={Add01Icon} strokeWidth={2.2} />
+              {t.admin.addService}
+            </Button>
+          }
+        />
+      ) : (
+        <ul className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+          {services.map((service) => {
+            const imageSrc = defaultServiceImage(service);
+            return (
+              <li
+                key={service.id}
+                className={cn(
+                  "flex gap-3 rounded-xl bg-card p-3 ring-1 ring-foreground/10 transition",
+                  !service.active && "opacity-80",
+                )}
+              >
+                <span className="relative size-24 shrink-0 overflow-hidden rounded-lg bg-muted sm:size-28">
+                  <Image
+                    src={imageSrc}
+                    alt=""
+                    fill
+                    sizes="112px"
+                    unoptimized={imageIsExternal(imageSrc)}
+                    className={cn("object-cover", !service.active && "grayscale")}
+                  />
+                </span>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-foreground">{service.name}</p>
+                      <p className="text-sm text-muted-foreground tabular-nums">
+                        {service.duration} {t.admin.minutesShort} · {service.price} €
+                      </p>
+                    </div>
+                    {!service.active ? <StatusPill tone="neutral">{t.admin.hiddenLabel}</StatusPill> : null}
+                  </div>
+                  {service.description ? (
+                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{service.description}</p>
+                  ) : null}
+                  <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+                    <label className="flex min-h-10 items-center gap-2 text-xs font-medium text-muted-foreground">
+                      <Toggle
+                        size="sm"
+                        checked={service.active}
+                        disabled={pending}
+                        onChange={() => toggle(service)}
+                        label={`${service.name}: ${t.admin.serviceVisible}`}
+                      />
+                      <span className="hidden sm:inline">{t.admin.serviceVisible}</span>
+                    </label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEdit(service)}
+                      className="h-9"
+                    >
+                      <Icon icon={PencilEdit01Icon} />
+                      {t.admin.edit}
+                    </Button>
+                  </div>
                 </div>
-                <p className="text-sm text-stone-500 dark:text-stone-400">
-                  {service.duration} {t.admin.minutesShort} · {service.price} €
-                </p>
-                <div className="mt-2 flex gap-2">
-                  <Button type="button" variant="secondary" onClick={() => openEdit(service)}>
-                    {t.admin.edit}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={pending}
-                    onClick={() => toggle(service)}
-                  >
-                    {service.active ? t.admin.hide : t.admin.show}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       <Modal
         open={draft !== null}
@@ -251,33 +287,22 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
       >
         {draft ? (
           <form className="space-y-4" onSubmit={save}>
-            <Field
-              label={t.admin.serviceName}
-              value={draft.name}
-              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-            />
-            <TextAreaField
-              label={t.admin.serviceDescription}
-              value={draft.description}
-              onChange={(event) => setDraft({ ...draft, description: event.target.value })}
-            />
-
             {/* Image upload */}
             <div>
               <ServiceImageLabel label={t.admin.serviceImage} />
-              <div className="flex items-end gap-4">
-                <span className="relative h-24 w-28 shrink-0 overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
+              <div className="flex items-center gap-4">
+                <span className="relative size-24 shrink-0 overflow-hidden rounded-xl bg-muted ring-1 ring-foreground/10 sm:h-24 sm:w-32">
                   <Image
                     src={modalImageSrc()}
                     alt=""
                     fill
-                    sizes="112px"
+                    sizes="128px"
                     unoptimized={localPreview != null || imageIsExternal(modalImageSrc())}
                     className="object-cover"
                   />
                   {uploadPending ? (
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/40">
-                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
+                      <Spinner className="size-5" />
                     </span>
                   ) : null}
                 </span>
@@ -291,25 +316,37 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
                   />
                   <Button
                     type="button"
-                    variant="secondary"
+                    variant="outline"
                     disabled={uploadPending}
                     onClick={() => fileInputRef.current?.click()}
                   >
+                    <Icon icon={Camera01Icon} />
                     {uploadPending ? t.profile.uploading : t.profile.changePhoto}
                   </Button>
-                  <p className="text-xs text-stone-400 dark:text-stone-500">
-                    {t.admin.serviceImageHint}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t.admin.serviceImageHint}</p>
                 </div>
               </div>
               {uploadFeedback && !uploadFeedback.ok ? (
-                <p className="mt-2 text-xs text-red-600 dark:text-red-400">{uploadFeedback.error}</p>
+                <p className="mt-2 text-xs font-medium text-destructive">{uploadFeedback.error}</p>
               ) : null}
             </div>
+
+            <Field
+              label={t.admin.serviceName}
+              value={draft.name}
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              autoComplete="off"
+            />
+            <TextAreaField
+              label={t.admin.serviceDescription}
+              value={draft.description}
+              onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+            />
 
             <div className="grid grid-cols-2 gap-3">
               <Field
                 type="number"
+                inputMode="numeric"
                 min={15}
                 max={480}
                 step={15}
@@ -319,6 +356,7 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
               />
               <Field
                 type="number"
+                inputMode="decimal"
                 min={0}
                 max={1000}
                 step={0.5}
@@ -328,13 +366,15 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
               />
             </div>
             <Feedback result={feedback && !feedback.ok ? feedback : null} />
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={onClose}>
+            <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" size="lg" onClick={onClose}>
                 {t.common.cancel}
               </Button>
               <Button
                 type="submit"
-                disabled={pending || uploadPending || draft.name.trim().length === 0}
+                size="lg"
+                loading={pending}
+                disabled={uploadPending || draft.name.trim().length === 0}
               >
                 {pending ? t.common.saving : t.common.save}
               </Button>

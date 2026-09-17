@@ -1,9 +1,11 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { useState } from "react";
 import type { ReactNode } from "react";
 
+import { Button } from "@/components/shared/button";
+import { Icon } from "@/components/shared/icon";
 import {
   monthGrid,
   monthKey,
@@ -16,6 +18,11 @@ import { localeFor } from "@/i18n/config";
 import { useLang, useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
 
+/**
+ * Month grid with large tappable day cells. Consumers colour cells through
+ * `dayClassName`/`renderDay`; the calendar itself only owns the frame, the
+ * month navigation and the today/selected rings.
+ */
 export function MonthCalendar({
   initialMonth,
   month: controlledMonth,
@@ -78,32 +85,37 @@ export function MonthCalendar({
 
   return (
     <div className={cn("w-full", className)}>
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-black dark:text-white" aria-live="polite">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="min-w-0 truncate text-base font-semibold text-foreground capitalize" aria-live="polite">
           {monthLabel(month, locale)}
         </h3>
-        <div className="flex items-center gap-1">
-          <NavButton
-            label={t.common.previousMonth}
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="secondary"
+            size="icon"
+            aria-label={t.common.previousMonth}
             disabled={!canGoBack}
             onClick={() => setMonth(shiftMonth(month, -1))}
           >
-            <ChevronLeft className="size-4" aria-hidden />
-          </NavButton>
-          <button
-            type="button"
+            <Icon icon={ArrowLeft01Icon} className="size-[18px]" strokeWidth={2} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-10 px-3 text-xs font-semibold"
             onClick={() => setMonth(monthKey(todayIso()))}
-            className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             {t.common.today}
-          </button>
-          <NavButton
-            label={t.common.nextMonth}
+          </Button>
+          <Button
+            variant="secondary"
+            size="icon"
+            aria-label={t.common.nextMonth}
             disabled={!canGoForward}
             onClick={() => setMonth(shiftMonth(month, 1))}
           >
-            <ChevronRight className="size-4" aria-hidden />
-          </NavButton>
+            <Icon icon={ArrowRight01Icon} className="size-[18px]" strokeWidth={2} />
+          </Button>
         </div>
       </div>
 
@@ -112,7 +124,7 @@ export function MonthCalendar({
           <div
             key={day}
             aria-hidden
-            className="pb-1 text-center text-[0.7rem] font-semibold tracking-wide text-stone-500 uppercase dark:text-stone-400"
+            className="pb-1 text-center text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase"
           >
             {day}
           </div>
@@ -125,8 +137,8 @@ export function MonthCalendar({
             <>
               <span
                 className={cn(
-                  "text-xs font-semibold tabular-nums",
-                  cell.inMonth ? "text-stone-700 dark:text-stone-300" : "text-stone-500 dark:text-stone-500",
+                  "text-sm font-semibold tabular-nums",
+                  cell.inMonth ? "text-foreground" : "text-muted-foreground/70",
                   dayNumberClassName?.(cell),
                 )}
               >
@@ -137,15 +149,13 @@ export function MonthCalendar({
           );
           const cellClass = cn(
             "flex min-h-[68px] flex-col rounded-lg border p-1.5 text-left align-top transition",
-            cell.inMonth
-              ? "border-black/10 bg-white dark:border-white/10 dark:bg-stone-900"
-              : "border-black/5 bg-white/70 dark:border-white/5 dark:bg-stone-900/45",
+            cell.inMonth ? "bg-card" : "border-border/60 bg-card/60",
             dayClassName?.(cell),
-            interactive && !disabled && "hover:border-black dark:hover:border-white",
+            interactive && !disabled && "hover:border-foreground active:scale-[0.97]",
             interactive && disabled && "cursor-not-allowed",
-            selected && "border-black ring-2 ring-black dark:border-white dark:ring-white",
+            selected && "border-foreground ring-2 ring-foreground",
             cell.isToday && "ring-2 ring-black dark:ring-white",
-            cell.isToday && selected && "ring-offset-2 ring-offset-white dark:ring-offset-stone-900",
+            cell.isToday && selected && "ring-offset-2 ring-offset-background",
           );
 
           if (!interactive) {
@@ -166,7 +176,7 @@ export function MonthCalendar({
               aria-current={cell.isToday ? "date" : undefined}
               aria-label={dayFormatter.format(new Date(`${cell.date}T12:00:00`))}
               onClick={() => onDayClick?.(cell)}
-              className={cn(cellClass, "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white")}
+              className={cn(cellClass, "outline-none focus-visible:ring-3 focus-visible:ring-ring/50")}
             >
               {cellContent}
             </button>
@@ -176,29 +186,5 @@ export function MonthCalendar({
 
       {footer ? <div className="mt-4">{footer}</div> : null}
     </div>
-  );
-}
-
-function NavButton({
-  label,
-  onClick,
-  disabled,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      className="flex size-9 items-center justify-center rounded-lg border border-black/10 text-stone-600 transition hover:bg-stone-100 disabled:opacity-40 disabled:hover:bg-transparent dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-800"
-    >
-      {children}
-    </button>
   );
 }

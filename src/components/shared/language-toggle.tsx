@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { LANG_COOKIE, LANG_COOKIE_MAX_AGE, LANGS, type Lang } from "@/i18n/config";
 import { useLang, useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
@@ -22,39 +23,32 @@ export function LanguageToggle({ className }: { className?: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  function choose(next: Lang) {
-    if (next === lang) return;
-    persistLang(next);
+  function choose(next: string) {
+    if (!next || next === lang) return;
+    persistLang(next as Lang);
     startTransition(() => router.refresh());
   }
 
   return (
-    <div
-      role="group"
+    <ToggleGroup
+      type="single"
+      value={lang}
+      onValueChange={choose}
       aria-label={t.language.label}
-      className={cn(
-        "inline-flex h-9 items-center rounded-lg border border-black/10 bg-white p-0.5 text-xs font-semibold dark:border-white/10 dark:bg-stone-900",
-        pending && "opacity-70",
-        className,
-      )}
+      spacing={0}
+      variant="outline"
+      className={cn("h-10 rounded-lg bg-card", pending && "opacity-70", className)}
     >
       {LANGS.map((option) => (
-        <button
+        <ToggleGroupItem
           key={option}
-          type="button"
-          onClick={() => choose(option)}
-          aria-pressed={option === lang}
+          value={option}
           aria-label={t.language.switchTo(t.language[option])}
-          className={cn(
-            "h-8 rounded-md px-2.5 uppercase transition",
-            option === lang
-              ? "bg-black text-white dark:bg-white dark:text-black"
-              : "text-stone-500 hover:text-black dark:text-stone-400 dark:hover:text-white",
-          )}
+          className="h-10 min-w-11 px-3 text-xs font-semibold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
         >
           {t.language[option]}
-        </button>
+        </ToggleGroupItem>
       ))}
-    </div>
+    </ToggleGroup>
   );
 }

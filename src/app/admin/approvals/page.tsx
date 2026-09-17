@@ -19,7 +19,7 @@ export default async function AdminApprovalsPage() {
         title={t.admin.approvalsTitle}
         description={t.admin.approvalsDescription}
       />
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
+      <div className="grid items-start gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.6fr)]">
         <ApprovalQueue
           clients={data.clients}
           requests={data.requests}

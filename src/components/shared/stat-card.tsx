@@ -1,41 +1,36 @@
+import { ArrowDownRight01Icon, ArrowUpRight01Icon, MinusSignIcon } from "@hugeicons/core-free-icons";
+import type { IconSvgElement } from "@hugeicons/react";
 import type { ReactNode } from "react";
 
+import { Icon } from "@/components/shared/icon";
+import { Card } from "@/components/ui/card";
 import type { PercentageTrend } from "@/domain/analytics";
 import { cn } from "@/lib/classnames";
 
 type Tone = "neutral" | "amber" | "emerald" | "sky";
 type Variant = "default" | "overview";
 
-const tones: Record<Tone, { ring: string; value: string; dot: string }> = {
-  neutral: {
-    ring: "border-black/10 dark:border-white/10",
-    value: "text-black dark:text-white",
-    dot: "bg-stone-400",
-  },
-  amber: {
-    ring: "border-amber-200 dark:border-amber-500/30",
-    value: "text-black dark:text-white",
-    dot: "bg-amber-500",
-  },
-  emerald: {
-    ring: "border-emerald-200 dark:border-emerald-500/30",
-    value: "text-black dark:text-white",
-    dot: "bg-emerald-500",
-  },
-  sky: {
-    ring: "border-sky-200 dark:border-sky-500/30",
-    value: "text-black dark:text-white",
-    dot: "bg-sky-500",
-  },
+const tones: Record<Tone, string> = {
+  neutral: "bg-muted text-foreground",
+  amber: "bg-amber-500/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300",
+  emerald: "bg-emerald-500/12 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300",
+  sky: "bg-sky-500/12 text-sky-700 dark:bg-sky-400/15 dark:text-sky-300",
 };
 
+function isIconSource(icon: ReactNode | IconSvgElement): icon is IconSvgElement {
+  return Array.isArray(icon);
+}
+
+/**
+ * KPI tile. Compact two-up on phones (icon + value + label), roomier from `sm`
+ * with the hint line. `icon` accepts a hugeicons source or any node.
+ */
 export function StatCard({
   label,
   value,
   hint,
   tone = "neutral",
   icon,
-  variant = "default",
   trend,
   className,
 }: {
@@ -43,63 +38,39 @@ export function StatCard({
   value: ReactNode;
   hint?: string;
   tone?: Tone;
-  icon?: ReactNode;
+  icon?: ReactNode | IconSvgElement;
+  /** Kept for call-site compatibility; both variants share one layout now. */
   variant?: Variant;
   trend?: PercentageTrend;
   className?: string;
 }) {
-  const palette = tones[tone];
-
-  if (variant === "overview") {
-    return (
-      <div
-        className={cn(
-          "min-h-32 rounded-lg border border-black/10 bg-white p-4 shadow-[0_8px_24px_rgba(0,0,0,0.035)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(0,0,0,0.055)] dark:border-white/10 dark:bg-stone-900",
-          className,
-        )}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white text-black dark:border-white/10 dark:bg-stone-950 dark:text-white">
-            {icon ?? <span className={cn("h-2.5 w-2.5 rounded-full", palette.dot)} />}
-          </span>
-          {trend ? <TrendPill trend={trend} /> : null}
-        </div>
-        <div className="mt-6">
-          <p className="truncate text-sm font-medium text-stone-400 dark:text-stone-500">
-            {label}
-          </p>
-          <p className={cn("mt-1 text-3xl font-semibold tabular-nums tracking-normal", palette.value)}>
-            {value}
-          </p>
-          {hint ? <p className="mt-1 truncate text-sm text-stone-500 dark:text-stone-400">{hint}</p> : null}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div
+    <Card
       className={cn(
-        "rounded-2xl border bg-white/85 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.04)] backdrop-blur-sm transition hover:shadow-[0_16px_50px_rgba(0,0,0,0.07)] dark:bg-stone-900/70",
-        palette.ring,
+        "gap-0 overflow-visible p-3.5 shadow-xs transition-shadow hover:shadow-sm sm:p-4",
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-stone-500 dark:text-stone-400">
-          {label}
-        </p>
-        {icon ? (
-          <span className="text-stone-400">{icon}</span>
-        ) : (
-          <span className={cn("h-2 w-2 rounded-full", palette.dot)} />
-        )}
+      <div className="flex items-start justify-between gap-2">
+        <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg sm:size-10", tones[tone])}>
+          {icon ? (
+            isIconSource(icon) ? (
+              <Icon icon={icon} className="size-[18px] sm:size-5" />
+            ) : (
+              <span className="[&_svg]:size-[18px] sm:[&_svg]:size-5">{icon}</span>
+            )
+          ) : (
+            <span aria-hidden className="size-2 rounded-full bg-current opacity-60" />
+          )}
+        </span>
+        {trend ? <TrendPill trend={trend} /> : null}
       </div>
-      <p className={cn("mt-3 text-3xl font-semibold tabular-nums tracking-tight", palette.value)}>
-        {value}
-      </p>
-      {hint ? <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">{hint}</p> : null}
-    </div>
+      <div className="mt-3 sm:mt-4">
+        <p className="text-2xl font-semibold tracking-tight text-foreground tabular-nums sm:text-3xl">{value}</p>
+        <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground sm:text-sm">{label}</p>
+        {hint ? <p className="mt-1 hidden truncate text-xs text-muted-foreground/80 sm:block">{hint}</p> : null}
+      </div>
+    </Card>
   );
 }
 
@@ -110,20 +81,19 @@ function TrendPill({ trend }: { trend: PercentageTrend }) {
   return (
     <span
       className={cn(
-        "inline-flex min-h-7 min-w-16 items-center justify-center gap-1 rounded-md px-2 text-sm font-semibold tabular-nums",
+        "inline-flex h-6 items-center gap-0.5 rounded-full px-2 text-xs font-semibold tabular-nums",
         isFlat
-          ? "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-300"
+          ? "bg-muted text-muted-foreground"
           : isDown
-            ? "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300"
-            : "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+            ? "bg-destructive/10 text-destructive"
+            : "bg-emerald-500/12 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300",
       )}
-      title={
-        isFlat
-          ? "No change from previous period"
-          : `${trend.percent}% ${isDown ? "down" : "up"} from previous period`
-      }
     >
-      <span aria-hidden="true">{isFlat ? "→" : isDown ? "↘" : "↗"}</span>
+      <Icon
+        icon={isFlat ? MinusSignIcon : isDown ? ArrowDownRight01Icon : ArrowUpRight01Icon}
+        className="size-3.5"
+        strokeWidth={2.2}
+      />
       <span>{trend.percent}%</span>
     </span>
   );

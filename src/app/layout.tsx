@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Geist } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
 
@@ -7,11 +8,16 @@ import { ConsentPreferences } from "@/components/consent/consent-preferences";
 import { ConsentProvider } from "@/components/consent/consent-provider";
 import { ThemeScript } from "@/components/shared/theme-script";
 import { Toaster } from "@/components/shared/toaster";
-import { TooltipProvider } from "@/components/shared/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/i18n/provider";
 import { getConsent } from "@/lib/consent/server";
 import { getSiteUrl } from "@/lib/env";
 import { getDict, getLang } from "@/i18n/server";
+import { cn } from "@/lib/classnames";
+
+// Self-hosted at build time by next/font; exposed as --font-geist and consumed
+// by the --font-sans token in globals.css.
+const geist = Geist({ subsets: ["latin", "latin-ext"], variable: "--font-geist" });
 
 export async function generateMetadata(): Promise<Metadata> {
   const dict = await getDict();
@@ -39,7 +45,7 @@ export const viewport: Viewport = {
   // padding in sheets, the top bar and the toaster takes effect in the PWA.
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f4f5" },
+    { media: "(prefers-color-scheme: light)", color: "#fafaf9" },
     { media: "(prefers-color-scheme: dark)", color: "#0c0a09" },
   ],
 };
@@ -58,15 +64,15 @@ export default async function RootLayout({
     <html
       lang={lang}
       suppressHydrationWarning
-      className="h-full"
+      className={cn("h-full", geist.variable)}
     >
       <head>
         <ThemeScript nonce={nonce} />
       </head>
-      <body className="flex min-h-full flex-col antialiased">
+      <body className="flex min-h-full flex-col">
         <LanguageProvider lang={lang}>
           <ConsentProvider initial={consent}>
-            <TooltipProvider>
+            <TooltipProvider delayDuration={300}>
               {children}
               <ConsentBanner />
               <ConsentPreferences />

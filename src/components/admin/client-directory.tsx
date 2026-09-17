@@ -1,18 +1,25 @@
 "use client";
 
+import { Call02Icon, Search01Icon, UserMultiple02Icon } from "@hugeicons/core-free-icons";
 import { useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Avatar } from "@/components/shared/avatar";
-import { Card, SectionHeader } from "@/components/shared/card";
+import { SectionHeader } from "@/components/shared/card";
 import { DataTable, type Column } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
+import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import type { ApprovalStatus, ClientProfile } from "@/domain/types";
 import { useT } from "@/i18n/provider";
 
 import { clientStatusLabel, clientStatusTone } from "./client-status";
 
+/**
+ * Searchable client list. Phones get a card per client (avatar, name, phone,
+ * status); from `sm` the same rows render as a table. Tapping opens the detail.
+ */
 export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
   const t = useT();
   const router = useRouter();
@@ -56,8 +63,8 @@ export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
         <div className="flex items-center gap-3">
           <Avatar name={client.name} src={client.avatarUrl} size="sm" tone="muted" />
           <div className="min-w-0">
-            <p className="truncate font-semibold text-black dark:text-white">{client.name}</p>
-            <p className="truncate text-xs text-stone-500 dark:text-stone-400">{client.email}</p>
+            <p className="truncate font-semibold text-foreground">{client.name}</p>
+            <p className="truncate text-xs text-muted-foreground">{client.email}</p>
           </div>
         </div>
       ),
@@ -66,7 +73,7 @@ export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
       key: "phone",
       header: t.admin.colPhone,
       hideOnMobile: true,
-      cell: (client) => client.phone || "—",
+      cell: (client) => <span className="tabular-nums">{client.phone || "—"}</span>,
     },
     {
       key: "verified",
@@ -84,27 +91,35 @@ export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
       header: t.admin.colStatus,
       align: "right",
       cell: (client) => (
-        <StatusPill tone={clientStatusTone[client.status]}>{clientStatusLabel(t, client.status)}</StatusPill>
+        <StatusPill tone={clientStatusTone[client.status]} dot>
+          {clientStatusLabel(t, client.status)}
+        </StatusPill>
       ),
     },
   ];
 
   return (
-    <Card className="rounded-2xl p-5">
+    <section className="space-y-4">
       <SectionHeader
-        eyebrow={t.admin.clientsEyebrow}
         title={t.admin.clientsTitle}
         action={<StatusPill tone="neutral">{t.admin.totalCount(people.length)}</StatusPill>}
       />
-      <input
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        aria-label={t.admin.searchClientsLabel}
-        placeholder={t.admin.searchClientsPlaceholder}
-        className="mt-4 h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white dark:placeholder:text-stone-500"
-      />
-      <div className="mt-3">
+
+      <InputGroup className="h-10 bg-card">
+        <InputGroupAddon>
+          <Icon icon={Search01Icon} className="text-muted-foreground" />
+        </InputGroupAddon>
+        <InputGroupInput
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label={t.admin.searchClientsLabel}
+          placeholder={t.admin.searchClientsPlaceholder}
+          autoComplete="off"
+        />
+      </InputGroup>
+
+      <div className="sm:rounded-xl sm:bg-card sm:p-2 sm:shadow-xs sm:ring-1 sm:ring-foreground/10">
         <DataTable
           columns={columns}
           rows={rows}
@@ -112,28 +127,32 @@ export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
           onRowClick={(client) => router.push(`/admin/clients/${client.id}`)}
           rowLabel={(client) => t.admin.openClient(client.name)}
           mobileCard={(client) => (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <Avatar name={client.name} src={client.avatarUrl} size="sm" tone="muted" />
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-black dark:text-white">{client.name}</p>
-                    <p className="truncate text-xs text-stone-500 dark:text-stone-400">{client.email}</p>
-                  </div>
-                </div>
-                <StatusPill tone={clientStatusTone[client.status]}>
-                  {clientStatusLabel(t, client.status)}
-                </StatusPill>
+            <div className="flex items-center gap-3">
+              <Avatar name={client.name} src={client.avatarUrl} size="md" tone="muted" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold text-foreground">{client.name}</p>
+                <p className="truncate text-xs text-muted-foreground">{client.email}</p>
+                <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
+                  <Icon icon={Call02Icon} className="size-3.5" />
+                  {client.phone || "—"}
+                  <span aria-hidden>·</span>
+                  {client.emailConfirmed ? t.admin.verified : t.admin.unverified}
+                </p>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-600 dark:text-stone-300">
-                <span>{client.phone || "—"}</span>
-                <span>{client.emailConfirmed ? t.admin.verified : t.admin.unverified}</span>
-              </div>
+              <StatusPill tone={clientStatusTone[client.status]} dot className="shrink-0">
+                {clientStatusLabel(t, client.status)}
+              </StatusPill>
             </div>
           )}
-          empty={<EmptyState title={t.admin.noClientsFound} description={t.admin.nothingMatches(query)} />}
+          empty={
+            <EmptyState
+              title={t.admin.noClientsFound}
+              description={t.admin.nothingMatches(query)}
+              icon={<Icon icon={UserMultiple02Icon} />}
+            />
+          }
         />
       </div>
-    </Card>
+    </section>
   );
 }

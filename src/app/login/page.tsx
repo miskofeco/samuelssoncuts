@@ -1,7 +1,5 @@
-import Link from "next/link";
-
 import { signInAction } from "@/app/actions";
-import { AuthPanel } from "@/components/auth/auth-panel";
+import { AuthLink, AuthPanel } from "@/components/auth/auth-panel";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { Field, PasswordField } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
@@ -36,16 +34,13 @@ export default async function LoginPage({
           hint={t.auth.passwordHint}
           placeholder={t.auth.passwordPlaceholder}
         />
-        <SubmitButton className="w-full" pendingLabel={t.common.sending}>
+        <SubmitButton size="lg" className="w-full" pendingLabel={t.common.sending}>
           {t.auth.signIn}
         </SubmitButton>
-        <p className="text-center text-sm">
-          <Link
-            href="/reset-password"
-            className="font-semibold text-stone-600 underline-offset-4 hover:underline dark:text-stone-400"
-          >
+        <p className="flex justify-center text-sm">
+          <AuthLink href="/reset-password" muted>
             {t.auth.forgotPassword}
-          </Link>
+          </AuthLink>
         </p>
       </form>
       <OAuthButtons />

@@ -1,10 +1,8 @@
+import { UserIcon } from "@hugeicons/core-free-icons";
 import { redirect } from "next/navigation";
 
+import { AuthFrame, AuthHeading, AuthIllustration } from "@/components/auth/auth-panel";
 import { CompletePhoneForm } from "@/components/auth/complete-phone-form";
-import { Card } from "@/components/shared/card";
-import { LanguageToggle } from "@/components/shared/language-toggle";
-import { Logo } from "@/components/shared/logo";
-import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { getDict } from "@/i18n/server";
 import { dashboardPathFor, requireProfile } from "@/server/auth";
 
@@ -22,23 +20,15 @@ export default async function CompleteProfilePage() {
   }
 
   return (
-    <main className="app-surface grid min-h-screen place-items-center px-4 py-10">
-      <div className="absolute right-4 top-4 flex items-center gap-2">
-        <LanguageToggle />
-        <ThemeToggle />
+    <AuthFrame>
+      <AuthHeading
+        title={t.auth.completeProfileTitle}
+        description={t.auth.completeProfileSubtitle}
+        illustration={<AuthIllustration icon={UserIcon} tone="info" />}
+      />
+      <div className="mt-6">
+        <CompletePhoneForm />
       </div>
-      <Card className="w-full max-w-md rounded-2xl p-6 sm:p-7">
-        <Logo className="h-10" priority />
-        <h1 className="mt-6 text-2xl font-semibold tracking-tight text-black dark:text-white">
-          {t.auth.completeProfileTitle}
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-stone-600 dark:text-stone-400">
-          {t.auth.completeProfileSubtitle}
-        </p>
-        <div className="mt-5">
-          <CompletePhoneForm />
-        </div>
-      </Card>
-    </main>
+    </AuthFrame>
   );
 }

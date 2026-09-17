@@ -1,5 +1,14 @@
 "use client";
 
+import {
+  Call02Icon,
+  Cancel01Icon,
+  HourglassIcon,
+  Mail01Icon,
+  Scissor01Icon,
+  Tick02Icon,
+  UserCheck01Icon,
+} from "@hugeicons/core-free-icons";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -10,6 +19,7 @@ import { Card, SectionHeader } from "@/components/shared/card";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
+import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
 import { formatFullDay, serviceById } from "@/domain/schedule";
 import type {
@@ -21,6 +31,11 @@ import type {
 import { localeFor } from "@/i18n/config";
 import { useLang, useT } from "@/i18n/provider";
 
+/**
+ * Verified-but-unapproved clients as decision cards: who they are, how to
+ * reach them, what they asked for, then approve / reject. Reject goes through
+ * the shared ConfirmDialog.
+ */
 export function ApprovalQueue({
   clients,
   requests,
@@ -73,15 +88,19 @@ export function ApprovalQueue({
   }
 
   return (
-    <Card className="rounded-2xl p-5">
+    <Card>
       <SectionHeader
         eyebrow={t.admin.approvalsEyebrow}
         title={t.admin.pendingApprovals}
         action={
           pending.length > 0 ? (
-            <StatusPill tone="warning">{t.admin.waiting(pending.length)}</StatusPill>
+            <StatusPill tone="warning" dot>
+              {t.admin.waiting(pending.length)}
+            </StatusPill>
           ) : (
-            <StatusPill tone="success">{t.admin.allClear}</StatusPill>
+            <StatusPill tone="success" dot>
+              {t.admin.allClear}
+            </StatusPill>
           )
         }
       />
@@ -89,8 +108,9 @@ export function ApprovalQueue({
       <Feedback result={feedback} className="mt-4" />
 
       {awaitingVerification > 0 ? (
-        <p className="mt-4 rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-500 dark:bg-stone-800/60 dark:text-stone-400">
-          {t.admin.awaitingVerification(awaitingVerification)}
+        <p className="mt-4 flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">
+          <Icon icon={HourglassIcon} className="mt-0.5" />
+          <span>{t.admin.awaitingVerification(awaitingVerification)}</span>
         </p>
       ) : null}
 
@@ -99,6 +119,7 @@ export function ApprovalQueue({
           <EmptyState
             title={t.admin.noVerifiedWaiting}
             description={t.admin.noVerifiedDescription}
+            icon={<Icon icon={UserCheck01Icon} />}
           />
         ) : (
           pending.map((client) => {
@@ -107,66 +128,86 @@ export function ApprovalQueue({
               (request) => request.clientId === client.id,
             );
             return (
-              <div
+              <article
                 key={client.id}
-                className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-500/30 dark:bg-amber-500/5"
+                className="rounded-xl bg-card p-4 ring-1 ring-amber-500/35 shadow-xs"
               >
-                <div className="flex items-center gap-3">
-                  <Avatar name={client.name} src={client.avatarUrl} size="md" />
+                <div className="flex items-start gap-3">
+                  <Avatar name={client.name} src={client.avatarUrl} size="lg" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-black dark:text-white">
-                      {client.name}
-                    </p>
-                    <p className="truncate text-sm text-stone-500 dark:text-stone-400">
-                      {client.email}
-                    </p>
-                    {client.phone ? (
-                      <p className="truncate text-xs text-stone-400 dark:text-stone-500">
-                        {client.phone}
-                      </p>
-                    ) : null}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <p className="text-base font-semibold text-foreground">{client.name}</p>
+                      <StatusPill tone="warning" dot>
+                        {t.statuses.approvalPending}
+                      </StatusPill>
+                    </div>
+                    <ul className="mt-1.5 space-y-1 text-sm text-muted-foreground">
+                      <li className="flex min-w-0 items-center gap-2">
+                        <Icon icon={Mail01Icon} className="shrink-0" />
+                        <span className="truncate">{client.email}</span>
+                      </li>
+                      {client.phone ? (
+                        <li className="flex min-w-0 items-center gap-2">
+                          <Icon icon={Call02Icon} className="shrink-0" />
+                          <span className="truncate tabular-nums">{client.phone}</span>
+                        </li>
+                      ) : null}
+                    </ul>
                   </div>
                 </div>
 
                 {clientRequests.length > 0 ? (
-                  <div className="mt-3 rounded-lg bg-white/70 p-3 dark:bg-stone-900/50">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                  <div className="mt-3 rounded-lg bg-muted/60 p-3">
+                    <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                       {t.admin.requested}
                     </p>
-                    <div className="mt-2 space-y-1.5">
+                    <ul className="mt-2 space-y-1.5">
                       {clientRequests.slice(0, 2).map((request) => (
-                        <div key={request.id} className="text-sm text-stone-600 dark:text-stone-300">
-                          <span className="font-medium">
-                            {serviceById(request.serviceId, services).name}
-                          </span>{" "}
-                          —{" "}
-                          {request.preferences
-                            .map((preference) => formatFullDay(preference.date, locale))
-                            .join(", ")}
-                        </div>
+                        <li key={request.id} className="flex items-start gap-2 text-sm text-foreground/90">
+                          <Icon icon={Scissor01Icon} className="mt-0.5 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0">
+                            <span className="font-medium">
+                              {serviceById(request.serviceId, services).name}
+                            </span>
+                            {request.preferences.length > 0 ? (
+                              <span className="text-muted-foreground">
+                                {" — "}
+                                {request.preferences
+                                  .map((preference) => formatFullDay(preference.date, locale))
+                                  .join(", ")}
+                              </span>
+                            ) : null}
+                          </span>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </div>
                 ) : null}
 
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
                   <Button
                     type="button"
-                    disabled={busy}
-                    onClick={() => run(approveClientAction, client.id)}
-                  >
-                    {busy ? t.common.working : t.admin.approve}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
+                    variant="dangerOutline"
+                    size="lg"
                     disabled={busy}
                     onClick={() => setRejecting(client)}
+                    className="sm:w-auto"
                   >
+                    <Icon icon={Cancel01Icon} strokeWidth={2} />
                     {busy ? t.common.working : t.admin.reject}
                   </Button>
+                  <Button
+                    type="button"
+                    size="lg"
+                    loading={busy}
+                    onClick={() => run(approveClientAction, client.id)}
+                    className="sm:w-auto"
+                  >
+                    {busy ? null : <Icon icon={Tick02Icon} strokeWidth={2.2} />}
+                    {busy ? t.common.working : t.admin.approve}
+                  </Button>
                 </div>
-              </div>
+              </article>
             );
           })
         )}

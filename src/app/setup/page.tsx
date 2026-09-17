@@ -1,26 +1,23 @@
-import { Card } from "@/components/shared/card";
+import { Settings02Icon } from "@hugeicons/core-free-icons";
+
+import { AuthFrame, AuthHeading, AuthIllustration } from "@/components/auth/auth-panel";
 import { getDict } from "@/i18n/server";
 
 export default async function SetupPage() {
   const t = await getDict();
   return (
-    <main className="app-surface grid min-h-screen place-items-center px-4 py-10">
-      <Card className="w-full max-w-2xl rounded-2xl p-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-          {t.setup.eyebrow}
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold text-black dark:text-white">
-          {t.setup.title}
-        </h1>
-        <p className="mt-3 text-sm leading-6 text-stone-600 dark:text-stone-400">
-          {t.setup.description}
-        </p>
-        <pre className="mt-5 whitespace-pre-wrap break-all rounded-md bg-black p-4 text-sm text-white dark:bg-stone-950 dark:ring-1 dark:ring-white/10">
+    <AuthFrame width="xl">
+      <AuthHeading
+        eyebrow={t.setup.eyebrow}
+        title={t.setup.title}
+        description={t.setup.description}
+        illustration={<AuthIllustration icon={Settings02Icon} tone="warning" />}
+      />
+      <pre className="mt-6 overflow-x-auto rounded-xl bg-muted p-4 font-mono text-xs leading-6 text-foreground ring-1 ring-foreground/10 sm:text-sm">
 {`NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 NEXT_PUBLIC_SITE_URL=http://localhost:3000`}
-        </pre>
-      </Card>
-    </main>
+      </pre>
+    </AuthFrame>
   );
 }

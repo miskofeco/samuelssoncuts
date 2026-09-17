@@ -1,14 +1,25 @@
 "use client";
 
+import {
+  Add01Icon,
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  BlockedIcon,
+  Calendar03Icon,
+  Clock01Icon,
+} from "@hugeicons/core-free-icons";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/shared/button";
-import { Card, SectionHeader } from "@/components/shared/card";
+import { CalendarExport } from "@/components/shared/calendar-export";
+import { Card } from "@/components/shared/card";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Icon } from "@/components/shared/icon";
 import { MonthCalendar } from "@/components/shared/month-calendar";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
+import { Tooltip } from "@/components/shared/tooltip";
 import {
   CLOSE_MINUTES,
   addMinutesToTime,
@@ -24,8 +35,6 @@ import {
   weekStart,
 } from "@/domain/schedule";
 import { nowMinutesInShopTimeZone } from "@/lib/time-zone";
-
-import { CalendarExport } from "@/components/shared/calendar-export";
 
 import { AddBookingModal } from "./add-booking-modal";
 import { AppointmentDetailModal } from "./appointment-detail-modal";
@@ -73,6 +82,8 @@ export type BookedSlot = {
   durationMinutes: number;
 };
 
+type CalendarView = "day" | "week" | "month";
+
 const MOBILE_QUERY = "(max-width: 1023px)";
 
 function subscribeMobile(callback: () => void) {
@@ -112,7 +123,7 @@ export function AdminCalendar({
   const [selected, setSelected] = useState<CalendarItem | null>(null);
   const today = todayIso();
   const requestedView = searchParams.get("view");
-  const view =
+  const view: CalendarView =
     requestedView === "day" || requestedView === "week" || requestedView === "month"
       ? requestedView
       : isMobile
@@ -124,7 +135,7 @@ export function AdminCalendar({
     : today;
   const weekMonday = weekStart(selectedDate);
 
-  function navigateCalendar(nextView: typeof view, nextDate = selectedDate, replace = false) {
+  function navigateCalendar(nextView: CalendarView, nextDate = selectedDate, replace = false) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("view", nextView);
     params.set("date", nextDate);
@@ -221,139 +232,197 @@ export function AdminCalendar({
     return map;
   }, [itemsByDate]);
 
-  return (
-    <Card className="rounded-2xl p-5">
-      <SectionHeader
-        eyebrow={t.admin.calendarEyebrow}
-        title={t.admin.schedule}
-        action={
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-                {t.admin.confirmed}
-              </span>
-              <span className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-blue-500" />
-                {t.admin.addBooking}
-              </span>
-              <span className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-orange-400" />
-                {t.statuses.proposedShort}
-              </span>
-            </div>
-            <CalendarExport feedUrl={feedUrl} />
-            <Button type="button" onClick={() => setDraft({})} className="gap-1.5">
-              <span aria-hidden className="text-base leading-none">+</span>
-              {t.admin.addBooking}
-            </Button>
-          </div>
-        }
-      />
+  // Toolbar navigation: the day and week views share one prev/today/next row;
+  // the month view keeps the MonthCalendar's built-in month navigation.
+  const isOnToday = view === "day" ? selectedDate === today : weekMonday === weekStart(today);
+  const navLabel = view === "day" ? formatFullDay(selectedDate, locale) : weekLabel(weekMonday, locale);
+  function step(direction: -1 | 1) {
+    if (view === "day") navigateCalendar("day", shiftDay(selectedDate, direction));
+    else navigateCalendar("week", shiftWeek(weekMonday, direction));
+  }
+  function jumpToToday() {
+    navigateCalendar(view, view === "day" ? today : weekStart(today));
+  }
 
-      <div className="mt-4 max-w-xs">
-        <SegmentedControl
-          ariaLabel={t.admin.calendarView}
-          value={view}
-          onChange={(next) => navigateCalendar(next)}
-          options={[
-            { label: t.admin.day, value: "day" },
-            { label: t.admin.week, value: "week" },
-            { label: t.admin.month, value: "month" },
-          ]}
-        />
+  return (
+    <div className="space-y-4">
+      {/* Legend + secondary actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ul aria-label={t.admin.legend} className="flex flex-wrap items-center gap-2">
+          <LegendItem tone="bg-emerald-500">{t.admin.confirmed}</LegendItem>
+          <LegendItem tone="bg-blue-500">{t.admin.addBooking}</LegendItem>
+          <LegendItem tone="bg-orange-500">{t.statuses.proposedShort}</LegendItem>
+        </ul>
+        <div className="flex items-center gap-2">
+          <CalendarExport feedUrl={feedUrl} />
+          <Button type="button" onClick={() => setDraft({})} className="hidden md:inline-flex">
+            <Icon icon={Add01Icon} strokeWidth={2.2} />
+            {t.admin.addBooking}
+          </Button>
+        </div>
       </div>
 
-      {view === "day" ? (
-        <DayAgenda
-          t={t}
-          locale={locale}
-          date={selectedDate}
-          onDateChange={(date) => navigateCalendar("day", date)}
-          items={itemsByDate.get(selectedDate) ?? []}
-          blocked={blockedDates.has(selectedDate)}
-          onAddSlot={(date, time) => setDraft({ date, time })}
-          onSelect={setSelected}
-        />
-      ) : view === "week" ? (
-        <WeekGrid
-          t={t}
-          locale={locale}
-          weekMonday={weekMonday}
-          onWeekChange={(date) => navigateCalendar("week", date)}
-          itemsByDate={itemsByDate}
-          blockedDates={blockedDates}
-          onAddSlot={(date, time) => setDraft({ date, time })}
-          onSelect={setSelected}
-        />
-      ) : (
-        <div className="mt-5">
-          <MonthCalendar
-            month={selectedDate.slice(0, 7)}
-            onMonthChange={(month) => navigateCalendar("month", `${month}-01`)}
-            isSelected={(cell) => cell.date === selectedDate}
-            onDayClick={(cell) => {
-              const items = itemsByDate.get(cell.date) ?? [];
-              if (items.length === 0 && !blockedDates.has(cell.date) && cell.date >= today) {
-                setDraft({ date: cell.date });
-                return;
-              }
-              // Drill into week view for that day — works for any date (past or future).
-              navigateCalendar("week", cell.date);
-            }}
-            dayClassName={(cell) => {
-              if (cell.date < today) {
-                return "cursor-not-allowed border-dashed !border-stone-400 !bg-stone-200 text-stone-500 dark:!border-stone-700 dark:!bg-stone-800 dark:text-stone-500";
-              }
-              if (blockedDates.has(cell.date)) {
-                return "border-2 border-red-300 bg-red-50 dark:border-red-500/60 dark:bg-red-500/15";
-              }
-              return "";
-            }}
-            dayNumberClassName={(cell) =>
-              cell.date < today
-                ? "text-stone-400 dark:text-stone-500"
-                : blockedDates.has(cell.date)
-                  ? "text-red-900 dark:text-red-100"
-                : ""
-            }
-            renderDay={(cell) => {
-              const items = itemsByDate.get(cell.date) ?? [];
-              const blocked = blockedDates.has(cell.date);
-	              if (blocked) {
-	                return (
-	                  <span
-	                    aria-label={t.admin.off}
-	                    className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 dark:bg-red-500/20 dark:text-red-200"
-	                  >
-	                    <span aria-hidden="true">x</span>
-	                    <span className="sr-only">{t.admin.off}</span>
-	                  </span>
-	                );
-	              }
-              if (items.length === 0) return null;
-              return (
-                <span className="mt-1 flex flex-row flex-wrap gap-1">
-                  {items.map((item) => (
-                    <span
-                      key={item.id}
-                      aria-label={`${item.time} ${item.title}`}
-                      className={cn(
-                        "block h-2 w-2 rounded-full",
-                        monthDotToneClasses(item.type),
-                      )}
-                    >
-                      <span className="sr-only">
-                        {item.time} {item.title}
-                      </span>
-                    </span>
-                  ))}
-                </span>
-              );
-            }}
+      {/* Toolbar: sticky under the phone top bar, static from md */}
+      <div className="sticky top-[calc(max(0.5rem,env(safe-area-inset-top))+2.75rem+1px)] z-20 -mx-4 bg-background/92 px-4 py-2 backdrop-blur-xl sm:-mx-6 sm:px-6 md:static md:mx-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+        <div className="flex flex-col gap-2 rounded-xl bg-card p-2 shadow-xs ring-1 ring-foreground/10 md:flex-row md:items-center md:gap-3">
+          <SegmentedControl
+            ariaLabel={t.admin.calendarView}
+            value={view}
+            onChange={(next) => navigateCalendar(next)}
+            options={[
+              { label: t.admin.day, value: "day" },
+              { label: t.admin.week, value: "week" },
+              { label: t.admin.month, value: "month" },
+            ]}
+            className="md:max-w-xs"
           />
+          {view !== "month" ? (
+            <div className="flex items-center gap-1 md:ml-auto">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={view === "day" ? t.admin.prevDay : t.admin.previousWeek}
+                onClick={() => step(-1)}
+              >
+                <Icon icon={ArrowLeft01Icon} strokeWidth={2} />
+              </Button>
+              <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-1 md:min-w-56">
+                <p className="truncate text-sm font-semibold text-foreground tabular-nums" aria-live="polite">
+                  {navLabel}
+                </p>
+                {!isOnToday ? (
+                  <button
+                    type="button"
+                    onClick={jumpToToday}
+                    className="text-xs font-semibold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                  >
+                    {t.common.today}
+                  </button>
+                ) : null}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={view === "day" ? t.admin.nextDay : t.admin.nextWeek}
+                onClick={() => step(1)}
+              >
+                <Icon icon={ArrowRight01Icon} strokeWidth={2} />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                aria-label={t.admin.addBooking}
+                onClick={() => setDraft({})}
+                className="ml-1 md:hidden"
+              >
+                <Icon icon={Add01Icon} strokeWidth={2.2} />
+              </Button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              size="icon"
+              aria-label={t.admin.addBooking}
+              onClick={() => setDraft({})}
+              className="self-end md:hidden"
+            >
+              <Icon icon={Add01Icon} strokeWidth={2.2} />
+            </Button>
+          )}
         </div>
-      )}
+      </div>
+
+      <Card className="rounded-2xl p-0 sm:p-0">
+        {view === "day" ? (
+          <DayAgenda
+            t={t}
+            date={selectedDate}
+            items={itemsByDate.get(selectedDate) ?? []}
+            blocked={blockedDates.has(selectedDate)}
+            onAddSlot={(date, time) => setDraft({ date, time })}
+            onSelect={setSelected}
+          />
+        ) : view === "week" ? (
+          <WeekGrid
+            t={t}
+            locale={locale}
+            weekMonday={weekMonday}
+            itemsByDate={itemsByDate}
+            blockedDates={blockedDates}
+            onAddSlot={(date, time) => setDraft({ date, time })}
+            onSelect={setSelected}
+          />
+        ) : (
+          <div className="p-3 sm:p-5">
+            <MonthCalendar
+              month={selectedDate.slice(0, 7)}
+              onMonthChange={(month) => navigateCalendar("month", `${month}-01`)}
+              isSelected={(cell) => cell.date === selectedDate}
+              onDayClick={(cell) => {
+                const items = itemsByDate.get(cell.date) ?? [];
+                if (items.length === 0 && !blockedDates.has(cell.date) && cell.date >= today) {
+                  setDraft({ date: cell.date });
+                  return;
+                }
+                // Drill into week view for that day — works for any date (past or future).
+                navigateCalendar("week", cell.date);
+              }}
+              dayClassName={(cell) => {
+                if (cell.date < today) {
+                  return "cursor-not-allowed border-dashed !border-stone-400 !bg-stone-200 text-stone-500 dark:!border-stone-700 dark:!bg-stone-800 dark:text-stone-500";
+                }
+                if (blockedDates.has(cell.date)) {
+                  return "border-2 border-red-300 bg-red-50 dark:border-red-500/60 dark:bg-red-500/15";
+                }
+                return "";
+              }}
+              dayNumberClassName={(cell) =>
+                cell.date < today
+                  ? "text-stone-400 dark:text-stone-500"
+                  : blockedDates.has(cell.date)
+                    ? "text-red-900 dark:text-red-100"
+                  : ""
+              }
+              renderDay={(cell) => {
+                const items = itemsByDate.get(cell.date) ?? [];
+                const blocked = blockedDates.has(cell.date);
+                if (blocked) {
+                  return (
+                    <span
+                      aria-label={t.admin.off}
+                      className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 dark:bg-red-500/20 dark:text-red-200"
+                    >
+                      <span aria-hidden="true">x</span>
+                      <span className="sr-only">{t.admin.off}</span>
+                    </span>
+                  );
+                }
+                if (items.length === 0) return null;
+                return (
+                  <span className="mt-1 flex flex-row flex-wrap gap-1">
+                    {items.map((item) => (
+                      <span
+                        key={item.id}
+                        aria-label={`${item.time} ${item.title}`}
+                        className={cn(
+                          "block h-2 w-2 rounded-full",
+                          monthDotToneClasses(item.type),
+                        )}
+                      >
+                        <span className="sr-only">
+                          {item.time} {item.title}
+                        </span>
+                      </span>
+                    ))}
+                  </span>
+                );
+              }}
+            />
+          </div>
+        )}
+      </Card>
 
       <AddBookingModal
         open={draft !== null}
@@ -370,7 +439,16 @@ export function AdminCalendar({
         onClose={() => setSelected(null)}
         bookedByDate={bookedByDate}
       />
-    </Card>
+    </div>
+  );
+}
+
+function LegendItem({ tone, children }: { tone: string; children: React.ReactNode }) {
+  return (
+    <li className="inline-flex h-7 items-center gap-1.5 rounded-full bg-muted px-2.5 text-xs font-medium text-muted-foreground">
+      <span aria-hidden className={cn("size-2 shrink-0 rounded-full", tone)} />
+      {children}
+    </li>
   );
 }
 
@@ -396,22 +474,19 @@ function shiftDay(date: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
-// Single-day agenda: a chronological list of the day's items with prev/next
-// navigation. Reuses the same item model and detail modal as the other views.
+// Single-day agenda: a chronological timeline of the day's items. Navigation
+// lives in the shared toolbar; this view reuses the same item model and detail
+// modal as the week and month views.
 function DayAgenda({
   t,
-  locale,
   date,
-  onDateChange,
   items,
   blocked,
   onAddSlot,
   onSelect,
 }: {
   t: Dict;
-  locale: string;
   date: string;
-  onDateChange: (date: string) => void;
   items: CalendarItem[];
   blocked: boolean;
   onAddSlot: (date: string, time?: string) => void;
@@ -420,106 +495,92 @@ function DayAgenda({
   const today = todayIso();
   const sorted = [...items].sort((a, b) => (a.time < b.time ? -1 : 1));
   const addTime = firstFreeSlot(sorted, date === today);
+  const canAdd = date >= today && !blocked;
 
   return (
-    <div className="mt-5">
-      <div className="flex items-center justify-between gap-3">
-        <Button
-          type="button"
-          variant="secondary"
-          aria-label={t.admin.prevDay}
-          onClick={() => onDateChange(shiftDay(date, -1))}
-        >
-          ‹
-        </Button>
-        <div className="text-center">
-          <p className="text-sm font-semibold text-black dark:text-white">
-            {formatFullDay(date, locale)}
-          </p>
-          {date !== today ? (
-            <button
-              type="button"
-              onClick={() => onDateChange(today)}
-              className="text-xs font-semibold text-stone-500 underline underline-offset-4 hover:text-black dark:text-stone-400 dark:hover:text-white"
-            >
-              {t.common.today}
-            </button>
-          ) : null}
-        </div>
-        <Button
-          type="button"
-          variant="secondary"
-          aria-label={t.admin.nextDay}
-          onClick={() => onDateChange(shiftDay(date, 1))}
-        >
-          ›
-        </Button>
-      </div>
-
-      {date >= today && !blocked ? (
-        <div className="mt-3 flex justify-end">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => onAddSlot(date, addTime)}
-          >
-            <span aria-hidden>+</span> {t.admin.addAt(addTime)}
-          </Button>
+    <div className="space-y-4 p-4 sm:p-5">
+      {blocked ? (
+        <div className="flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-500/15 dark:text-red-200 dark:ring-red-500/30">
+          <Icon icon={BlockedIcon} className="size-5" strokeWidth={2} />
+          {t.admin.off}
         </div>
       ) : null}
 
-      <div className="mt-4 space-y-2">
-        {date === today ? (
-          <p className="border-l-2 border-red-500 pl-3 text-xs font-semibold text-red-700 dark:text-red-300">
-            {t.admin.currentTime(timeOfMinutes(nowMinutesInShopTimeZone()))}
-          </p>
-        ) : null}
-        {blocked ? (
-          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200">
-            {t.admin.off}
-          </p>
-        ) : null}
-        {sorted.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-black/15 px-3 py-6 text-center dark:border-white/15">
-            <p className="text-sm text-stone-500 dark:text-stone-400">{t.admin.noAppointments}</p>
-            {date >= today && !blocked ? (
-              <Button
-                type="button"
-                variant="secondary"
-                className="mt-3"
-                onClick={() => onAddSlot(date)}
-              >
-                +
+      {canAdd ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          onClick={() => onAddSlot(date, addTime)}
+          className="w-full sm:w-auto"
+        >
+          <Icon icon={Add01Icon} strokeWidth={2.2} />
+          {t.admin.addAt(addTime)}
+        </Button>
+      ) : null}
+
+      {date === today ? (
+        <p className="flex items-center gap-2 border-l-2 border-red-500 pl-3 text-xs font-semibold text-red-700 dark:text-red-300">
+          <Icon icon={Clock01Icon} className="size-3.5" strokeWidth={2} />
+          {t.admin.currentTime(timeOfMinutes(nowMinutesInShopTimeZone()))}
+        </p>
+      ) : null}
+
+      {sorted.length === 0 ? (
+        <EmptyState
+          title={t.admin.noAppointments}
+          icon={<Icon icon={Calendar03Icon} />}
+          action={
+            canAdd ? (
+              <Button type="button" variant="secondary" onClick={() => onAddSlot(date)}>
+                <Icon icon={Add01Icon} strokeWidth={2.2} />
+                {t.admin.addBooking}
               </Button>
-            ) : null}
-          </div>
-        ) : (
-          sorted.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onSelect(item)}
-              className={cn(
-                "grid min-h-14 w-full grid-cols-[3.75rem_0.25rem_minmax(0,1fr)] items-center gap-3 rounded-xl px-3 py-3 text-left transition",
-                neutralChipClasses,
-              )}
-            >
-              <span className="w-14 shrink-0 text-sm font-semibold tabular-nums text-black dark:text-white">
-                {item.time}
-              </span>
-              <span className={cn("h-8 w-1 shrink-0 rounded-full", accentToneClasses(item.type))} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold text-black dark:text-white">
-                  {item.title}
-                </span>
-                <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
-                  {item.service}
-                </span>
-              </span>
-            </button>
-          ))
-        )}
-      </div>
+            ) : undefined
+          }
+        />
+      ) : (
+        <ol className="space-y-2">
+          {sorted.map((item) => {
+            const endTime = addMinutesToTime(item.time, item.durationMinutes);
+            return (
+              <li key={item.id} className="flex gap-3">
+                <div className="w-12 shrink-0 pt-3 text-right leading-tight">
+                  <span className="block text-sm font-semibold text-foreground tabular-nums">{item.time}</span>
+                  <span className="block text-[0.7rem] text-muted-foreground tabular-nums">{endTime}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onSelect(item)}
+                  className={cn(
+                    "relative flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-xl py-3 pr-3 pl-5 text-left transition",
+                    neutralChipClasses,
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className={cn("absolute inset-y-3 left-2 w-1 rounded-full", accentToneClasses(item.type))}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-foreground">{item.title}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {item.service} · {item.durationMinutes} {t.admin.minutesShort}
+                    </span>
+                  </span>
+                  {item.outcome === "completed" || item.outcome === "no_show" ? (
+                    <StatusPill tone={item.outcome === "completed" ? "success" : "danger"} className="hidden sm:inline-flex">
+                      {item.outcome === "completed" ? t.admin.outcomeCompleted : t.admin.outcomeNoShow}
+                    </StatusPill>
+                  ) : null}
+                  <span className="shrink-0 text-sm font-semibold text-foreground tabular-nums">
+                    {Math.round(item.finalPriceCents / 100)} €
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      )}
     </div>
   );
 }
@@ -553,7 +614,7 @@ function CurrentTimeLine() {
     >
       {/* Offset by the 64px time gutter so the line crosses only the day columns. */}
       <div className="relative ml-16 border-t border-dashed border-red-500/70">
-        <span className="absolute left-0 top-0 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500" />
+        <span className="absolute top-0 left-0 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500" />
       </div>
     </div>
   );
@@ -563,7 +624,6 @@ function WeekGrid({
   t,
   locale,
   weekMonday,
-  onWeekChange,
   itemsByDate,
   blockedDates,
   onAddSlot,
@@ -572,7 +632,6 @@ function WeekGrid({
   t: Dict;
   locale: string;
   weekMonday: string;
-  onWeekChange: (monday: string) => void;
   itemsByDate: Map<string, CalendarItem[]>;
   blockedDates: Set<string>;
   onAddSlot: (date: string, time: string) => void;
@@ -585,7 +644,6 @@ function WeekGrid({
     return d.toISOString().slice(0, 10);
   });
   const hours = Array.from({ length: GRID_HOURS }, (_, index) => START_HOUR + index);
-  const isCurrentWeek = weekMonday === weekStart(today);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollbarWidth, setScrollbarWidth] = useState(0);
@@ -618,54 +676,15 @@ function WeekGrid({
 
   return (
     <>
-      {/* Week navigation */}
-      <div className="mt-5 flex items-center gap-2">
-        <button
-          type="button"
-          aria-label={t.admin.previousWeek}
-          onClick={() => onWeekChange(shiftWeek(weekMonday, -1))}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-black/10 text-stone-600 transition hover:bg-stone-100 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-800"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-        <span className="min-w-0 flex-1 text-center text-sm font-semibold text-black dark:text-white">
-          {weekLabel(weekMonday, locale)}
-        </span>
-        <button
-          type="button"
-          aria-label={t.admin.nextWeek}
-          onClick={() => onWeekChange(shiftWeek(weekMonday, 1))}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-black/10 text-stone-600 transition hover:bg-stone-100 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-800"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M9 18l6-6-6-6" />
-          </svg>
-        </button>
-        {!isCurrentWeek ? (
-          <button
-            type="button"
-            onClick={() => onWeekChange(weekStart(today))}
-            className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
-          >
-            {t.common.today}
-          </button>
-        ) : null}
-      </div>
-
       {/* Desktop time grid */}
-      <div className="mt-3 hidden overflow-x-auto lg:block">
+      <div className="hidden overflow-x-auto rounded-2xl lg:block">
         <div className="min-w-245">
-          <div
-            className="rounded-t-xl bg-black/5 dark:bg-white/10"
-            style={{ paddingRight: scrollbarWidth }}
-          >
+          <div className="bg-border" style={{ paddingRight: scrollbarWidth }}>
             <div
               className="grid gap-px"
               style={{ gridTemplateColumns: WEEK_GRID_COLUMNS }}
             >
-              <div className="bg-white dark:bg-stone-900" />
+              <div className="bg-card" />
               {days.map((day) => {
                 const isToday = day === today;
                 const isBlocked = blockedDates.has(day);
@@ -673,26 +692,15 @@ function WeekGrid({
                   <div
                     key={day}
                     className={cn(
-                      "px-2 py-3 text-center",
+                      "px-2 py-3 text-center text-sm font-semibold",
                       isBlocked
                         ? "bg-red-50 text-red-900 dark:bg-red-500/15 dark:text-red-100"
                         : isToday
-                          ? "bg-stone-900 text-white dark:bg-white dark:text-black"
-                          : "bg-white dark:bg-stone-900",
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-card text-foreground",
                     )}
                   >
-                    <p
-                      className={cn(
-                        "text-sm font-semibold",
-                        isBlocked
-                          ? "text-red-900 dark:text-red-100"
-                          : isToday
-                            ? ""
-                            : "text-black dark:text-white",
-                      )}
-                    >
-                      {formatDay(day, locale)}
-                    </p>
+                    {formatDay(day, locale)}
                   </div>
                 );
               })}
@@ -705,14 +713,14 @@ function WeekGrid({
             style={{ height: VIEWPORT_HEIGHT }}
           >
             <div
-              className="relative grid gap-px bg-black/5 dark:bg-white/10"
+              className="relative grid gap-px bg-border"
               style={{ gridTemplateColumns: WEEK_GRID_COLUMNS }}
             >
               {/* Time gutter */}
-              <div className="bg-white dark:bg-stone-900">
+              <div className="bg-card">
                 {hours.map((hour) => (
                   <div key={hour} style={{ height: HOUR_HEIGHT }} className="relative">
-                    <span className="absolute right-2 top-1 text-xs font-medium text-stone-400 dark:text-stone-500">
+                    <span className="absolute top-1 right-2 text-xs font-medium text-muted-foreground tabular-nums">
                       {String(hour).padStart(2, "0")}:00
                     </span>
                   </div>
@@ -743,7 +751,7 @@ function WeekGrid({
       </div>
 
       {/* Mobile day list */}
-      <div className="mt-3 grid gap-3 lg:hidden">
+      <div className="grid gap-3 p-3 sm:p-4 lg:hidden">
         {days.map((day) => {
           const items = itemsByDate.get(day) ?? [];
           const isToday = day === today;
@@ -751,21 +759,21 @@ function WeekGrid({
           const isBlocked = blockedDates.has(day);
           const canAdd = !isBlocked && !isPast;
           return (
-            <div
+            <section
               key={day}
               className={cn(
-                "rounded-xl border bg-white p-3 dark:bg-stone-900",
+                "rounded-xl border p-3",
                 isBlocked
                   ? "border-2 border-red-300 bg-red-50 dark:border-red-500/60 dark:bg-red-500/15"
                   : isToday
-                    ? "border-stone-900 dark:border-white"
-                    : "border-black/10 dark:border-white/10",
+                    ? "border-primary bg-card"
+                    : "border-transparent bg-card ring-1 ring-foreground/10",
               )}
             >
               <div className="flex items-center justify-between gap-2">
                 <h3
                   className={cn(
-                    "font-semibold text-black dark:text-white",
+                    "text-sm font-semibold text-foreground",
                     isBlocked && "text-red-900 dark:text-red-100",
                   )}
                 >
@@ -773,16 +781,18 @@ function WeekGrid({
                 </h3>
                 <div className="flex items-center gap-2">
                   {isBlocked ? <StatusPill tone="danger">{t.admin.off}</StatusPill> : null}
-                  {isToday ? <StatusPill tone="neutral">{t.common.today}</StatusPill> : null}
+                  {isToday ? <StatusPill tone="neutral" dot>{t.common.today}</StatusPill> : null}
                   {canAdd ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="outline"
+                      size="sm"
                       onClick={() => onAddSlot(day, firstFreeSlot(items, isToday))}
-                      className="flex h-8 items-center gap-1 rounded-lg border border-black/10 px-2.5 text-xs font-semibold text-stone-600 transition hover:border-black hover:text-black dark:border-white/15 dark:text-stone-300 dark:hover:border-white dark:hover:text-white"
+                      className="h-9"
                     >
-                      <span aria-hidden className="text-sm leading-none">+</span>
+                      <Icon icon={Add01Icon} strokeWidth={2.2} />
                       {t.admin.addShort}
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               </div>
@@ -790,7 +800,7 @@ function WeekGrid({
                 {items.length === 0 ? (
                   <p
                     className={cn(
-                      "rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-500 dark:bg-stone-800/60 dark:text-stone-400",
+                      "rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground",
                       isBlocked &&
                         "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200",
                     )}
@@ -803,7 +813,7 @@ function WeekGrid({
                   ))
                 )}
               </div>
-            </div>
+            </section>
           );
         })}
       </div>
@@ -935,8 +945,8 @@ function DayColumn({
         isBlocked
           ? "bg-red-50 dark:bg-red-500/15"
           : isToday
-            ? "bg-stone-50 dark:bg-stone-800/50"
-            : "bg-white dark:bg-stone-900",
+            ? "bg-muted/60"
+            : "bg-card",
       )}
       style={{ height: GRID_HOURS * HOUR_HEIGHT }}
     >
@@ -948,7 +958,7 @@ function DayColumn({
           className={cn(
             "border-t",
             index === 0 && "border-t-0",
-            isBlocked ? "border-red-200/70 dark:border-red-500/20" : "border-black/5 dark:border-white/5",
+            isBlocked ? "border-red-200/70 dark:border-red-500/20" : "border-border/60",
           )}
         />
       ))}
@@ -957,7 +967,7 @@ function DayColumn({
       {isToday && earliest > OPEN_MINUTES && earliest <= CLOSE_MINUTES ? (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 bg-stone-100/50 dark:bg-black/30"
+          className="pointer-events-none absolute inset-x-0 top-0 bg-foreground/5"
           style={{ height: ((Math.min(earliest, CLOSE_MINUTES) - OPEN_MINUTES) / 60) * HOUR_HEIGHT }}
         />
       ) : null}
@@ -979,13 +989,13 @@ function DayColumn({
             {showHoverAdd ? (
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-x-1 flex items-center gap-1 rounded-md border border-dashed border-stone-300 bg-white/70 px-1.5 text-[0.6rem] font-semibold text-stone-500 dark:border-stone-600 dark:bg-stone-800/70 dark:text-stone-300"
+                className="pointer-events-none absolute inset-x-1 flex items-center gap-1 rounded-md border border-dashed border-foreground/30 bg-card/80 px-1.5 text-[0.6rem] font-semibold text-muted-foreground"
                 style={{
                   top: ((hoverMin - START_HOUR * 60) / 60) * HOUR_HEIGHT,
                   height: (SNAP_MINUTES / 60) * HOUR_HEIGHT,
                 }}
               >
-                <span className="text-sm leading-none">+</span>
+                <Icon icon={Add01Icon} className="size-3" strokeWidth={2.4} />
                 {timeOfMinutes(hoverMin)}
               </span>
             ) : null}
@@ -1015,8 +1025,8 @@ function DayColumn({
   );
 }
 
-// Mobile month view shows a tiny color-coded dot — too small for an inset bar,
-// so the accent color fills it. Overridden to a neutral surface at sm+.
+// Month view shows a tiny color-coded dot per item — too small for an inset
+// bar, so the accent color fills it.
 function monthDotToneClasses(type: CalendarItem["type"]) {
   switch (type) {
     case "Confirmed":
@@ -1028,10 +1038,10 @@ function monthDotToneClasses(type: CalendarItem["type"]) {
   }
 }
 
-// Neutral event block — grey surface with a subtle border. The event type is
+// Neutral event block — card surface with a hairline ring. The event type is
 // conveyed only by the inset accent bar (see accentToneClasses), not a full tint.
 const neutralChipClasses =
-  "border border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-800/60 dark:text-stone-200 dark:hover:bg-stone-700/60";
+  "bg-card text-foreground ring-1 ring-foreground/10 hover:bg-muted/70 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none";
 
 // Color of the vertical accent bar, matching the legend for each event type.
 function accentToneClasses(type: CalendarItem["type"]) {
@@ -1059,25 +1069,24 @@ function CalendarChip({
   const showName = item.durationMinutes >= 30;
   const showService = item.durationMinutes >= 45;
 
-  // Fixed-position tooltip — the chip lives in an overflow-hidden scroller, so a
-  // normally-positioned tooltip would be clipped. Anchor it to the chip's rect.
-  const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
-
-  function showTip(event: React.MouseEvent<HTMLButtonElement>) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    setTip({ x: rect.left, y: rect.top });
-  }
-
   return (
-    <>
+    <Tooltip
+      content={
+        <div className="leading-snug">
+          <p className="font-semibold tabular-nums">
+            {item.time}–{endTime}
+          </p>
+          <p>{item.title}</p>
+          <p className="opacity-80">{item.service}</p>
+        </div>
+      }
+    >
       <button
         type="button"
         onClick={() => onSelect(item)}
-        onMouseEnter={showTip}
-        onMouseLeave={() => setTip(null)}
         style={style}
         className={cn(
-          "absolute z-10 flex overflow-hidden rounded-md py-0.5 pl-3.5 pr-1.5 text-left leading-tight transition",
+          "absolute z-10 flex overflow-hidden rounded-md py-0.5 pr-1.5 pl-3.5 text-left leading-tight transition",
           neutralChipClasses,
         )}
       >
@@ -1090,33 +1099,17 @@ function CalendarChip({
         />
         <span className="flex min-w-0 flex-col gap-px">
           {showName ? (
-            <span className="truncate text-xs font-semibold leading-tight">{item.title}</span>
+            <span className="truncate text-xs leading-tight font-semibold">{item.title}</span>
           ) : null}
-          <span className="truncate text-[0.65rem] leading-tight tabular-nums opacity-60">
+          <span className="truncate text-[0.65rem] leading-tight text-muted-foreground tabular-nums">
             {item.time}–{endTime}
           </span>
           {showService ? (
-            <span className="truncate text-[0.65rem] leading-tight opacity-60">{item.service}</span>
+            <span className="truncate text-[0.65rem] leading-tight text-muted-foreground">{item.service}</span>
           ) : null}
         </span>
       </button>
-
-      {tip
-        ? createPortal(
-            <div
-              className="pointer-events-none fixed z-50 -translate-y-full rounded-lg bg-stone-900 px-2.5 py-1.5 text-xs leading-snug text-white shadow-lg dark:bg-stone-700"
-              style={{ left: tip.x, top: tip.y - 6 }}
-            >
-              <p className="font-semibold tabular-nums">
-                {item.time}–{endTime}
-              </p>
-              <p>{item.title}</p>
-              <p className="opacity-80">{item.service}</p>
-            </div>,
-            document.body,
-          )
-        : null}
-    </>
+    </Tooltip>
   );
 }
 
@@ -1133,7 +1126,7 @@ function MobileChip({
       type="button"
       onClick={() => onSelect(item)}
       className={cn(
-        "relative flex w-full rounded-lg py-2 pl-5 pr-3 text-left transition",
+        "relative flex min-h-12 w-full items-center gap-3 rounded-lg py-2 pr-3 pl-5 text-left transition",
         neutralChipClasses,
       )}
     >
@@ -1144,15 +1137,18 @@ function MobileChip({
           accentToneClasses(item.type),
         )}
       />
-      <span className="min-w-0">
+      <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold">{item.title}</span>
-        <span className="mt-0.5 block truncate text-xs opacity-60">
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
           <span className="tabular-nums">
             {item.time}–{endTime}
           </span>
           {" · "}
           {item.service}
         </span>
+      </span>
+      <span className="shrink-0 text-sm font-semibold tabular-nums">
+        {Math.round(item.finalPriceCents / 100)} €
       </span>
     </button>
   );

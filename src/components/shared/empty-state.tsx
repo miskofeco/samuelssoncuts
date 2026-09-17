@@ -1,5 +1,13 @@
 import type { ReactNode } from "react";
 
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { cn } from "@/lib/classnames";
 
 export function EmptyState({
@@ -16,24 +24,17 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "flex flex-col items-center justify-center rounded-xl border border-dashed border-black/10 bg-stone-50 px-6 py-12 text-center dark:border-white/10 dark:bg-stone-900/50",
-        className,
-      )}
-    >
-      {icon ? (
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white text-stone-400 shadow-sm dark:bg-stone-800 dark:text-stone-500">
-          {icon}
-        </div>
-      ) : null}
-      <p className="text-sm font-semibold text-black dark:text-white">{title}</p>
-      {description ? (
-        <p className="mt-1 max-w-sm text-sm text-stone-500 dark:text-stone-400">
-          {description}
-        </p>
-      ) : null}
-      {action ? <div className="mt-4">{action}</div> : null}
-    </div>
+    <Empty className={cn("border border-dashed bg-muted/30 py-10", className)}>
+      <EmptyHeader>
+        {icon ? (
+          <EmptyMedia variant="icon" className="size-11 rounded-xl bg-card text-muted-foreground shadow-xs ring-1 ring-foreground/10 [&_svg:not([class*='size-'])]:size-5">
+            {icon}
+          </EmptyMedia>
+        ) : null}
+        <EmptyTitle className="text-base">{title}</EmptyTitle>
+        {description ? <EmptyDescription>{description}</EmptyDescription> : null}
+      </EmptyHeader>
+      {action ? <EmptyContent className="*:w-full sm:*:w-auto">{action}</EmptyContent> : null}
+    </Empty>
   );
 }

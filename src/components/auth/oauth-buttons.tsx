@@ -1,5 +1,6 @@
 import { signInWithOAuthAction } from "@/app/actions";
-import { buttonClass } from "@/components/shared/button";
+import { Button } from "@/components/shared/button";
+import { Separator } from "@/components/ui/separator";
 import { getDict } from "@/i18n/server";
 
 // Social sign-in / sign-up. The same OAuth flow handles both: Supabase creates
@@ -9,34 +10,36 @@ export async function OAuthButtons() {
   const t = await getDict();
   return (
     <div>
-      <div className="my-5 flex items-center gap-3" aria-hidden>
-        <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
-        <span className="text-xs font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500">
+      <div className="my-6 flex items-center gap-3" aria-hidden>
+        <Separator className="flex-1" />
+        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
           {t.auth.orDivider}
         </span>
-        <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+        <Separator className="flex-1" />
       </div>
 
       <div className="grid gap-2.5">
         <form action={signInWithOAuthAction}>
           <input type="hidden" name="provider" value="google" />
-          <button type="submit" className={buttonClass("secondary", "w-full gap-2.5")}>
-            <GoogleIcon />
+          <Button type="submit" variant="outline" size="lg" className="w-full">
+            <GoogleMark />
             {t.auth.continueWithGoogle}
-          </button>
+          </Button>
         </form>
 
         {/* Apple sign-in needs a paid Apple Developer account ($99/yr). Re-add a
-            second <form> with provider="apple" + <AppleIcon /> once that exists —
-            the server action already accepts "apple". */}
+            second <form> with provider="apple" + an Apple brand mark once that
+            exists — the server action already accepts "apple". */}
       </div>
     </div>
   );
 }
 
-function GoogleIcon() {
+// Google brand mark (official multi-colour "G"). This is a logo, not a UI icon,
+// so it is intentionally kept as an inline SVG rather than a hugeicons glyph.
+function GoogleMark() {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+    <svg className="size-[18px]" viewBox="0 0 18 18" aria-hidden>
       <path
         fill="#4285F4"
         d="M17.64 9.2045c0-.6381-.0573-1.2518-.1636-1.8409H9v3.4814h4.8436c-.2086 1.125-.8427 2.0782-1.7959 2.7164v2.2581h2.9082c1.7018-1.5668 2.6841-3.874 2.6841-6.615z"
@@ -56,4 +59,3 @@ function GoogleIcon() {
     </svg>
   );
 }
-

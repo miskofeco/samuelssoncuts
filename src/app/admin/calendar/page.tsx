@@ -25,7 +25,7 @@ export default async function AdminCalendarPage() {
     : undefined;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <PageHeader
         eyebrow={t.admin.calendarEyebrow}
         title={t.admin.calendarTitle}

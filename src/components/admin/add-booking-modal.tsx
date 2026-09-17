@@ -1,5 +1,6 @@
 "use client";
 
+import { Add01Icon } from "@hugeicons/core-free-icons";
 import { useMemo, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
@@ -10,9 +11,10 @@ import { Button } from "@/components/shared/button";
 import { Combobox } from "@/components/shared/combobox";
 import { Feedback } from "@/components/shared/feedback";
 import { Field, SelectField } from "@/components/shared/form";
+import { Icon } from "@/components/shared/icon";
 import { Modal } from "@/components/shared/modal";
 import { SegmentedControl } from "@/components/shared/segmented-control";
-import { adminSlotOptions, todayIso } from "@/domain/schedule";
+import { addMinutesToTime, adminSlotOptions, todayIso } from "@/domain/schedule";
 import type { ActionResult, ClientProfile, Service } from "@/domain/types";
 import { useT } from "@/i18n/provider";
 
@@ -87,7 +89,8 @@ function BookingForm({
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
   const today = todayIso();
 
-  const duration = services.find((s) => s.id === serviceId)?.duration ?? 30;
+  const service = services.find((s) => s.id === serviceId);
+  const duration = service?.duration ?? 30;
   const options = useMemo(
     () =>
       adminSlotOptions({
@@ -142,105 +145,119 @@ function BookingForm({
     timeInvalid ||
     (mode === "client" ? !clientId : customerName.trim().length === 0);
 
+  const slotHint = dateInvalid
+    ? t.feedback.chooseFutureTime
+    : date && allTaken
+      ? t.admin.dayFull
+      : date && timeInvalid
+        ? t.admin.slotOverlapError
+        : null;
+
   return (
     <form className="space-y-4" onSubmit={submit}>
-        <div>
-          <span className="mb-2 block text-sm font-medium text-stone-700 dark:text-stone-300">
-            {t.admin.customer}
-          </span>
-          <SegmentedControl
-            ariaLabel={t.admin.customer}
-            value={mode}
-            onChange={setMode}
-            options={[
-              { label: t.admin.existingClient, value: "client" },
-              { label: t.admin.walkIn, value: "walkin" },
-            ]}
-          />
-        </div>
-
-        {mode === "client" ? (
-          bookableClients.length > 0 ? (
-            <Combobox
-              label={t.admin.client}
-              placeholder={t.admin.searchClients}
-              value={clientId}
-              onChange={setClientId}
-              options={bookableClients.map((client) => ({
-                value: client.id,
-                label: client.email ? `${client.name} — ${client.email}` : client.name,
-              }))}
-            />
-          ) : (
-            <p className="rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-500 dark:bg-stone-800/60 dark:text-stone-400">
-              {t.admin.noClientsYet}
-            </p>
-          )
-        ) : (
-          <Field
-            label={t.admin.walkInName}
-            value={customerName}
-            onChange={(event) => setCustomerName(event.target.value)}
-            placeholder={t.admin.walkInPlaceholder}
-            maxLength={120}
-          />
-        )}
-
-        <SelectField
-          label={t.client.service}
-          value={serviceId}
-          onChange={(event) => setServiceId(event.target.value)}
-        >
-          {services.map((service) => (
-            <option key={service.id} value={service.id}>
-              {service.name} — {service.duration} {t.admin.minutesShort} · {service.price} €
-            </option>
-          ))}
-        </SelectField>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field
-            label={t.admin.date}
-            type="date"
-            value={date}
-            min={today}
-            onChange={(event) => setDate(event.target.value)}
-          />
-          <Combobox
-            label={t.admin.time}
-            placeholder={t.admin.typeTime}
-            value={time}
-            onChange={setTime}
-            options={options}
-            searchable={false}
-          />
-        </div>
-        {dateInvalid ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400">{t.feedback.chooseFutureTime}</p>
-        ) : date && allTaken ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400">{t.admin.dayFull}</p>
-        ) : date && timeInvalid ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400">{t.admin.slotOverlapError}</p>
-        ) : null}
-
-        <Field
-          label={`${t.admin.note} ${t.common.optional}`}
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          placeholder={t.admin.bookingNotePlaceholder}
-          maxLength={1000}
+      <div>
+        <span className="mb-1.5 block text-sm font-medium text-foreground">{t.admin.customer}</span>
+        <SegmentedControl
+          ariaLabel={t.admin.customer}
+          value={mode}
+          onChange={setMode}
+          options={[
+            { label: t.admin.existingClient, value: "client" },
+            { label: t.admin.walkIn, value: "walkin" },
+          ]}
         />
+      </div>
 
-        <Feedback result={feedback && !feedback.ok ? feedback : null} />
+      {mode === "client" ? (
+        bookableClients.length > 0 ? (
+          <Combobox
+            label={t.admin.client}
+            placeholder={t.admin.searchClients}
+            value={clientId}
+            onChange={setClientId}
+            options={bookableClients.map((client) => ({
+              value: client.id,
+              label: client.email ? `${client.name} — ${client.email}` : client.name,
+            }))}
+          />
+        ) : (
+          <p className="rounded-lg bg-muted px-3 py-2.5 text-sm text-muted-foreground">
+            {t.admin.noClientsYet}
+          </p>
+        )
+      ) : (
+        <Field
+          label={t.admin.walkInName}
+          value={customerName}
+          onChange={(event) => setCustomerName(event.target.value)}
+          placeholder={t.admin.walkInPlaceholder}
+          maxLength={120}
+          autoComplete="off"
+        />
+      )}
 
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            {t.common.cancel}
-          </Button>
-          <Button type="submit" disabled={disabled}>
-            {pending ? t.admin.adding : t.admin.addBooking}
-          </Button>
-        </div>
+      <SelectField
+        label={t.client.service}
+        value={serviceId}
+        onChange={(event) => setServiceId(event.target.value)}
+      >
+        {services.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.name} — {option.duration} {t.admin.minutesShort} · {option.price} €
+          </option>
+        ))}
+      </SelectField>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field
+          label={t.admin.date}
+          type="date"
+          value={date}
+          min={today}
+          onChange={(event) => setDate(event.target.value)}
+        />
+        <Combobox
+          label={t.admin.time}
+          placeholder={t.admin.typeTime}
+          value={time}
+          onChange={setTime}
+          options={options}
+          searchable={false}
+        />
+      </div>
+      {slotHint ? (
+        <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{slotHint}</p>
+      ) : time && !timeInvalid && service ? (
+        <p className="text-xs text-muted-foreground tabular-nums">
+          {time}–{addMinutesToTime(time, duration)} · {service.name} · {service.price} €
+        </p>
+      ) : null}
+
+      <Field
+        label={`${t.admin.note} ${t.common.optional}`}
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+        placeholder={t.admin.bookingNotePlaceholder}
+        maxLength={1000}
+      />
+
+      <Feedback result={feedback && !feedback.ok ? feedback : null} />
+
+      <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+        <Button type="button" variant="outline" size="lg" onClick={onClose}>
+          {t.common.cancel}
+        </Button>
+        <Button type="submit" size="lg" disabled={disabled} loading={pending}>
+          {pending ? (
+            t.admin.adding
+          ) : (
+            <>
+              <Icon icon={Add01Icon} strokeWidth={2.2} />
+              {t.admin.addBooking}
+            </>
+          )}
+        </Button>
+      </div>
     </form>
   );
 }

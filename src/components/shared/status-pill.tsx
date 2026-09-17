@@ -1,35 +1,45 @@
 import type { ReactNode } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/classnames";
 
-type Tone = "neutral" | "success" | "warning" | "info" | "danger";
+export type PillTone = "neutral" | "success" | "warning" | "info" | "danger";
 
-const tones: Record<Tone, string> = {
-  neutral: "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300",
-  success: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
-  warning: "bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300",
-  info: "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300",
-  danger: "bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300",
+export const pillTones: Record<PillTone, string> = {
+  neutral: "bg-muted text-muted-foreground",
+  success: "bg-emerald-500/12 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300",
+  warning: "bg-amber-500/15 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300",
+  info: "bg-sky-500/12 text-sky-700 dark:bg-sky-400/15 dark:text-sky-300",
+  danger: "bg-destructive/10 text-destructive dark:bg-destructive/20",
 };
 
+const dotTones: Record<PillTone, string> = {
+  neutral: "bg-muted-foreground/60",
+  success: "bg-emerald-500",
+  warning: "bg-amber-500",
+  info: "bg-sky-500",
+  danger: "bg-destructive",
+};
+
+/** Small status label. Semantic colour comes from `tone`; `dot` adds a marker. */
 export function StatusPill({
   children,
   tone = "neutral",
+  dot = false,
   className,
 }: {
   children: ReactNode;
-  tone?: Tone;
+  tone?: PillTone;
+  dot?: boolean;
   className?: string;
 }) {
   return (
-    <span
-      className={cn(
-        "inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold",
-        tones[tone],
-        className,
-      )}
+    <Badge
+      variant="secondary"
+      className={cn("h-6 gap-1.5 rounded-full px-2.5 text-xs font-semibold", pillTones[tone], className)}
     >
+      {dot ? <span aria-hidden className={cn("size-1.5 rounded-full", dotTones[tone])} /> : null}
       {children}
-    </span>
+    </Badge>
   );
 }

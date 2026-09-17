@@ -1,16 +1,87 @@
-import Link from "next/link";
+import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
+import type { ReactNode } from "react";
 
+import { ButtonLink } from "@/components/shared/button";
+import { Icon } from "@/components/shared/icon";
 import { LanguageToggle } from "@/components/shared/language-toggle";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { cn } from "@/lib/classnames";
 
 // Renders a legal document (Privacy / Terms) from a localized content object.
-// Mirrors the structure of the cookie policy page so all legal pages look
-// consistent and stay fully bilingual via the passed-in dictionary strings.
+// The cookie policy page reuses `LegalShell` + `LegalSection` so all legal
+// pages share one article layout and stay fully bilingual via the passed-in
+// dictionary strings.
 export type LegalContent = {
   title: string;
   intro: string;
   sections: ReadonlyArray<{ heading: string; body: string }>;
 };
+
+/**
+ * Article frame for legal documents: a sticky top bar (back link + language and
+ * theme toggles) above a readable `max-w-3xl` column.
+ */
+export function LegalShell({
+  backLabel,
+  title,
+  meta,
+  intro,
+  children,
+}: {
+  backLabel: string;
+  title: string;
+  /** Small print under the title (version, last-updated date). */
+  meta?: ReactNode;
+  intro: string;
+  children: ReactNode;
+}) {
+  return (
+    <main className="min-h-dvh bg-background">
+      <header className="sticky top-0 z-30 border-b bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+        <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-3 px-4 sm:px-6">
+          <ButtonLink href="/" variant="ghost" className="-ml-2 text-muted-foreground hover:text-foreground">
+            <Icon icon={ArrowLeft01Icon} />
+            {backLabel}
+          </ButtonLink>
+          <div className="flex items-center gap-2">
+            <LanguageToggle className="h-9 *:h-9" />
+            <ThemeToggle className="size-9" />
+          </div>
+        </div>
+      </header>
+
+      <article className="mx-auto w-full max-w-3xl px-4 pt-8 pb-[max(3rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-12 sm:pb-20">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">{title}</h1>
+        {meta ? (
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">{meta}</div>
+        ) : null}
+        <p className="mt-6 text-base leading-7 text-foreground/90 sm:text-[1.0625rem] sm:leading-8">{intro}</p>
+        <div className="mt-10 space-y-10">{children}</div>
+      </article>
+    </main>
+  );
+}
+
+/** One heading + body block inside `LegalShell`. Pass children for custom bodies. */
+export function LegalSection({
+  title,
+  body,
+  children,
+  className,
+}: {
+  title: string;
+  body?: string;
+  children?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={cn("scroll-mt-20", className)}>
+      <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">{title}</h2>
+      {body ? <p className="mt-3 text-[0.9375rem] leading-7 text-muted-foreground">{body}</p> : null}
+      {children}
+    </section>
+  );
+}
 
 export function LegalPage({
   content,
@@ -24,42 +95,19 @@ export function LegalPage({
   lastUpdated: string;
 }) {
   return (
-    <main className="app-surface min-h-screen px-4 py-10">
-      <div className="absolute right-4 top-4 flex items-center gap-2">
-        <LanguageToggle />
-        <ThemeToggle />
-      </div>
-
-      <article className="mx-auto w-full max-w-3xl">
-        <Link
-          href="/"
-          className="text-sm font-semibold text-stone-600 underline-offset-4 hover:underline dark:text-stone-400"
-        >
-          ← {backLabel}
-        </Link>
-
-        <h1 className="mt-6 text-3xl font-semibold tracking-tight text-black dark:text-white">
-          {content.title}
-        </h1>
-        <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+    <LegalShell
+      backLabel={backLabel}
+      title={content.title}
+      meta={
+        <span>
           {lastUpdatedLabel}: {lastUpdated}
-        </p>
-
-        <p className="mt-6 text-sm leading-7 text-stone-700 dark:text-stone-300">
-          {content.intro}
-        </p>
-
-        {content.sections.map((section) => (
-          <section key={section.heading} className="mt-8">
-            <h2 className="text-lg font-semibold text-black dark:text-white">
-              {section.heading}
-            </h2>
-            <p className="mt-2 text-sm leading-7 text-stone-700 dark:text-stone-300">
-              {section.body}
-            </p>
-          </section>
-        ))}
-      </article>
-    </main>
+        </span>
+      }
+      intro={content.intro}
+    >
+      {content.sections.map((section) => (
+        <LegalSection key={section.heading} title={section.heading} body={section.body} />
+      ))}
+    </LegalShell>
   );
 }

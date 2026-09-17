@@ -1,5 +1,14 @@
 "use client";
 
+import {
+  Calendar03Icon,
+  Call02Icon,
+  Mail01Icon,
+  Note01Icon,
+  Scissor01Icon,
+  UserIcon,
+} from "@hugeicons/core-free-icons";
+import type { IconSvgElement } from "@hugeicons/react";
 import { useMemo, useState, useTransition } from "react";
 
 import {
@@ -12,7 +21,10 @@ import {
 import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
 import { Combobox } from "@/components/shared/combobox";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Feedback } from "@/components/shared/feedback";
+import { Field, TextAreaField } from "@/components/shared/form";
+import { Icon } from "@/components/shared/icon";
 import { Modal } from "@/components/shared/modal";
 import { StatusPill } from "@/components/shared/status-pill";
 import type { BookedSlot, CalendarItem } from "@/components/admin/admin-calendar";
@@ -22,7 +34,7 @@ import { localeFor } from "@/i18n/config";
 import { useLang, useT } from "@/i18n/provider";
 import { shopDateTimeToEpochMs } from "@/lib/time-zone";
 
-type Mode = "view" | "reschedule" | "cancel";
+type Mode = "view" | "reschedule";
 
 export function AppointmentDetailModal({
   item,
@@ -60,17 +72,22 @@ function DetailBody({
   const t = useT();
   const locale = localeFor(useLang());
   const [mode, setMode] = useState<Mode>("view");
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [noShowOpen, setNoShowOpen] = useState(false);
   const [date, setDate] = useState(item.date);
   const [time, setTime] = useState(item.time);
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
+  // Snapshot the clock once per opened appointment (the body is keyed by item
+  // id) so render stays pure while "has this ended" is still current enough.
+  const [openedAt] = useState(() => Date.now());
   const today = todayIso();
 
   const isWalkIn = !item.clientId;
   const isConfirmed = item.type !== "Proposed";
   const endTime = addMinutesToTime(item.time, item.durationMinutes);
-  const hasEnded = shopDateTimeToEpochMs(item.date, endTime) <= Date.now();
+  const hasEnded = shopDateTimeToEpochMs(item.date, endTime) <= openedAt;
   const finalPrice = Math.round(item.finalPriceCents / 100);
 
   const timeOptions = useMemo(
@@ -142,138 +159,148 @@ function DetailBody({
     }
   }
 
+  const errorFeedback = feedback && !feedback.ok ? feedback : null;
+  const canRecordOutcome = isConfirmed && hasEnded && !item.outcome;
+
   return (
     <div className="space-y-4">
-      {/* Summary */}
-      <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-start gap-3">
-            {!isWalkIn ? (
-              <Avatar size="md" name={item.title} src={item.clientAvatarUrl} />
+      {/* Who */}
+      <div className="flex items-start gap-3">
+        {isWalkIn ? (
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <Icon icon={UserIcon} className="size-5" />
+          </span>
+        ) : (
+          <Avatar size="lg" name={item.title} src={item.clientAvatarUrl} />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-lg font-semibold text-foreground">{item.title}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <StatusPill tone={isConfirmed ? "success" : "info"} dot>
+              {isConfirmed ? t.admin.confirmed : t.statuses.proposedShort}
+            </StatusPill>
+            {isWalkIn ? <StatusPill tone="neutral">{t.admin.walkIn}</StatusPill> : null}
+            {item.outcome === "completed" || item.outcome === "no_show" ? (
+              <StatusPill tone={item.outcome === "completed" ? "success" : "danger"}>
+                {item.outcome === "completed" ? t.admin.outcomeCompleted : t.admin.outcomeNoShow}
+              </StatusPill>
             ) : null}
-            <div className="min-w-0">
-              <p className="text-lg font-semibold text-black dark:text-white">{item.title}</p>
-              <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
-                {item.service} · {item.durationMinutes} {t.admin.minutesShort}
-              </p>
-            </div>
           </div>
-          <StatusPill tone={isConfirmed ? "success" : "info"}>
-            {isConfirmed ? t.admin.confirmed : t.statuses.proposedShort}
-          </StatusPill>
         </div>
+      </div>
 
-        <dl className="mt-3 space-y-1.5 text-sm">
-          <Row label={t.admin.when}>
-            {formatFullDay(item.date, locale)} · {item.time}–{endTime}
-          </Row>
-          {isWalkIn ? (
-            <Row label={t.admin.customer}>
-              <StatusPill tone="neutral">{t.admin.walkIn}</StatusPill>
-            </Row>
-          ) : (
-            <>
-              {item.clientEmail ? <Row label={t.common.email}>{item.clientEmail}</Row> : null}
-              {item.clientPhone ? <Row label={t.common.phone}>{item.clientPhone}</Row> : null}
-            </>
-          )}
-          {item.note ? <Row label={t.admin.note}>{item.note}</Row> : null}
-        </dl>
+      {/* What / when / contact */}
+      <dl className="divide-y rounded-xl bg-muted/40 ring-1 ring-foreground/10">
+        <DetailRow icon={Scissor01Icon} label={t.client.service}>
+          {item.service} · {item.durationMinutes} {t.admin.minutesShort}
+        </DetailRow>
+        <DetailRow icon={Calendar03Icon} label={t.admin.when}>
+          {formatFullDay(item.date, locale)}
+          <span className="block text-muted-foreground tabular-nums">
+            {item.time}–{endTime}
+          </span>
+        </DetailRow>
+        {!isWalkIn && item.clientEmail ? (
+          <DetailRow icon={Mail01Icon} label={t.common.email}>
+            <a href={`mailto:${item.clientEmail}`} className="break-all underline-offset-4 hover:underline">
+              {item.clientEmail}
+            </a>
+          </DetailRow>
+        ) : null}
+        {!isWalkIn && item.clientPhone ? (
+          <DetailRow icon={Call02Icon} label={t.common.phone}>
+            <a href={`tel:${item.clientPhone}`} className="tabular-nums underline-offset-4 hover:underline">
+              {item.clientPhone}
+            </a>
+          </DetailRow>
+        ) : null}
+        {item.note ? (
+          <DetailRow icon={Note01Icon} label={t.admin.note}>
+            {item.note}
+          </DetailRow>
+        ) : null}
+      </dl>
 
-        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-500/25 dark:bg-emerald-500/10">
-          <p className="text-xs font-medium uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
+      {/* Price */}
+      <div className="flex items-center justify-between gap-3 rounded-xl bg-emerald-500/10 px-4 py-3 ring-1 ring-emerald-500/20 dark:bg-emerald-400/10">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold tracking-wide text-emerald-800 uppercase dark:text-emerald-300">
             {t.admin.finalPrice}
           </p>
-          <p className="mt-1 text-2xl font-semibold text-emerald-950 dark:text-emerald-50">
-            {finalPrice} €
-          </p>
           {item.surcharge ? (
-            <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+            <p className="mt-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
               {t.admin.surcharge}
             </p>
           ) : null}
         </div>
+        <p className="text-2xl font-semibold text-foreground tabular-nums">{finalPrice} €</p>
       </div>
 
       {mode === "view" ? (
         <>
-          <Feedback result={feedback && !feedback.ok ? feedback : null} />
+          <Feedback result={errorFeedback} />
 
-          {/* Outcome section — only for past confirmed appointments */}
-          {isConfirmed && hasEnded ? (
-            item.outcome ? (
-              <div className="flex items-center gap-2">
-                <StatusPill tone={item.outcome === "completed" ? "success" : "danger"}>
-                  {item.outcome === "completed" ? t.admin.outcomeCompleted : t.admin.outcomeNoShow}
-                </StatusPill>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={pending}
-                  onClick={() =>
-                    run(() => markAppointmentOutcomeAction(item.appointmentId!, "completed"))
-                  }
-                >
-                  {t.admin.markCompleted}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={pending}
-                  onClick={() =>
-                    run(() => markAppointmentOutcomeAction(item.appointmentId!, "no_show"))
-                  }
-                  className="text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10"
-                >
-                  {t.admin.markNoShow}
-                </Button>
-              </div>
-            )
+          {/* Outcome — only for confirmed appointments that already ended */}
+          {canRecordOutcome ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                size="lg"
+                loading={pending}
+                onClick={() => run(() => markAppointmentOutcomeAction(item.appointmentId!, "completed"))}
+              >
+                {t.admin.markCompleted}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                disabled={pending}
+                onClick={() => setNoShowOpen(true)}
+                className="text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
+              >
+                {t.admin.markNoShow}
+              </Button>
+            </div>
           ) : null}
 
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:justify-end">
             {isWalkIn && isConfirmed ? (
-              <p className="mr-auto self-center text-xs text-stone-500 dark:text-stone-400">
+              <p className="text-xs text-muted-foreground sm:mr-auto sm:self-center">
                 {t.admin.walkInNoReschedule}
               </p>
             ) : (
-              <Button type="button" variant="secondary" onClick={() => setMode("reschedule")}>
+              <Button type="button" variant="outline" size="lg" onClick={() => setMode("reschedule")}>
                 {t.admin.reschedule}
               </Button>
             )}
             <Button
               type="button"
-              variant="ghost"
-              onClick={() => setMode("cancel")}
-              className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+              variant="destructive-outline"
+              size="lg"
+              disabled={pending}
+              onClick={() => setCancelOpen(true)}
             >
               {t.admin.cancelAppointment}
             </Button>
           </div>
         </>
-      ) : null}
-
-      {mode === "reschedule" ? (
-        <div className="space-y-4">
-          <p className="text-sm text-stone-600 dark:text-stone-300">
+      ) : (
+        <div className="space-y-4 border-t pt-4">
+          <p className="text-sm text-muted-foreground">
             {isConfirmed
               ? t.admin.rescheduleConfirmedDescription
               : t.admin.rescheduleProposedDescription}
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-sm font-medium text-stone-700 dark:text-stone-300">{t.admin.date}</span>
-              <input
-                type="date"
-                value={date}
-                min={today}
-                onChange={(event) => setDate(event.target.value)}
-                className="mt-2 h-11 w-full rounded-md border border-black/10 bg-white px-3 text-sm text-black outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white dark:[color-scheme:dark]"
-              />
-            </label>
+            <Field
+              label={t.admin.date}
+              type="date"
+              value={date}
+              min={today}
+              onChange={(event) => setDate(event.target.value)}
+              error={dateInvalid ? t.feedback.chooseFutureTime : undefined}
+            />
             <Combobox
               label={t.admin.time}
               placeholder={t.admin.typeTime}
@@ -283,33 +310,28 @@ function DetailBody({
               searchable={false}
             />
           </div>
-          {dateInvalid ? (
-            <p className="text-xs text-amber-600 dark:text-amber-400">{t.feedback.chooseFutureTime}</p>
-          ) : timeInvalid ? (
-            <p className="text-xs text-amber-600 dark:text-amber-400">{t.admin.slotOverlapError}</p>
+          {!dateInvalid && timeInvalid ? (
+            <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{t.admin.slotOverlapError}</p>
           ) : null}
-          <label className="block">
-            <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
-              {`${t.admin.messageToClient} ${t.common.optional}`}
-            </span>
-            <textarea
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              rows={2}
-              placeholder={t.admin.rescheduleNotePlaceholder}
-              maxLength={1000}
-              className="mt-2 w-full resize-none rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white"
-            />
-          </label>
-          <Feedback result={feedback && !feedback.ok ? feedback : null} />
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setMode("view")}>
+          <TextAreaField
+            label={`${t.admin.messageToClient} ${t.common.optional}`}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={2}
+            placeholder={t.admin.rescheduleNotePlaceholder}
+            maxLength={1000}
+          />
+          <Feedback result={errorFeedback} />
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" size="lg" onClick={() => setMode("view")}>
               {t.common.back}
             </Button>
             <Button
               type="button"
+              size="lg"
               onClick={submitReschedule}
-              disabled={pending || !date || !time || dateInvalid || timeInvalid}
+              loading={pending}
+              disabled={!date || !time || dateInvalid || timeInvalid}
             >
               {pending
                 ? t.common.sending
@@ -319,54 +341,63 @@ function DetailBody({
             </Button>
           </div>
         </div>
-      ) : null}
+      )}
 
-      {mode === "cancel" ? (
-        <div className="space-y-4">
-          <p className="text-sm text-stone-600 dark:text-stone-300">
-            {t.admin.cancelConfirmBase}
-            {isWalkIn ? t.admin.cancelConfirmWalkIn : t.admin.cancelConfirmClient}
-          </p>
+      <ConfirmDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        title={t.admin.cancelAppointment}
+        description={`${t.admin.cancelConfirmBase}${isWalkIn ? t.admin.cancelConfirmWalkIn : t.admin.cancelConfirmClient}`}
+        confirmLabel={pending ? t.admin.cancelling : t.admin.cancelAppointment}
+        loading={pending}
+        onConfirm={submitCancel}
+      >
+        <div className="space-y-3">
           {!isWalkIn ? (
-            <label className="block">
-              <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
-                {`${t.admin.messageToClient} ${t.common.optional}`}
-              </span>
-              <textarea
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                rows={2}
-                placeholder={t.admin.cancelNotePlaceholder}
-                maxLength={1000}
-                className="mt-2 w-full resize-none rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white"
-              />
-            </label>
+            <TextAreaField
+              label={`${t.admin.messageToClient} ${t.common.optional}`}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              rows={2}
+              placeholder={t.admin.cancelNotePlaceholder}
+              maxLength={1000}
+            />
           ) : null}
-          <Feedback result={feedback && !feedback.ok ? feedback : null} />
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setMode("view")}>
-              {t.common.back}
-            </Button>
-            <Button
-              type="button"
-              onClick={submitCancel}
-              disabled={pending}
-              className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:text-white dark:hover:bg-red-500"
-            >
-              {pending ? t.admin.cancelling : t.admin.cancelAppointment}
-            </Button>
-          </div>
+          <Feedback result={errorFeedback} />
         </div>
-      ) : null}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={noShowOpen}
+        onOpenChange={setNoShowOpen}
+        title={t.admin.noShowConfirmTitle}
+        description={t.admin.noShowConfirmBody}
+        confirmLabel={t.admin.markNoShow}
+        loading={pending}
+        onConfirm={() => run(() => markAppointmentOutcomeAction(item.appointmentId!, "no_show"))}
+      >
+        <Feedback result={errorFeedback} />
+      </ConfirmDialog>
     </div>
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function DetailRow({
+  icon,
+  label,
+  children,
+}: {
+  icon: IconSvgElement;
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex gap-2">
-      <dt className="w-16 shrink-0 text-stone-500 dark:text-stone-400">{label}</dt>
-      <dd className="min-w-0 break-words font-medium text-black dark:text-white">{children}</dd>
+    <div className="flex items-start gap-3 px-3 py-2.5">
+      <Icon icon={icon} className="mt-0.5 size-4 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+        <dd className="mt-0.5 text-sm font-medium break-words text-foreground">{children}</dd>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { Cancel01Icon, LockIcon, RepeatIcon } from "@hugeicons/core-free-icons";
 import { useState, useTransition } from "react";
 
 import {
@@ -9,6 +10,7 @@ import {
 import { Button } from "@/components/shared/button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Feedback } from "@/components/shared/feedback";
+import { Icon } from "@/components/shared/icon";
 import { Modal } from "@/components/shared/modal";
 import type {
   ActionResult,
@@ -88,28 +90,34 @@ export function ConfirmedAppointmentActions({
       <Feedback result={feedback} className="mt-3" />
 
       {appointment.canModify ? (
-        <div className="mt-3 flex flex-wrap justify-end gap-2">
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
           <Button
             type="button"
             variant="secondary"
+            size="lg"
             disabled={pending}
             onClick={() => setRescheduling(true)}
+            className="sm:h-10 sm:text-sm"
           >
+            <Icon icon={RepeatIcon} className="size-4" strokeWidth={2} />
             {t.client.rescheduleAppointment}
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="dangerOutline"
+            size="lg"
             disabled={pending}
             onClick={() => setConfirmingCancel(true)}
-            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+            className="sm:h-10 sm:text-sm"
           >
+            <Icon icon={Cancel01Icon} className="size-4" strokeWidth={2} />
             {t.client.cancelAppointment}
           </Button>
         </div>
       ) : (
-        <p className="mt-3 rounded-lg bg-stone-50 px-3 py-2 text-xs text-stone-500 dark:bg-stone-800/60 dark:text-stone-400">
-          {t.client.lockedNotice}
+        <p className="mt-4 flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+          <Icon icon={LockIcon} className="mt-px size-3.5" />
+          <span>{t.client.lockedNotice}</span>
         </p>
       )}
 
@@ -135,15 +143,20 @@ export function ConfirmedAppointmentActions({
             <Button
               type="button"
               variant="secondary"
+              size="lg"
               disabled={pending}
               onClick={() => setRescheduling(false)}
+              className="sm:h-10 sm:text-sm"
             >
               {t.common.cancel}
             </Button>
             <Button
               type="button"
-              disabled={!date || !slot || pending}
+              size="lg"
+              disabled={!date || !slot}
+              loading={pending}
               onClick={submitReschedule}
+              className="sm:h-10 sm:text-sm"
             >
               {pending ? t.common.sending : t.client.rescheduleSubmit}
             </Button>

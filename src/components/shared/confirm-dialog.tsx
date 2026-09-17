@@ -1,9 +1,20 @@
 "use client";
 
-import { AlertDialog } from "radix-ui";
+import { Alert02Icon, HelpCircleIcon } from "@hugeicons/core-free-icons";
 import type { ReactNode } from "react";
 
-import { buttonVariants } from "@/components/shared/button";
+import { Icon } from "@/components/shared/icon";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
 
@@ -38,41 +49,38 @@ export function ConfirmDialog({
 }) {
   const t = useT();
   return (
-    <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
-      <AlertDialog.Portal>
-        <AlertDialog.Overlay className="ss-overlay fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm" />
-        <div className="pointer-events-none fixed inset-0 z-[60] flex items-end justify-center px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-0 sm:items-center sm:p-4">
-          <AlertDialog.Content className="ss-modal-panel pointer-events-auto w-full rounded-t-2xl border border-black/10 bg-white p-5 shadow-2xl outline-none dark:border-white/10 dark:bg-stone-900 sm:max-w-md sm:rounded-2xl">
-            <AlertDialog.Title className="text-lg font-semibold text-black dark:text-white">
-              {title}
-            </AlertDialog.Title>
-            {description ? (
-              <AlertDialog.Description className="mt-2 text-sm text-stone-600 dark:text-stone-400">
-                {description}
-              </AlertDialog.Description>
-            ) : null}
-            {children ? <div className="mt-4">{children}</div> : null}
-            <div className="mt-5 flex flex-col-reverse gap-2 pb-[max(0px,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end">
-              <AlertDialog.Cancel className={cn(buttonVariants({ variant: "secondary" }))} disabled={loading}>
-                {cancelLabel ?? t.common.cancel}
-              </AlertDialog.Cancel>
-              <AlertDialog.Action
-                className={cn(buttonVariants({ variant: destructive ? "danger" : "primary" }))}
-                disabled={loading}
-                aria-busy={loading || undefined}
-                onClick={(event) => {
-                  // Keep the dialog open while the action runs; the caller
-                  // closes it via onOpenChange when done.
-                  event.preventDefault();
-                  onConfirm();
-                }}
-              >
-                {confirmLabel}
-              </AlertDialog.Action>
-            </div>
-          </AlertDialog.Content>
-        </div>
-      </AlertDialog.Portal>
-    </AlertDialog.Root>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="w-[calc(100%-2rem)] rounded-2xl bg-card text-card-foreground sm:max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogMedia
+            className={cn(
+              "rounded-xl",
+              destructive ? "bg-destructive/10 text-destructive" : "bg-muted text-foreground",
+            )}
+          >
+            <Icon icon={destructive ? Alert02Icon : HelpCircleIcon} className="size-5" strokeWidth={2} />
+          </AlertDialogMedia>
+          <AlertDialogTitle className="text-lg font-semibold">{title}</AlertDialogTitle>
+          {description ? <AlertDialogDescription>{description}</AlertDialogDescription> : null}
+        </AlertDialogHeader>
+        {children ? <div className="text-left">{children}</div> : null}
+        <AlertDialogFooter className="pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4">
+          <AlertDialogCancel disabled={loading}>{cancelLabel ?? t.common.cancel}</AlertDialogCancel>
+          <AlertDialogAction
+            variant={destructive ? "destructive" : "default"}
+            disabled={loading}
+            aria-busy={loading || undefined}
+            onClick={(event) => {
+              // Keep the dialog open while the action runs; the caller closes
+              // it via onOpenChange when done.
+              event.preventDefault();
+              onConfirm();
+            }}
+          >
+            {confirmLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

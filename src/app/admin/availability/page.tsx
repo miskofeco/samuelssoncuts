@@ -19,7 +19,7 @@ export default async function AdminAvailabilityPage() {
   ]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <PageHeader
         eyebrow={t.admin.availabilityEyebrow}
         title={t.admin.availabilityTitle}

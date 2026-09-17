@@ -1,22 +1,39 @@
+import { Home01Icon, Search01Icon } from "@hugeicons/core-free-icons";
+
 import { ButtonLink } from "@/components/shared/button";
 import { Card } from "@/components/shared/card";
+import { Icon } from "@/components/shared/icon";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { getDict } from "@/i18n/server";
 
 export default async function NotFound() {
   const t = await getDict();
   return (
-    <main className="app-surface grid min-h-screen place-items-center px-4 py-10">
-      <Card className="w-full max-w-md rounded-2xl p-6 text-center">
-        <p className="text-5xl font-semibold text-black dark:text-white">404</p>
-        <h1 className="mt-4 text-xl font-semibold text-black dark:text-white">
-          {t.errors.notFoundTitle}
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-stone-600 dark:text-stone-400">
-          {t.errors.notFoundBody}
-        </p>
-        <div className="mt-6 flex justify-center">
-          <ButtonLink href="/">{t.errors.goHome}</ButtonLink>
-        </div>
+    <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-10 sm:px-6">
+      <Card className="w-full max-w-md rounded-2xl p-6 sm:p-8">
+        <Empty className="border-0 p-0">
+          <EmptyHeader>
+            <EmptyMedia
+              variant="icon"
+              className="size-14 rounded-2xl bg-muted text-foreground ring-1 ring-foreground/10 [&_svg:not([class*='size-'])]:size-7"
+            >
+              <Icon icon={Search01Icon} />
+            </EmptyMedia>
+            <p className="text-[0.7rem] font-semibold tracking-[0.12em] text-muted-foreground uppercase tabular-nums">
+              404
+            </p>
+            <EmptyTitle className="text-xl font-semibold tracking-tight text-foreground">
+              {t.errors.notFoundTitle}
+            </EmptyTitle>
+            <EmptyDescription className="leading-6">{t.errors.notFoundBody}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent className="mt-2 *:w-full sm:*:w-auto">
+            <ButtonLink href="/" size="lg">
+              <Icon icon={Home01Icon} />
+              {t.errors.goHome}
+            </ButtonLink>
+          </EmptyContent>
+        </Empty>
       </Card>
     </main>
   );

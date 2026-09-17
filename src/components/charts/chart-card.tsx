@@ -1,22 +1,32 @@
 import type { ReactNode } from "react";
 
 import { Card, SectionHeader } from "@/components/shared/card";
+import { cn } from "@/lib/classnames";
 
+/**
+ * Consistent frame for every analytics chart: tokenised card surface, a
+ * SectionHeader and a fixed-height plot area so charts line up in the grid.
+ * Line/bar charts inherit `currentColor` from `text-foreground`.
+ */
 export function ChartCard({
   eyebrow,
   title,
+  description,
   action,
+  className,
   children,
 }: {
   eyebrow?: string;
   title: string;
+  description?: string;
   action?: ReactNode;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <Card className="rounded-lg border-black/10 bg-white p-5 shadow-[0_8px_24px_rgba(0,0,0,0.035)] dark:border-white/10 dark:bg-stone-900">
-      <SectionHeader eyebrow={eyebrow} title={title} action={action} />
-      <div className="mt-6 h-64 w-full">{children}</div>
+    <Card className={cn("flex h-full flex-col text-foreground", className)}>
+      <SectionHeader eyebrow={eyebrow} title={title} description={description} action={action} />
+      <div className="mt-5 h-64 w-full min-w-0">{children}</div>
     </Card>
   );
 }

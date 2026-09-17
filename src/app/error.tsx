@@ -1,9 +1,12 @@
 "use client";
 
+import { Alert02Icon, RefreshIcon } from "@hugeicons/core-free-icons";
 import { useEffect } from "react";
 
 import { Button } from "@/components/shared/button";
 import { Card } from "@/components/shared/card";
+import { Icon } from "@/components/shared/icon";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { useT } from "@/i18n/provider";
 
 // Route-segment error boundary. Renders inside the root layout, so the i18n and
@@ -23,19 +26,28 @@ export default function Error({
   }, [error]);
 
   return (
-    <main className="app-surface grid min-h-screen place-items-center px-4 py-10">
-      <Card className="w-full max-w-md rounded-2xl p-6 text-center">
-        <h1 className="text-xl font-semibold text-black dark:text-white">
-          {t.errors.genericTitle}
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-stone-600 dark:text-stone-400">
-          {t.errors.genericBody}
-        </p>
-        <div className="mt-6 flex justify-center">
-          <Button type="button" onClick={reset}>
-            {t.errors.retry}
-          </Button>
-        </div>
+    <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-10 sm:px-6">
+      <Card className="w-full max-w-md rounded-2xl p-6 sm:p-8">
+        <Empty className="border-0 p-0">
+          <EmptyHeader>
+            <EmptyMedia
+              variant="icon"
+              className="size-14 rounded-2xl bg-destructive/10 text-destructive ring-1 ring-foreground/10 dark:bg-destructive/20 [&_svg:not([class*='size-'])]:size-7"
+            >
+              <Icon icon={Alert02Icon} />
+            </EmptyMedia>
+            <EmptyTitle className="text-xl font-semibold tracking-tight text-foreground">
+              {t.errors.genericTitle}
+            </EmptyTitle>
+            <EmptyDescription className="leading-6">{t.errors.genericBody}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent className="mt-2 *:w-full sm:*:w-auto">
+            <Button type="button" size="lg" onClick={reset}>
+              <Icon icon={RefreshIcon} />
+              {t.errors.retry}
+            </Button>
+          </EmptyContent>
+        </Empty>
       </Card>
     </main>
   );

@@ -18,7 +18,9 @@ Most routes are dynamically rendered because `src/proxy.ts` emits a per-request 
 ## Runtime Stack
 
 - App framework: Next.js `16.2.9`, React `19.2.4`, App Router under `src/app`.
-- Styling: Tailwind CSS v4 through `postcss.config.mjs` and `src/app/globals.css`.
+- Styling: Tailwind CSS v4 through `postcss.config.mjs` and `src/app/globals.css`, which defines the shadcn design tokens (warm stone palette, light/dark via the `.dark` class) and imports `tw-animate-css` and `shadcn/tailwind.css`.
+- UI kit: shadcn v4 primitives generated into `src/components/ui` (`components.json`, radix base, `iconLibrary: "hugeicons"`). App-level wrappers with stable APIs live in `src/components/shared` (Button, Card, Modal, Sheet, ConfirmDialog, Field, Combobox, DataTable, StatCard, StatusPill, EmptyState…). Icons come only from `@hugeicons/core-free-icons` through `src/components/shared/icon.tsx`.
+- Fonts: Geist self-hosted through `next/font/google` in `src/app/layout.tsx` (exposed as `--font-geist`).
 - Data/auth: Supabase SSR clients in `src/lib/supabase`, generated DB types in `src/lib/database.types.ts`, migrations in `supabase/migrations`.
 - Email: React Email templates in `src/emails`, Resend delivery through `src/lib/email.ts`.
 - Push: `web-push`, API routes under `src/app/api/push`, browser service worker in `public/sw.js`.
@@ -180,13 +182,22 @@ Admin booking and calendar changes:
 - In-app notifications should be created through `createNotification`, `createNotifications`, or `createAdminNotification` in `src/server/notifications.ts`.
 - Push delivery is best-effort and non-fatal. Invalid subscriptions are deleted or marked failed.
 - `PushBadgeSync` registers `public/sw.js` and keeps foreground app badge counts aligned.
-- Admin sidebar attention counts are server-computed and refreshed by `revalidatePath`; Supabase Realtime is only a background refresh nudge.
+- Admin navigation attention counts are server-computed and refreshed by `revalidatePath`; Supabase Realtime is only a background refresh nudge.
 
-## Realtime Sidebar Constraint
+## App Shell And Navigation
 
-The desktop sidebar stays mounted on mobile and the mobile drawer mounts a second `Sidebar` instance. Any hook inside `Sidebar` can run twice at once.
+`src/components/layout/app-shell.tsx` (server) wraps both authenticated workspaces:
 
-`useAttentionRefresh` must use a per-mount stable channel name derived from `useId`. Do not replace it with a static channel name like `supabase.channel("admin-attention")`.
+- `md` and up: a collapsible shadcn `Sidebar` (`layout/sidebar.tsx`, state persisted in the `sidebar_state` cookie, read server-side to avoid a flash) plus a slim sticky utility header with the sidebar trigger, language and theme toggles. The account menu is a dropdown in the sidebar footer.
+- Below `md`: `layout/mobile-nav.tsx` renders a top bar (logo, theme toggle, avatar → account bottom sheet) and a fixed bottom tab bar with up to four primary destinations; remaining destinations open a "More" bottom sheet. The shell adds `--spacing-bottom-nav` plus the safe-area inset as bottom padding so content never hides behind the tab bar.
+- Navigation items, badge mapping and active-state rules are defined once in `layout/nav-items.tsx`.
+- Shared `Modal` renders a swipeable vaul drawer on phones and a Radix dialog from `sm` up; `ConfirmDialog` stays a centred alert dialog everywhere.
+
+## Realtime Attention Refresh Constraint
+
+`useAttentionRefresh` is mounted exactly once per shell by `layout/attention-refresh.tsx` (admin only). Do not call it from navigation components: the desktop sidebar and phone navigation both stay mounted, so a hook inside them would run twice.
+
+`useAttentionRefresh` must keep using a per-mount stable channel name derived from `useId`. Do not replace it with a static channel name like `supabase.channel("admin-attention")`.
 
 ## Localization, Theme, And Consent
 
@@ -220,7 +231,7 @@ Use risk-based verification. Do not create or run tests blindly for every cosmet
 
 - New route or page: add under `src/app`, load data with `src/server/dashboard-data.ts`, reuse shared/admin/client components.
 - New mutation: add or extend a server action in `src/app/actions.ts`; validate with Zod; call auth and rate-limit helpers; revalidate affected layouts/pages.
-- New shared UI primitive: add to `src/components/shared`.
+- New shared UI primitive: compose from `src/components/ui` (add missing shadcn components with `pnpm dlx shadcn@latest add <name>`; `components.json` already targets hugeicons) and expose an app-level wrapper in `src/components/shared`. Never import `lucide-react` or hand-write SVG icons; use `Icon` from `src/components/shared/icon.tsx`.
 - Admin-only UI: use `src/components/admin`; client-only UI: use `src/components/client`.
 - Scheduling/pricing math: update `src/domain/schedule.ts` and add focused tests.
 - Analytics math: update `src/domain/analytics.ts` or `src/domain/chart-scale.ts` and add focused tests.

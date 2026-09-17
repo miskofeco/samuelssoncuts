@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useMemo } from "react";
 
 import { ChartCard } from "@/components/charts/chart-card";
+import { Skeleton } from "@/components/shared/skeleton";
 import {
   bookingsByWeekday,
   bookingsTrend,
@@ -18,9 +19,7 @@ import { useLang, useT } from "@/i18n/provider";
 
 // Recharts measures its container, so render client-only to avoid
 // width(-1)/height(-1) warnings during SSR/hydration.
-const chartLoading = () => (
-  <div className="h-full w-full animate-pulse rounded-lg bg-stone-100 dark:bg-stone-800" />
-);
+const chartLoading = () => <Skeleton className="h-full w-full rounded-lg" />;
 
 const BookingsTrendChart = dynamic(
   () => import("@/components/charts/bookings-trend-chart").then((m) => m.BookingsTrendChart),
@@ -110,31 +109,31 @@ export function AdminAnalytics({
   );
 
   return (
-    <div className="grid gap-6 xl:grid-cols-2">
-      {/* text-* drives the charts' currentColor (monochrome line/bars). */}
-      <div className="text-stone-900 dark:text-stone-100 xl:col-span-2">
-        <ChartCard eyebrow={t.charts.trendsEyebrow} title={t.charts.bookingsOverTime}>
-          <BookingsTrendChart data={trend} />
-        </ChartCard>
-      </div>
-      <div className="text-stone-900 dark:text-stone-100 xl:col-span-2">
-        <ChartCard eyebrow={t.charts.revenueEyebrow} title={t.charts.revenueOverTime}>
-          <RevenueTrendChart data={revTrend} />
-        </ChartCard>
-      </div>
-      <div className="text-stone-900 dark:text-stone-100">
-        <ChartCard eyebrow={t.charts.patternsEyebrow} title={t.charts.busiestWeekdays}>
-          <BookingsByWeekdayChart data={weekday} />
-        </ChartCard>
-      </div>
+    <div className="grid gap-4 sm:gap-6 xl:grid-cols-2">
+      {/* Trend charts get the full row so six months of ticks stay legible. */}
+      <ChartCard
+        eyebrow={t.charts.trendsEyebrow}
+        title={t.charts.bookingsOverTime}
+        className="xl:col-span-2"
+      >
+        <BookingsTrendChart data={trend} />
+      </ChartCard>
+      <ChartCard
+        eyebrow={t.charts.revenueEyebrow}
+        title={t.charts.revenueOverTime}
+        className="xl:col-span-2"
+      >
+        <RevenueTrendChart data={revTrend} />
+      </ChartCard>
+      <ChartCard eyebrow={t.charts.patternsEyebrow} title={t.charts.busiestWeekdays}>
+        <BookingsByWeekdayChart data={weekday} />
+      </ChartCard>
       <ChartCard eyebrow={t.charts.pipelineEyebrow} title={t.charts.requestsByStatus}>
         <RequestsByStatusChart data={status} />
       </ChartCard>
-      <div className="text-stone-900 dark:text-stone-100">
-        <ChartCard eyebrow={t.charts.revenueEyebrow} title={t.charts.revenueByService}>
-          <RevenueByServiceChart data={revByService} emptyLabel={t.charts.noRequestsYet} />
-        </ChartCard>
-      </div>
+      <ChartCard eyebrow={t.charts.revenueEyebrow} title={t.charts.revenueByService}>
+        <RevenueByServiceChart data={revByService} emptyLabel={t.charts.noRequestsYet} />
+      </ChartCard>
       <ChartCard eyebrow={t.charts.outcomesEyebrow} title={t.charts.outcomesTitle}>
         <OutcomesChart data={outcomes} emptyLabel={t.charts.noRequestsYet} />
       </ChartCard>

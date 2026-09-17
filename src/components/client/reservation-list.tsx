@@ -1,12 +1,22 @@
 "use client";
 
+import {
+  Calendar03Icon,
+  CalendarCheckIn01Icon,
+  Clock01Icon,
+  HourglassIcon,
+  InboxIcon,
+  Note01Icon,
+} from "@hugeicons/core-free-icons";
 import { useState, useTransition } from "react";
 
 import { cancelRequestAction, respondToProposalAction } from "@/app/actions";
 import { Button } from "@/components/shared/button";
+import { Card } from "@/components/shared/card";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
+import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
 import { formatFullDay, serviceById } from "@/domain/schedule";
 import type {
@@ -36,6 +46,7 @@ export function ReservationList({
   if (requests.length === 0) {
     return (
       <EmptyState
+        icon={<Icon icon={InboxIcon} />}
         title={variant === "active" ? t.client.noOpenReservations : t.client.noPastReservations}
         description={
           variant === "active"
@@ -110,112 +121,142 @@ function ReservationCard({
   }
 
   return (
-    <article className="rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-stone-900">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="font-semibold text-black dark:text-white">{service.name}</h3>
-          <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
-            {service.duration} min · {service.price} €
-          </p>
-        </div>
-        <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
-      </div>
-
-      {pendingExactSlot ? (
-        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
-            {t.client.awaitingConfirmation}
-          </p>
-          <p className="mt-0.5 font-semibold text-amber-950 dark:text-amber-200">
-            {formatFullDay(request.requestedDate as string, locale)} ·{" "}
-            {request.requestedTime as string}
-            {typeof request.priceCents === "number"
-              ? ` · ${Math.round(request.priceCents / 100)} €`
-              : ""}
-          </p>
-        </div>
-      ) : request.preferences.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {request.preferences.map((preference) => (
-            <span
-              key={preference.id}
-              className="rounded-lg bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300"
-            >
-              {formatFullDay(preference.date, locale)} · {t.windows[preference.window]}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      {request.note ? (
-        <p className="mt-3 rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-600 dark:bg-stone-800/60 dark:text-stone-300">
-          “{request.note}”
-        </p>
-      ) : null}
-
-      {liveProposal ? (
-        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10">
-          <p className="font-semibold text-emerald-950 dark:text-emerald-200">
-            {t.client.proposedAt(formatFullDay(liveProposal.date, locale), liveProposal.time)}
-          </p>
-          {liveProposal.note ? (
-            <p className="mt-1 text-sm text-emerald-900 dark:text-emerald-300">
-              {liveProposal.note}
+    <Card className="rounded-2xl">
+      <article>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="truncate text-base font-semibold text-foreground">{service.name}</h3>
+            <p className="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground tabular-nums">
+              <Icon icon={Clock01Icon} className="size-3.5" />
+              {service.duration} min · {service.price} €
             </p>
-          ) : null}
-          {variant === "active" ? (
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Button type="button" disabled={pending} onClick={() => respond(true)}>
-                {pending ? t.common.working : t.client.confirm}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={pending}
-                onClick={() => respond(false)}
-              >
-                {t.client.decline}
-              </Button>
+          </div>
+          <StatusPill tone={meta.tone} dot className="shrink-0">
+            {meta.label}
+          </StatusPill>
+        </div>
+
+        {pendingExactSlot ? (
+          <div className="mt-3 flex items-start gap-3 rounded-xl bg-amber-500/10 p-3 text-amber-950 ring-1 ring-amber-500/20 dark:text-amber-100">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-800 dark:text-amber-200">
+              <Icon icon={HourglassIcon} className="size-[18px]" strokeWidth={2} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[0.7rem] font-semibold tracking-[0.12em] text-amber-800 uppercase dark:text-amber-300">
+                {t.client.awaitingConfirmation}
+              </p>
+              <p className="mt-0.5 font-semibold tabular-nums">
+                {formatFullDay(request.requestedDate as string, locale)} ·{" "}
+                {request.requestedTime as string}
+                {typeof request.priceCents === "number"
+                  ? ` · ${Math.round(request.priceCents / 100)} €`
+                  : ""}
+              </p>
             </div>
-          ) : null}
-        </div>
-      ) : null}
+          </div>
+        ) : request.preferences.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {request.preferences.map((preference) => (
+              <span
+                key={preference.id}
+                className="inline-flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"
+              >
+                <Icon icon={Calendar03Icon} className="size-3.5" />
+                {formatFullDay(preference.date, locale)} · {t.windows[preference.window]}
+              </span>
+            ))}
+          </div>
+        ) : null}
 
-      {request.status === "confirmed" && (proposal || confirmedExactSlot) ? (
-        <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-300">
-          {t.client.bookedFor(
-            formatFullDay(proposal ? proposal.date : request.requestedDate as string, locale),
-            proposal ? proposal.time : request.requestedTime as string,
-          )}
-        </p>
-      ) : null}
+        {request.note ? (
+          <p className="mt-3 flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
+            <Icon icon={Note01Icon} className="mt-0.5 size-4" />
+            <span className="min-w-0">“{request.note}”</span>
+          </p>
+        ) : null}
 
-      <Feedback result={feedback} className="mt-3" />
+        {liveProposal ? (
+          <div className="mt-3 rounded-xl bg-sky-500/10 p-3 text-sky-950 ring-1 ring-sky-500/20 sm:p-4 dark:text-sky-100">
+            <div className="flex items-start gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/20 text-sky-800 dark:text-sky-200">
+                <Icon icon={CalendarCheckIn01Icon} className="size-[18px]" strokeWidth={2} />
+              </span>
+              <div className="min-w-0">
+                <p className="font-semibold tabular-nums">
+                  {t.client.proposedAt(formatFullDay(liveProposal.date, locale), liveProposal.time)}
+                </p>
+                {liveProposal.note ? (
+                  <p className="mt-1 text-sm text-sky-900/80 dark:text-sky-100/80">
+                    {liveProposal.note}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            {variant === "active" ? (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  size="lg"
+                  disabled={pending}
+                  onClick={() => respond(true)}
+                  className="bg-emerald-600 text-white hover:bg-emerald-700 sm:h-10 sm:text-sm dark:bg-emerald-500 dark:hover:bg-emerald-400"
+                >
+                  {pending ? t.common.working : t.client.confirm}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  disabled={pending}
+                  onClick={() => respond(false)}
+                  className="sm:h-10 sm:text-sm"
+                >
+                  {t.client.decline}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
-      {variant === "active" &&
-      (request.status === "pending" || request.status === "proposed") ? (
-        <div className="mt-3 flex justify-end">
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={pending}
-            onClick={() => setConfirmingCancel(true)}
-            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
-          >
-            {t.client.cancelRequest}
-          </Button>
-        </div>
-      ) : null}
+        {request.status === "confirmed" && (proposal || confirmedExactSlot) ? (
+          <p className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-300">
+            <Icon icon={CalendarCheckIn01Icon} className="size-4" strokeWidth={2} />
+            <span className="tabular-nums">
+              {t.client.bookedFor(
+                formatFullDay(proposal ? proposal.date : request.requestedDate as string, locale),
+                proposal ? proposal.time : request.requestedTime as string,
+              )}
+            </span>
+          </p>
+        ) : null}
 
-      <ConfirmDialog
-        open={confirmingCancel}
-        onOpenChange={setConfirmingCancel}
-        title={t.client.confirmCancelRequestTitle}
-        description={t.client.confirmCancelRequestBody}
-        confirmLabel={pending ? t.common.working : t.client.cancelRequest}
-        loading={pending}
-        onConfirm={cancel}
-      />
-    </article>
+        <Feedback result={feedback} className="mt-3" />
+
+        {variant === "active" &&
+        (request.status === "pending" || request.status === "proposed") ? (
+          <div className="mt-3 flex sm:justify-end">
+            <Button
+              type="button"
+              variant="dangerOutline"
+              disabled={pending}
+              onClick={() => setConfirmingCancel(true)}
+              className="w-full sm:w-auto"
+            >
+              {t.client.cancelRequest}
+            </Button>
+          </div>
+        ) : null}
+
+        <ConfirmDialog
+          open={confirmingCancel}
+          onOpenChange={setConfirmingCancel}
+          title={t.client.confirmCancelRequestTitle}
+          description={t.client.confirmCancelRequestBody}
+          confirmLabel={pending ? t.common.working : t.client.cancelRequest}
+          loading={pending}
+          onConfirm={cancel}
+        />
+      </article>
+    </Card>
   );
 }

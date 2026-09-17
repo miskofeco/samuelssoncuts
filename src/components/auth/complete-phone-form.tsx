@@ -46,7 +46,7 @@ export function CompletePhoneForm() {
         placeholder={t.auth.phonePlaceholder}
       />
       <Feedback result={feedback} />
-      <Button type="submit" className="w-full" disabled={pending}>
+      <Button type="submit" size="lg" className="w-full" loading={pending}>
         {pending ? t.common.saving : t.auth.completeProfileCta}
       </Button>
     </form>
