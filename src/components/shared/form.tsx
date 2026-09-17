@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, EyeOff } from "lucide-react";
+import { ViewIcon, ViewOffSlashIcon } from "@hugeicons/core-free-icons";
 import { useId, useState } from "react";
 import type {
   InputHTMLAttributes,
@@ -9,11 +9,14 @@ import type {
   TextareaHTMLAttributes,
 } from "react";
 
+import { Icon } from "@/components/shared/icon";
+import { Button } from "@/components/ui/button";
+import { Field as UiField, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
-
-export const controlClass =
-  "w-full rounded-md border border-black/10 bg-white px-3 text-sm text-black outline-none transition placeholder:text-stone-500 focus:border-black focus:ring-2 focus:ring-black/10 aria-invalid:border-red-500 aria-invalid:focus:ring-red-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/15 dark:bg-stone-900 dark:text-white dark:placeholder:text-stone-400 dark:focus:border-white dark:focus:ring-white/15";
 
 type FieldChrome = {
   label: string;
@@ -33,21 +36,21 @@ function FieldShell({
   children,
 }: FieldChrome & { id: string; children: ReactNode }) {
   return (
-    <div className={cn("block", className)}>
-      <label htmlFor={id} className="text-sm font-medium text-stone-700 dark:text-stone-300">
+    <UiField data-invalid={error ? true : undefined} className={cn("gap-1.5", className)}>
+      <FieldLabel htmlFor={id} className="text-sm font-medium text-foreground">
         {label}
-      </label>
-      <div className="mt-2">{children}</div>
+      </FieldLabel>
+      {children}
       {error ? (
-        <p id={`${id}-error`} role="alert" className="mt-1.5 text-xs font-medium text-red-700 dark:text-red-300">
+        <FieldError id={`${id}-error`} className="text-xs font-medium">
           {error}
-        </p>
+        </FieldError>
       ) : hint ? (
-        <p id={`${id}-hint`} className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
+        <FieldDescription id={`${id}-hint`} className="text-xs">
           {hint}
-        </p>
+        </FieldDescription>
       ) : null}
-    </div>
+    </UiField>
   );
 }
 
@@ -69,11 +72,10 @@ export function Field({
   const id = idProp ?? autoId;
   return (
     <FieldShell id={id} label={label} hint={hint} error={error} className={className}>
-      <input
+      <Input
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy(id, hint, error)}
-        className={cn("h-11", controlClass)}
         {...props}
       />
     </FieldShell>
@@ -96,23 +98,25 @@ export function PasswordField({
   return (
     <FieldShell id={id} label={label} hint={hint} error={error} className={className}>
       <div className="relative">
-        <input
+        <Input
           id={id}
           type={visible ? "text" : "password"}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy(id, hint, error)}
-          className={cn("h-11 pr-11", controlClass)}
+          className="pr-11"
           {...props}
         />
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-sm"
           onClick={() => setVisible((v) => !v)}
           aria-label={visible ? t.common.hidePassword : t.common.showPassword}
           aria-pressed={visible}
-          className="absolute top-1/2 right-1.5 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-100 hover:text-black dark:hover:bg-stone-800 dark:hover:text-white"
+          className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground"
         >
-          {visible ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
-        </button>
+          <Icon icon={visible ? ViewOffSlashIcon : ViewIcon} />
+        </Button>
       </div>
     </FieldShell>
   );
@@ -126,20 +130,19 @@ export function SelectField({
   id: idProp,
   children,
   ...props
-}: SelectHTMLAttributes<HTMLSelectElement> & FieldChrome & { children: ReactNode }) {
+}: Omit<SelectHTMLAttributes<HTMLSelectElement>, "size"> & FieldChrome & { children: ReactNode }) {
   const autoId = useId();
   const id = idProp ?? autoId;
   return (
     <FieldShell id={id} label={label} hint={hint} error={error} className={className}>
-      <select
+      <NativeSelect
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy(id, hint, error)}
-        className={cn("h-11", controlClass)}
         {...props}
       >
         {children}
-      </select>
+      </NativeSelect>
     </FieldShell>
   );
 }
@@ -156,11 +159,11 @@ export function TextAreaField({
   const id = idProp ?? autoId;
   return (
     <FieldShell id={id} label={label} hint={hint} error={error} className={className}>
-      <textarea
+      <Textarea
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy(id, hint, error)}
-        className={cn("min-h-28 resize-none py-3", controlClass)}
+        className="min-h-28 resize-none"
         {...props}
       />
     </FieldShell>

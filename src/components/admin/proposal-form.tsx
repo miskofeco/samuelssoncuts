@@ -1,7 +1,18 @@
 "use client";
 
+import {
+  Alert02Icon,
+  ArrowDown01Icon,
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  Calendar03Icon,
+  CalendarAdd01Icon,
+  CheckmarkCircle02Icon,
+  HourglassIcon,
+  Note01Icon,
+  Scissor01Icon,
+} from "@hugeicons/core-free-icons";
 import { useMemo, useState, useTransition } from "react";
-import type { ReactNode } from "react";
 
 import {
   confirmRequestAction,
@@ -12,8 +23,10 @@ import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Feedback } from "@/components/shared/feedback";
-import { TextAreaField } from "@/components/shared/form";
+import { Field, SelectField, TextAreaField } from "@/components/shared/form";
+import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   addDays,
   dayCapacity,
@@ -69,6 +82,11 @@ function statusLabel(t: Dict, status: RequestStatus) {
   }
 }
 
+/**
+ * One booking request card. The header toggles the body; a pending exact-slot
+ * request shows the requested time with confirm/decline up front and hides the
+ * "propose another time" controls in a collapsible that starts closed.
+ */
 export function ProposalComposer({
   appointments,
   client,
@@ -97,21 +115,8 @@ export function ProposalComposer({
     ? appointments.filter((a) => a.clientId === client.id && a.outcome === "no_show").length
     : 0;
 
-  const [open, setOpen] = useState(request.status !== "pending");
-  const [proposalControlsOpen, setProposalControlsOpen] = useState(false);
-  const initialDate = request.preferences[0]?.date ?? addDays(1);
-  const [date, setDate] = useState(initialDate);
-  const [windowFilter, setWindowFilter] = useState<DayWindow | "all">(
-    request.preferences[0]?.window ?? "all",
-  );
-  const [time, setTime] = useState(() => firstFreeTime(initialDate));
-  const [note, setNote] = useState(t.admin.defaultProposalNote);
-  const [pending, startTransition] = useTransition();
-  const [feedback, setFeedback] = useState<ActionResult | null>(null);
-  const [declineOpen, setDeclineOpen] = useState(false);
-  const [declineReason, setDeclineReason] = useState("");
-  const proposalControlsId = `proposal-controls-${request.id}`;
-
+  // Declared before the state initialisers that call them (React Compiler
+  // requires declaration-before-use for values read during render).
   function takenAt(targetDate: string, targetTime: string) {
     if (blockedDates.has(targetDate)) return true;
     const start = minutesOf(targetTime);
@@ -130,6 +135,21 @@ export function ProposalComposer({
   function firstFreeTime(targetDate: string) {
     return workingHours.find((hour) => !takenAt(targetDate, hour)) ?? workingHours[0];
   }
+
+  const [open, setOpen] = useState(request.status !== "pending");
+  const [proposalControlsOpen, setProposalControlsOpen] = useState(false);
+  const initialDate = request.preferences[0]?.date ?? addDays(1);
+  const [date, setDate] = useState(initialDate);
+  const [windowFilter, setWindowFilter] = useState<DayWindow | "all">(
+    request.preferences[0]?.window ?? "all",
+  );
+  const [time, setTime] = useState(() => firstFreeTime(initialDate));
+  const [note, setNote] = useState(t.admin.defaultProposalNote);
+  const [pending, startTransition] = useTransition();
+  const [feedback, setFeedback] = useState<ActionResult | null>(null);
+  const [declineOpen, setDeclineOpen] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
+  const bodyId = `request-body-${request.id}`;
 
   const slots = useMemo(() => {
     const base = windowFilter === "all" ? workingHours : hoursInWindow(windowFilter);
@@ -190,106 +210,116 @@ export function ProposalComposer({
   }
 
   const conflict = takenAt(date, time);
+  const clientName = client?.name ?? t.admin.clientFallback;
 
   return (
     <article
       className={cn(
-        "rounded-xl border bg-white transition dark:bg-stone-900",
-        request.status === "pending"
-          ? "border-amber-200 dark:border-amber-500/30"
-          : "border-black/10 dark:border-white/10",
+        "rounded-xl bg-card text-card-foreground shadow-xs ring-1 transition",
+        request.status === "pending" ? "ring-amber-500/40" : "ring-foreground/10",
       )}
     >
-      {/* Header row */}
+      {/* Header: identity + status. Tapping toggles the body. */}
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left"
+        aria-expanded={open}
+        aria-controls={bodyId}
+        className="flex w-full items-start justify-between gap-3 rounded-t-xl p-4 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
       >
         <div className="flex min-w-0 items-start gap-3">
-          <Avatar
-            size="md"
-            name={client?.name ?? t.admin.clientFallback}
-            src={client?.avatarUrl}
-          />
+          <Avatar size="md" name={clientName} src={client?.avatarUrl} />
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-semibold text-black dark:text-white">
-                {client?.name ?? t.admin.clientFallback}
-              </p>
-              <StatusPill tone={tone}>{label}</StatusPill>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <p className="text-base font-semibold text-foreground">{clientName}</p>
+              <StatusPill tone={tone} dot>
+                {label}
+              </StatusPill>
               {clientNoShows > 0 ? (
                 <StatusPill tone="warning">
-                  ⚠ {clientNoShows}{" "}
+                  <Icon icon={Alert02Icon} className="size-3.5" strokeWidth={2} />
+                  {clientNoShows}{" "}
                   {clientNoShows === 1 ? t.admin.reliabilityFlag : t.admin.reliabilityFlagPlural}
                 </StatusPill>
               ) : null}
             </div>
-            <p className="mt-0.5 truncate text-sm text-stone-500 dark:text-stone-400">
-              {service.name} · {service.duration} {t.admin.minutesShort}
-              {client?.email ? ` · ${client.email}` : ""}
+            <p className="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
+              <Icon icon={Scissor01Icon} className="size-3.5" />
+              <span className="truncate">
+                {service.name} · {service.duration} {t.admin.minutesShort}
+                {client?.email ? ` · ${client.email}` : ""}
+              </span>
             </p>
           </div>
         </div>
         <span
           className={cn(
-            "mt-1 shrink-0 text-stone-400 transition-transform",
+            "mt-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-transform",
             open ? "rotate-180" : "",
           )}
           aria-hidden
         >
-          ▾
+          <Icon icon={ArrowDown01Icon} />
         </span>
       </button>
 
       {/* Confirmed summary */}
       {request.status === "confirmed" && activeProposal ? (
-        <div className="border-t border-black/5 px-4 py-3 dark:border-white/5">
-          <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-300">
-            {t.admin.bookedConfirmed(formatDay(activeProposal.date, locale), activeProposal.time)}
-          </p>
-        </div>
+        <SummaryBanner tone="success" icon={CheckmarkCircle02Icon}>
+          {t.admin.bookedConfirmed(formatDay(activeProposal.date, locale), activeProposal.time)}
+        </SummaryBanner>
       ) : null}
 
       {/* Proposed summary */}
       {request.status === "proposed" && activeProposal ? (
-        <div className="border-t border-black/5 px-4 py-3 dark:border-white/5">
-          <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm font-medium text-sky-900 dark:bg-sky-500/10 dark:text-sky-300">
-            {t.admin.proposedWaiting(formatDay(activeProposal.date, locale), activeProposal.time)}
-          </p>
-        </div>
+        <SummaryBanner tone="info" icon={HourglassIcon}>
+          {t.admin.proposedWaiting(formatDay(activeProposal.date, locale), activeProposal.time)}
+        </SummaryBanner>
       ) : null}
 
       {/* Chosen-slot summary + one-click confirm (new exact-slot flow) */}
       {request.status === "pending" && hasChosenSlot ? (
-        <div className="border-t border-black/5 px-4 py-3 dark:border-white/5">
-          <div className="flex flex-col gap-3 rounded-lg bg-amber-50 px-3 py-3 dark:bg-amber-500/10 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
-                {t.admin.chosenTime}
-              </p>
-              <p className="mt-0.5 font-semibold text-amber-950 dark:text-amber-200">
-                {formatDay(request.requestedDate as string, locale)} · {request.requestedTime}
-                {typeof request.priceCents === "number"
-                  ? ` · ${Math.round(request.priceCents / 100)} €`
-                  : ""}
-                {request.surcharge ? (
-                  <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-[0.65rem] font-semibold text-amber-900 dark:bg-amber-500/30 dark:text-amber-200">
-                    {t.admin.surcharge}
-                  </span>
-                ) : null}
-              </p>
+        <div className="border-t px-4 py-4">
+          <div className="rounded-xl bg-amber-500/10 p-3.5 dark:bg-amber-400/10">
+            <div className="flex items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                <Icon icon={Calendar03Icon} className="size-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold tracking-wide text-amber-800 uppercase dark:text-amber-300">
+                  {t.admin.chosenTime}
+                </p>
+                <p className="mt-0.5 text-lg font-semibold text-foreground tabular-nums">
+                  {formatDay(request.requestedDate as string, locale)} · {request.requestedTime}
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  {typeof request.priceCents === "number" ? (
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {Math.round(request.priceCents / 100)} €
+                    </span>
+                  ) : null}
+                  {request.surcharge ? <StatusPill tone="warning">{t.admin.surcharge}</StatusPill> : null}
+                </div>
+              </div>
             </div>
-            <div className="flex gap-2">
+            <div className="mt-4 grid gap-2 sm:flex sm:justify-end">
               <Button
                 type="button"
                 variant="dangerOutline"
+                size="lg"
                 onClick={() => setDeclineOpen(true)}
                 disabled={pending}
+                className="w-full sm:w-auto"
               >
                 {t.admin.declineRequest}
               </Button>
-              <Button type="button" onClick={confirm} disabled={pending}>
+              <Button
+                type="button"
+                size="lg"
+                onClick={confirm}
+                loading={pending}
+                className="w-full sm:w-auto"
+              >
                 {pending ? t.common.working : t.admin.confirmRequest}
               </Button>
             </div>
@@ -298,206 +328,199 @@ export function ProposalComposer({
         </div>
       ) : null}
 
-      {open ? (
-        <div className="border-t border-black/5 px-4 pb-4 pt-3 dark:border-white/5">
-          {/* Client note */}
-          {request.note ? (
-            <p className="mb-3 rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-600 dark:bg-stone-800/60 dark:text-stone-300">
-              “{request.note}”
-            </p>
-          ) : null}
-
-          {/* Legacy 3-window preferences (only old requests have these) */}
-          {request.preferences.length > 0 ? (
-            <>
-              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                {t.admin.clientPreferences}
-              </p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                {request.preferences.map((preference) => {
-                  const active = preference.date === date && windowFilter === preference.window;
-                  return (
-                    <button
-                      key={preference.id}
-                      type="button"
-                      onClick={() => choosePreference(preference.date, preference.window)}
-                      className={cn(
-                        "rounded-lg border px-3 py-2 text-left text-sm transition",
-                        active
-                          ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-                          : "border-black/10 bg-white text-stone-700 hover:border-black dark:border-white/15 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-white",
-                      )}
-                    >
-                      <span className="block text-xs font-semibold opacity-70">
-                        {t.client.choice(preference.rank)}
-                      </span>
-                      <span className="block font-semibold">{formatDay(preference.date, locale)}</span>
-                      <span className="block text-xs opacity-80">{t.windows[preference.window]}</span>
-                    </button>
-                  );
-                })}
+      <div id={bodyId} hidden={!open}>
+        {open ? (
+          <div className="space-y-4 border-t px-4 pt-4 pb-4">
+            {/* Client note */}
+            {request.note ? (
+              <div className="flex items-start gap-2.5 rounded-lg bg-muted/60 px-3 py-2.5 text-sm text-foreground/90">
+                <Icon icon={Note01Icon} className="mt-0.5 text-muted-foreground" />
+                <p className="min-w-0 break-words">“{request.note}”</p>
               </div>
-            </>
-          ) : null}
+            ) : null}
 
-          {canPropose ? (
-            <>
-              {hasChosenSlot && !proposalControlsOpen ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="mt-4 w-full"
-                  aria-controls={proposalControlsId}
-                  aria-expanded={proposalControlsOpen}
-                  onClick={() => setProposalControlsOpen(true)}
-                >
-                  {t.admin.orProposeAnother}
-                </Button>
-              ) : null}
-
-              <div
-                id={proposalControlsId}
-                className={cn(hasChosenSlot && !proposalControlsOpen && "hidden")}
-              >
-                <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-                  <AvailabilityCalendar
-                    t={t}
-                    locale={locale}
-                    appointments={appointments}
-                    blockedDates={blockedDates}
-                    preferences={request.preferences}
-                    selectedDate={date}
-                    onPickDate={chooseDate}
-                  />
-
-                  <div>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <label className="block">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                          {t.admin.date}
+            {/* Legacy 3-window preferences (only old requests have these) */}
+            {request.preferences.length > 0 ? (
+              <div>
+                <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  {t.admin.clientPreferences}
+                </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                  {request.preferences.map((preference) => {
+                    const active = preference.date === date && windowFilter === preference.window;
+                    return (
+                      <button
+                        key={preference.id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => choosePreference(preference.date, preference.window)}
+                        className={cn(
+                          "min-h-14 rounded-lg px-3 py-2 text-left text-sm ring-1 transition outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                          active
+                            ? "bg-primary text-primary-foreground ring-primary"
+                            : "bg-card text-foreground ring-foreground/15 hover:bg-muted/60",
+                        )}
+                      >
+                        <span className="block text-xs font-semibold opacity-70">
+                          {t.client.choice(preference.rank)}
                         </span>
-                        <input
+                        <span className="block font-semibold">{formatDay(preference.date, locale)}</span>
+                        <span className="block text-xs opacity-80">{t.windows[preference.window]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {canPropose ? (
+              <Collapsible
+                open={hasChosenSlot ? proposalControlsOpen : true}
+                onOpenChange={setProposalControlsOpen}
+              >
+                {hasChosenSlot ? (
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      className="w-full justify-between sm:w-auto sm:justify-center"
+                    >
+                      <Icon icon={CalendarAdd01Icon} />
+                      {t.admin.orProposeAnother}
+                      <Icon
+                        icon={ArrowDown01Icon}
+                        className={cn("transition-transform", proposalControlsOpen && "rotate-180")}
+                      />
+                    </Button>
+                  </CollapsibleTrigger>
+                ) : null}
+
+                <CollapsibleContent className={cn(hasChosenSlot && "pt-4")}>
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+                    <AvailabilityCalendar
+                      t={t}
+                      locale={locale}
+                      appointments={appointments}
+                      blockedDates={blockedDates}
+                      preferences={request.preferences}
+                      selectedDate={date}
+                      onPickDate={chooseDate}
+                    />
+
+                    <div className="space-y-4">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Field
+                          label={t.admin.date}
                           type="date"
                           value={date}
                           min={addDays(0)}
                           onChange={(event) => chooseDate(event.target.value)}
-                          className="mt-1.5 h-11 w-full rounded-lg border border-black/10 px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white dark:[color-scheme:dark]"
+                          className="dark:[color-scheme:dark]"
                         />
-                      </label>
-                      <label className="block">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                          {t.admin.timeOfDay}
-                        </span>
-                        <select
+                        <SelectField
+                          label={t.admin.timeOfDay}
                           value={windowFilter}
                           onChange={(event) =>
                             setWindowFilter(event.target.value as DayWindow | "all")
                           }
-                          className="mt-1.5 h-11 w-full rounded-lg border border-black/10 px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white"
                         >
                           <option value="all">{t.admin.allHours}</option>
                           <option value="Morning">{t.windows.Morning}</option>
                           <option value="Midday">{t.windows.Midday}</option>
                           <option value="Afternoon">{t.windows.Afternoon}</option>
                           <option value="Evening">{t.windows.Evening}</option>
-                        </select>
-                      </label>
-                    </div>
-
-                    <div className="mt-3">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                        {t.admin.pickSlot}
-                      </span>
-                      <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
-                        {slots.map(({ hour, taken }) => {
-                          const selected = hour === time;
-                          return (
-                            <button
-                              key={hour}
-                              type="button"
-                              disabled={taken}
-                              onClick={() => setTime(hour)}
-                              title={taken ? t.admin.alreadyBooked : t.windows[windowForTime(hour)]}
-                              className={cn(
-                                "h-10 rounded-lg border text-sm font-semibold tabular-nums transition",
-                                taken &&
-                                  "cursor-not-allowed border-black/5 bg-stone-100 text-stone-300 line-through dark:border-white/5 dark:bg-stone-800 dark:text-stone-600",
-                                !taken &&
-                                  selected &&
-                                  "border-black bg-black text-white shadow-sm dark:border-white dark:bg-white dark:text-black",
-                                !taken &&
-                                  !selected &&
-                                  "border-black/10 bg-white text-stone-700 hover:border-black dark:border-white/15 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-white",
-                              )}
-                            >
-                              {hour}
-                            </button>
-                          );
-                        })}
+                        </SelectField>
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.7rem] text-stone-400 dark:text-stone-500">
-                        <span className="flex items-center gap-1.5">
-                          <span className="h-2.5 w-2.5 rounded border border-black/10 bg-white dark:border-white/15 dark:bg-stone-900" />
-                          {t.admin.legendOpen}
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="h-2.5 w-2.5 rounded border border-black/5 bg-stone-100 dark:bg-stone-800" />
-                          {t.admin.legendBooked}
-                        </span>
+
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{t.admin.pickSlot}</p>
+                        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                          {slots.map(({ hour, taken }) => {
+                            const selected = hour === time;
+                            return (
+                              <button
+                                key={hour}
+                                type="button"
+                                disabled={taken}
+                                aria-pressed={selected}
+                                onClick={() => setTime(hour)}
+                                title={taken ? t.admin.alreadyBooked : t.windows[windowForTime(hour)]}
+                                className={cn(
+                                  "h-10 rounded-lg text-sm font-semibold tabular-nums transition outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                                  taken &&
+                                    "cursor-not-allowed bg-muted text-muted-foreground/50 line-through",
+                                  !taken && selected && "bg-primary text-primary-foreground shadow-xs",
+                                  !taken &&
+                                    !selected &&
+                                    "bg-card text-foreground ring-1 ring-foreground/15 hover:bg-muted/60",
+                                )}
+                              >
+                                {hour}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            <span className="size-2.5 rounded-sm bg-card ring-1 ring-foreground/15" />
+                            {t.admin.legendOpen}
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="size-2.5 rounded-sm bg-muted" />
+                            {t.admin.legendBooked}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Note */}
-                <label className="mt-3 block">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                    {t.admin.messageToClient}
-                  </span>
-                  <textarea
+                  <TextAreaField
+                    label={t.admin.messageToClient}
                     value={note}
                     onChange={(event) => setNote(event.target.value)}
                     rows={2}
-                    className="mt-1.5 w-full resize-none rounded-lg border border-black/10 px-3 py-2 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 dark:border-white/15 dark:bg-stone-900 dark:text-white"
+                    className="mt-4"
                   />
-                </label>
 
-                {conflict ? (
-                  <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-500/10 dark:text-red-300">
-                    {t.admin.slotTakenShort}
-                  </p>
-                ) : null}
-                <Feedback result={feedback && !feedback.ok ? feedback : null} className="mt-2" />
+                  {conflict ? (
+                    <Feedback result={{ ok: false, error: t.admin.slotTakenShort }} className="mt-3" />
+                  ) : null}
+                  <Feedback result={feedback && !feedback.ok ? feedback : null} className="mt-3" />
 
-                <Button
-                  type="button"
-                  onClick={submit}
-                  disabled={conflict || pending}
-                  className="mt-3 w-full"
-                >
-                  {pending
-                    ? t.common.sending
-                    : request.status === "declined"
-                      ? t.admin.reproposeAt(formatDay(date, locale), time)
-                      : t.admin.proposeAt(formatDay(date, locale), time)}
-                </Button>
-              </div>
-            </>
-          ) : null}
+                  <Button
+                    type="button"
+                    size="lg"
+                    onClick={submit}
+                    disabled={conflict}
+                    loading={pending}
+                    className="mt-4 w-full sm:w-auto"
+                  >
+                    {pending
+                      ? t.common.sending
+                      : request.status === "declined"
+                        ? t.admin.reproposeAt(formatDay(date, locale), time)
+                        : t.admin.proposeAt(formatDay(date, locale), time)}
+                  </Button>
+                </CollapsibleContent>
+              </Collapsible>
+            ) : null}
 
-          {!hasChosenSlot && (request.status === "pending" || request.status === "proposed") ? (
-            <Button
-              type="button"
-              variant="dangerOutline"
-              className="mt-3 w-full"
-              disabled={pending}
-              onClick={() => setDeclineOpen(true)}
-            >
-              {t.admin.declineRequest}
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
+            {!hasChosenSlot && (request.status === "pending" || request.status === "proposed") ? (
+              <Button
+                type="button"
+                variant="dangerOutline"
+                size="lg"
+                className="w-full sm:w-auto"
+                disabled={pending}
+                onClick={() => setDeclineOpen(true)}
+              >
+                {t.admin.declineRequest}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       <ConfirmDialog
         open={declineOpen}
@@ -518,6 +541,30 @@ export function ProposalComposer({
         />
       </ConfirmDialog>
     </article>
+  );
+}
+
+const bannerTone = {
+  success: "bg-emerald-500/10 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-200",
+  info: "bg-sky-500/10 text-sky-800 dark:bg-sky-400/10 dark:text-sky-200",
+} as const;
+
+function SummaryBanner({
+  tone,
+  icon,
+  children,
+}: {
+  tone: keyof typeof bannerTone;
+  icon: typeof CheckmarkCircle02Icon;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-t px-4 py-3">
+      <p className={cn("flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium", bannerTone[tone])}>
+        <Icon icon={icon} strokeWidth={2} />
+        <span className="min-w-0">{children}</span>
+      </p>
+    </div>
   );
 }
 
@@ -553,16 +600,28 @@ function AvailabilityCalendar({
   const preferenceRank = new Map(preferences.map((p) => [p.date, p.rank]));
 
   return (
-    <div className="rounded-xl border border-black/10 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-800/40">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-black dark:text-white">{formatMonth(`${month}-01`, locale)}</h4>
+    <div className="rounded-xl bg-muted/40 p-3 ring-1 ring-foreground/10">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-sm font-semibold text-foreground" aria-live="polite">
+          {formatMonth(`${month}-01`, locale)}
+        </h4>
         <div className="flex items-center gap-1">
-          <CalNav label={t.common.previousMonth} onClick={() => setMonth(shiftMonth(month, -1))}>
-            <path d="M15 18l-6-6 6-6" />
-          </CalNav>
-          <CalNav label={t.common.nextMonth} onClick={() => setMonth(shiftMonth(month, 1))}>
-            <path d="M9 18l6-6-6-6" />
-          </CalNav>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label={t.common.previousMonth}
+            onClick={() => setMonth(shiftMonth(month, -1))}
+          >
+            <Icon icon={ArrowLeft01Icon} />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label={t.common.nextMonth}
+            onClick={() => setMonth(shiftMonth(month, 1))}
+          >
+            <Icon icon={ArrowRight01Icon} />
+          </Button>
         </div>
       </div>
 
@@ -570,7 +629,7 @@ function AvailabilityCalendar({
         {t.weekdaysMini.map((day) => (
           <div
             key={day}
-            className="pb-1 text-center text-[0.65rem] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500"
+            className="pb-1 text-center text-[0.65rem] font-semibold tracking-wide text-muted-foreground uppercase"
           >
             {day}
           </div>
@@ -580,7 +639,7 @@ function AvailabilityCalendar({
           const dayNumber = Number(cell.date.slice(8, 10));
 
           if (!cell.inMonth) {
-            return <div key={cell.date} aria-hidden className="h-9" />;
+            return <div key={cell.date} aria-hidden className="h-10" />;
           }
 
           const isPast = cell.date < today;
@@ -597,6 +656,7 @@ function AvailabilityCalendar({
               key={cell.date}
               type="button"
               disabled={disabled}
+              aria-pressed={selected}
               onClick={() => onPickDate(cell.date)}
               title={
                 blocked
@@ -604,24 +664,24 @@ function AvailabilityCalendar({
                   : `${t.admin.bookedOfCapacity(booked, dayCapacity)}${rank ? ` · ${t.admin.clientChoiceN(rank)}` : ""}`
               }
               className={cn(
-                "relative flex h-9 flex-col items-center justify-center rounded-lg border text-xs tabular-nums transition",
+                "relative flex h-10 flex-col items-center justify-center rounded-lg text-xs tabular-nums transition outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
                 selected
-                  ? "border-black bg-black font-semibold text-white dark:border-white dark:bg-white dark:text-black"
+                  ? "bg-primary font-semibold text-primary-foreground"
                   : disabled
-                    ? "cursor-not-allowed border-transparent text-stone-300 dark:text-stone-600"
-                    : "border-black/10 text-stone-700 hover:border-black dark:border-white/10 dark:text-stone-200 dark:hover:border-white",
-                !selected && !disabled && full && "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10",
-                rank !== undefined && !selected && "ring-1 ring-inset ring-black/40 dark:ring-white/40",
+                    ? "cursor-not-allowed text-muted-foreground/40"
+                    : "bg-card text-foreground ring-1 ring-foreground/10 hover:bg-muted",
+                !selected && !disabled && full && "bg-destructive/10 ring-destructive/30",
+                rank !== undefined && !selected && "ring-2 ring-foreground/50",
               )}
             >
               <span>{dayNumber}</span>
               {/* Booking-load bar */}
               {!disabled && !selected ? (
-                <span className="absolute inset-x-1.5 bottom-1 h-0.5 overflow-hidden rounded-full bg-stone-200 dark:bg-stone-700">
+                <span className="absolute inset-x-1.5 bottom-1 h-0.5 overflow-hidden rounded-full bg-foreground/10">
                   <span
                     className={cn(
                       "block h-full rounded-full",
-                      full ? "bg-red-500" : load > 0.6 ? "bg-amber-500" : "bg-emerald-500",
+                      full ? "bg-destructive" : load > 0.6 ? "bg-amber-500" : "bg-emerald-500",
                     )}
                     style={{ width: `${Math.max(load * 100, booked > 0 ? 12 : 0)}%` }}
                   />
@@ -630,10 +690,10 @@ function AvailabilityCalendar({
               {rank ? (
                 <span
                   className={cn(
-                    "absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[0.55rem] font-bold ring-1",
+                    "absolute -top-1 -right-1 flex size-3.5 items-center justify-center rounded-full text-[0.55rem] font-bold ring-1",
                     selected
-                      ? "bg-white text-black ring-black dark:bg-stone-900 dark:text-white dark:ring-white"
-                      : "bg-black text-white ring-white dark:bg-white dark:text-black dark:ring-stone-900",
+                      ? "bg-card text-foreground ring-foreground"
+                      : "bg-primary text-primary-foreground ring-card",
                   )}
                 >
                   {rank}
@@ -644,7 +704,7 @@ function AvailabilityCalendar({
         })}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.65rem] text-stone-500 dark:text-stone-400">
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.65rem] text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <span className="h-1.5 w-3 rounded-full bg-emerald-500" />
           {t.admin.legendOpen}
@@ -654,39 +714,16 @@ function AvailabilityCalendar({
           {t.admin.legendFilling}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-3 rounded-full bg-red-500" />
+          <span className="h-1.5 w-3 rounded-full bg-destructive" />
           {t.admin.legendFull}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="flex h-3 w-3 items-center justify-center rounded-full bg-black text-[0.5rem] font-bold text-white dark:bg-white dark:text-black">
+          <span className="flex size-3 items-center justify-center rounded-full bg-primary text-[0.5rem] font-bold text-primary-foreground">
             #
           </span>
           {t.admin.legendClientPick}
         </span>
       </div>
     </div>
-  );
-}
-
-function CalNav({
-  label,
-  onClick,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className="flex h-7 w-7 items-center justify-center rounded-lg border border-black/10 text-stone-600 transition hover:bg-stone-100 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-800"
-    >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        {children}
-      </svg>
-    </button>
   );
 }

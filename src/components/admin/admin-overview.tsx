@@ -1,7 +1,17 @@
+import {
+  ArrowRight01Icon,
+  Calendar03Icon,
+  ChartLineData01Icon,
+  HourglassIcon,
+  InboxIcon,
+  UserCheck01Icon,
+} from "@hugeicons/core-free-icons";
+import type { IconSvgElement } from "@hugeicons/react";
 import Link from "next/link";
 
 import { ButtonLink } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
+import { Icon } from "@/components/shared/icon";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusPill } from "@/components/shared/status-pill";
 import { localeFor } from "@/i18n/config";
@@ -18,6 +28,7 @@ import type {
   ClientProfile,
   Service,
 } from "@/domain/types";
+import { cn } from "@/lib/classnames";
 import { AdminUpcomingAppointments } from "./admin-upcoming-appointments";
 import type { AdminUpcomingAppointmentItem } from "./admin-upcoming-appointments";
 import type { BookedSlotInput } from "./admin-booking-carousel";
@@ -107,14 +118,14 @@ export async function AdminOverview({
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label={t.admin.todayAppointments}
           value={todays.length}
           hint={t.admin.todayAppointmentsHint}
           tone={todays.length > 0 ? "emerald" : "neutral"}
-          icon={<CalendarIcon />}
+          icon={Calendar03Icon}
           trend={trends.todayAppointments}
           variant="overview"
         />
@@ -122,7 +133,7 @@ export async function AdminOverview({
           label={t.admin.revenueThisMonth}
           value={`${monthRevenue} €`}
           hint={t.admin.revenueThisMonthHint}
-          icon={<ChartIcon />}
+          icon={ChartLineData01Icon}
           trend={trends.revenueThisMonth}
           variant="overview"
         />
@@ -131,7 +142,7 @@ export async function AdminOverview({
           value={openRequests}
           hint={t.admin.openRequestsHint}
           tone={openRequests > 0 ? "sky" : "neutral"}
-          icon={<InboxIcon />}
+          icon={InboxIcon}
           trend={trends.openRequests}
           variant="overview"
         />
@@ -139,23 +150,21 @@ export async function AdminOverview({
           label={t.admin.awaitingClient}
           value={awaitingClient}
           hint={t.admin.awaitingClientHint}
-          icon={<ClockIcon />}
+          tone={awaitingClient > 0 ? "amber" : "neutral"}
+          icon={HourglassIcon}
           trend={trends.awaitingClient}
           variant="overview"
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.6fr)]">
-        <Card className="rounded-lg border-black/10 bg-white p-5 shadow-[0_8px_24px_rgba(0,0,0,0.035)] dark:border-white/10 dark:bg-stone-900">
+      <div className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.6fr)]">
+        <Card>
           <SectionHeader
             title={t.admin.upcomingAppointments}
             action={
-              <ButtonLink
-                href="/admin/calendar"
-                variant="secondary"
-                className="min-h-9 rounded-md border-0 bg-stone-100 px-4 font-medium text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
-              >
+              <ButtonLink href="/admin/calendar" variant="outline" size="sm">
                 {t.admin.viewCalendar}
+                <Icon icon={ArrowRight01Icon} />
               </ButtonLink>
             }
           />
@@ -171,86 +180,78 @@ export async function AdminOverview({
           />
         </Card>
 
-        <Card className="rounded-lg border-black/10 bg-white p-5 shadow-[0_8px_24px_rgba(0,0,0,0.035)] dark:border-white/10 dark:bg-stone-900">
+        <Card>
           <SectionHeader title={t.admin.needsAttention} />
-          <div className="mt-5 divide-y divide-black/5 border-y border-black/5 dark:divide-white/5 dark:border-white/5">
+          <ul className="mt-4 divide-y">
             <AttentionRow
               href="/admin/approvals"
+              icon={UserCheck01Icon}
               label={t.admin.pendingApprovals}
               count={pendingApprovals}
               tone="warning"
             />
             <AttentionRow
               href="/admin/requests"
+              icon={InboxIcon}
               label={t.admin.newRequests}
               count={openRequests}
               tone="info"
             />
             <AttentionRow
-              href="/admin/requests"
+              href="/admin/requests?filter=proposed"
+              icon={HourglassIcon}
               label={t.admin.awaitingClientReply}
               count={awaitingClient}
               tone="neutral"
             />
-          </div>
+          </ul>
         </Card>
       </div>
     </div>
   );
 }
 
-function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M7 3v3M17 3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
-    </svg>
-  );
-}
+const attentionIconTone = {
+  warning: "bg-amber-500/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300",
+  info: "bg-sky-500/12 text-sky-700 dark:bg-sky-400/15 dark:text-sky-300",
+  neutral: "bg-muted text-muted-foreground",
+} as const;
 
-function ChartIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M5 20V10M12 20V4M19 20v-7M3 20h18" />
-    </svg>
-  );
-}
-
-function InboxIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M4 5h16v14H4V5ZM4 14h4l2 3h4l2-3h4" />
-    </svg>
-  );
-}
-
-function ClockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-    </svg>
-  );
-}
-
+/** Tappable row linking to the queue that needs work; the count is a StatusPill. */
 function AttentionRow({
   href,
+  icon,
   label,
   count,
   tone,
 }: {
   href: string;
+  icon: IconSvgElement;
   label: string;
   count: number;
-  tone: "warning" | "info" | "neutral";
+  tone: keyof typeof attentionIconTone;
 }) {
+  const active = count > 0;
   return (
-    <Link
-      href={href}
-      className="flex items-center justify-between gap-4 px-1 py-4 transition hover:bg-stone-50 dark:hover:bg-stone-800/50"
-    >
-      <span className="text-sm font-medium text-stone-600 dark:text-stone-300">{label}</span>
-      <StatusPill tone={count > 0 ? tone : "neutral"} className="rounded-md px-3">
-        {count}
-      </StatusPill>
-    </Link>
+    <li>
+      <Link
+        href={href}
+        className="-mx-2 flex min-h-14 items-center gap-3 rounded-lg px-2 py-2.5 transition outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50 active:bg-muted"
+      >
+        <span
+          className={cn(
+            "flex size-9 shrink-0 items-center justify-center rounded-lg",
+            active ? attentionIconTone[tone] : attentionIconTone.neutral,
+          )}
+        >
+          <Icon icon={icon} className="size-[18px]" />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{label}</span>
+        <StatusPill tone={active ? tone : "neutral"} dot={active} className="tabular-nums">
+          {count}
+        </StatusPill>
+        <Icon icon={ArrowRight01Icon} className="text-muted-foreground" />
+      </Link>
+    </li>
   );
 }

@@ -1,13 +1,11 @@
-import Link from "next/link";
+import { ArrowLeft01Icon, Key01Icon } from "@hugeicons/core-free-icons";
 
 import { requestPasswordResetAction } from "@/app/actions";
-import { Card } from "@/components/shared/card";
+import { AuthFrame, AuthHeading, AuthIllustration, AuthLink } from "@/components/auth/auth-panel";
 import { Feedback } from "@/components/shared/feedback";
 import { Field } from "@/components/shared/form";
-import { LanguageToggle } from "@/components/shared/language-toggle";
-import { Logo } from "@/components/shared/logo";
+import { Icon } from "@/components/shared/icon";
 import { SubmitButton } from "@/components/shared/submit-button";
-import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { getDict } from "@/i18n/server";
 
 export default async function ResetPasswordPage({
@@ -19,53 +17,37 @@ export default async function ResetPasswordPage({
   const t = await getDict();
 
   return (
-    <main className="app-surface grid min-h-screen place-items-center px-4 py-10">
-      <div className="absolute right-4 top-4 flex items-center gap-2">
-        <LanguageToggle />
-        <ThemeToggle />
-      </div>
-      <Card className="w-full max-w-md rounded-2xl p-6 sm:p-7">
-        <Logo className="h-10" priority />
-        <span className="sr-only">{t.auth.srTitle}</span>
+    <AuthFrame>
+      <AuthHeading
+        title={t.auth.resetTitle}
+        description={t.auth.resetSubtitle}
+        illustration={<AuthIllustration icon={Key01Icon} />}
+      />
 
-        <h1 className="mt-6 text-2xl font-semibold tracking-tight text-black dark:text-white">
-          {t.auth.resetTitle}
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-stone-600 dark:text-stone-400">
-          {t.auth.resetSubtitle}
-        </p>
+      {params.error ? <Feedback result={{ ok: false, error: params.error }} className="mt-5" /> : null}
+      {params.message ? <Feedback result={{ ok: true, message: params.message }} className="mt-5" /> : null}
 
-        {params.error ? (
-          <Feedback result={{ ok: false, error: params.error }} className="mt-4" />
-        ) : null}
-        {params.message ? (
-          <Feedback result={{ ok: true, message: params.message }} className="mt-4" />
-        ) : null}
+      <form action={requestPasswordResetAction} className="mt-6 space-y-4">
+        <Field
+          required
+          label={t.common.email}
+          name="email"
+          type="email"
+          autoComplete="email"
+          defaultValue={params.email}
+          placeholder={t.auth.emailPlaceholder}
+        />
+        <SubmitButton size="lg" className="w-full" pendingLabel={t.common.sending}>
+          {t.auth.resetCta}
+        </SubmitButton>
+      </form>
 
-        <form action={requestPasswordResetAction} className="mt-5 space-y-4">
-          <Field
-            required
-            label={t.common.email}
-            name="email"
-            type="email"
-            autoComplete="email"
-            defaultValue={params.email}
-            placeholder={t.auth.emailPlaceholder}
-          />
-          <SubmitButton className="w-full" pendingLabel={t.common.sending}>
-            {t.auth.resetCta}
-          </SubmitButton>
-        </form>
-
-        <p className="mt-5 text-sm text-stone-600 dark:text-stone-400">
-          <Link
-            href="/login"
-            className="font-semibold text-black underline-offset-4 hover:underline dark:text-white"
-          >
-            {t.auth.backToLogin}
-          </Link>
-        </p>
-      </Card>
-    </main>
+      <p className="mt-5 flex justify-center text-sm">
+        <AuthLink href="/login" muted className="gap-1.5">
+          <Icon icon={ArrowLeft01Icon} />
+          {t.auth.backToLogin}
+        </AuthLink>
+      </p>
+    </AuthFrame>
   );
 }

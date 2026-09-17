@@ -1,9 +1,10 @@
+import { Call02Icon, CancelCircleIcon, HourglassIcon, Logout03Icon } from "@hugeicons/core-free-icons";
+
 import { signOutAction } from "@/app/actions";
-import { Button } from "@/components/shared/button";
-import { Card } from "@/components/shared/card";
-import { LanguageToggle } from "@/components/shared/language-toggle";
+import { AuthFrame, AuthHeading, AuthIllustration } from "@/components/auth/auth-panel";
+import { Button, buttonClass } from "@/components/shared/button";
+import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
-import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { getDict } from "@/i18n/server";
 import { getShopPhone } from "@/lib/env";
 import { requireProfile } from "@/server/auth";
@@ -23,43 +24,40 @@ export default async function PendingPage() {
         : t.statuses.approvalPending;
 
   return (
-    <main className="app-surface grid min-h-screen place-items-center px-4 py-10">
-      <div className="absolute right-4 top-4 flex items-center gap-2">
-        <LanguageToggle />
-        <ThemeToggle />
-      </div>
-      <Card className="w-full max-w-lg rounded-2xl p-6">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-            {t.pending.eyebrow}
-          </p>
-          <StatusPill tone={rejected ? "danger" : "warning"}>{statusLabel}</StatusPill>
-        </div>
-        <h1 className="mt-2 text-3xl font-semibold text-black dark:text-white">
-          {rejected ? t.pending.notApprovedTitle : t.pending.waitingTitle}
-        </h1>
-        <p className="mt-3 text-sm leading-6 text-stone-600 dark:text-stone-400">
-          {rejected
-            ? t.pending.rejected(profile.full_name)
-            : t.pending.waiting(profile.full_name)}
-        </p>
+    <AuthFrame width="lg">
+      <AuthHeading
+        eyebrow={t.pending.eyebrow}
+        title={rejected ? t.pending.notApprovedTitle : t.pending.waitingTitle}
+        description={rejected ? t.pending.rejected(profile.full_name) : t.pending.waiting(profile.full_name)}
+        illustration={
+          <AuthIllustration
+            icon={rejected ? CancelCircleIcon : HourglassIcon}
+            tone={rejected ? "danger" : "warning"}
+          />
+        }
+        aside={
+          <StatusPill tone={rejected ? "danger" : "warning"} dot>
+            {statusLabel}
+          </StatusPill>
+        }
+      />
+
+      {phone ? <p className="mt-5 text-sm text-muted-foreground">{t.pending.contactShop}</p> : null}
+
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         {phone ? (
-          <p className="mt-4 text-sm text-stone-600 dark:text-stone-300">
-            {t.pending.contactShop}: {" "}
-            <a
-              href={`tel:${phone.replace(/\s/g, "")}`}
-              className="font-semibold text-black underline underline-offset-4 dark:text-white"
-            >
-              {phone}
-            </a>
-          </p>
+          <a href={`tel:${phone.replace(/\s/g, "")}`} className={buttonClass("primary", "w-full sm:w-auto", "lg")}>
+            <Icon icon={Call02Icon} />
+            {phone}
+          </a>
         ) : null}
-        <form action={signOutAction} className="mt-5">
-          <Button type="submit" variant="secondary">
+        <form action={signOutAction} className="w-full sm:w-auto">
+          <Button type="submit" variant="outline" size="lg" className="w-full">
+            <Icon icon={Logout03Icon} />
             {t.common.signOut}
           </Button>
         </form>
-      </Card>
-    </main>
+      </div>
+    </AuthFrame>
   );
 }

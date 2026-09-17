@@ -1,10 +1,12 @@
 "use client";
 
+import { TaskDone01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { markNotificationReadAction, markNotificationsReadAction } from "@/app/actions";
 import { Button } from "@/components/shared/button";
+import { Icon } from "@/components/shared/icon";
 import { useT } from "@/i18n/provider";
 
 // "Mark all read" control for the notifications page. Server action clears the
@@ -19,7 +21,8 @@ export function MarkReadButton({ hasUnread }: { hasUnread: boolean }) {
     <Button
       type="button"
       variant="secondary"
-      disabled={pending || !hasUnread}
+      disabled={!hasUnread}
+      loading={pending}
       onClick={() =>
         startTransition(async () => {
           await markNotificationsReadAction();
@@ -27,6 +30,7 @@ export function MarkReadButton({ hasUnread }: { hasUnread: boolean }) {
         })
       }
     >
+      {pending ? null : <Icon icon={TaskDone01Icon} className="size-4" strokeWidth={2} />}
       {t.client.markAllRead}
     </Button>
   );
@@ -41,8 +45,9 @@ export function MarkNotificationReadButton({ notificationId }: { notificationId:
     <Button
       type="button"
       variant="ghost"
-      className="min-h-9 px-2 text-xs"
-      disabled={pending}
+      size="sm"
+      className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+      loading={pending}
       onClick={() =>
         startTransition(async () => {
           await markNotificationReadAction(notificationId);
@@ -50,6 +55,7 @@ export function MarkNotificationReadButton({ notificationId }: { notificationId:
         })
       }
     >
+      {pending ? null : <Icon icon={Tick02Icon} className="size-3.5" strokeWidth={2.2} />}
       {t.client.markRead}
     </Button>
   );

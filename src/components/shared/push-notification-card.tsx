@@ -1,12 +1,15 @@
 "use client";
 
+import { Notification03Icon, NotificationOff01Icon } from "@hugeicons/core-free-icons";
 import { useEffect, useState, useTransition } from "react";
 
 import { Button } from "@/components/shared/button";
-import { Card, SectionHeader } from "@/components/shared/card";
+import { Card } from "@/components/shared/card";
 import { Feedback } from "@/components/shared/feedback";
+import { Icon } from "@/components/shared/icon";
 import type { ActionResult } from "@/domain/types";
 import { useT } from "@/i18n/provider";
+import { cn } from "@/lib/classnames";
 
 type PushState =
   | "checking"
@@ -162,38 +165,61 @@ export function PushNotificationCard() {
   }
 
   const enabled = state === "enabled";
-  const disabled =
-    pending || state === "checking" || state === "unsupported" || state === "unavailable" || state === "denied";
+  const blocked = state === "denied" || state === "unsupported" || state === "unavailable";
+  const disabled = pending || state === "checking" || blocked;
+
+  const statusText =
+    state === "enabled"
+      ? t.push.statusEnabled
+      : state === "denied"
+        ? t.push.statusDenied
+        : state === "unsupported"
+          ? t.push.statusUnsupported
+          : state === "unavailable"
+            ? t.push.statusUnavailable
+            : t.push.statusReady;
 
   return (
-    <Card className="rounded-2xl p-5">
-      <SectionHeader
-        eyebrow={t.push.eyebrow}
-        title={t.push.title}
-        action={
-          enabled ? (
-            <Button type="button" variant="secondary" disabled={pending} onClick={disable}>
+    <Card className="rounded-2xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span
+            className={cn(
+              "flex size-11 shrink-0 items-center justify-center rounded-xl",
+              enabled
+                ? "bg-emerald-500/12 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300"
+                : blocked
+                  ? "bg-muted text-muted-foreground"
+                  : "bg-sky-500/12 text-sky-700 dark:bg-sky-400/15 dark:text-sky-300",
+            )}
+          >
+            <Icon icon={blocked ? NotificationOff01Icon : Notification03Icon} className="size-6" strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[0.7rem] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              {t.push.eyebrow}
+            </p>
+            <h2 className="mt-0.5 text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+              {t.push.title}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground" aria-live="polite">
+              {statusText}
+            </p>
+          </div>
+        </div>
+        <div className="shrink-0 *:w-full sm:*:w-auto">
+          {enabled ? (
+            <Button type="button" variant="secondary" size="lg" loading={pending} onClick={disable} className="sm:h-10 sm:text-sm">
               {pending ? t.push.disabling : t.push.disable}
             </Button>
           ) : (
-            <Button type="button" disabled={disabled} onClick={enable}>
+            <Button type="button" size="lg" disabled={disabled} loading={pending} onClick={enable} className="sm:h-10 sm:text-sm">
               {pending ? t.push.enabling : t.push.enable}
             </Button>
-          )
-        }
-      />
-      <p className="mt-3 text-sm text-stone-600 dark:text-stone-300">
-        {state === "enabled"
-          ? t.push.statusEnabled
-          : state === "denied"
-            ? t.push.statusDenied
-            : state === "unsupported"
-              ? t.push.statusUnsupported
-              : state === "unavailable"
-                ? t.push.statusUnavailable
-                : t.push.statusReady}
-      </p>
-      <Feedback result={feedback} className="mt-3" />
+          )}
+        </div>
+      </div>
+      <Feedback result={feedback} className="mt-4" />
     </Card>
   );
 }

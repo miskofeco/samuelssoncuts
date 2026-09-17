@@ -1,17 +1,18 @@
 "use client";
 
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
+import Link from "next/link";
+import type { ReactNode } from "react";
 import { useState } from "react";
 
+import { Button } from "@/components/shared/button";
+import { Icon } from "@/components/shared/icon";
 import { Modal } from "@/components/shared/modal";
+import { StatusPill } from "@/components/shared/status-pill";
 import { Toggle } from "@/components/shared/toggle";
 import { localeFor } from "@/i18n/config";
 import { useLang, useT } from "@/i18n/provider";
-import {
-  CONSENT_LAST_UPDATED,
-  CONSENT_VERSION,
-  OPTIONAL_CATEGORIES,
-} from "@/lib/consent/config";
-import { cn } from "@/lib/classnames";
+import { CONSENT_LAST_UPDATED, CONSENT_VERSION, OPTIONAL_CATEGORIES } from "@/lib/consent/config";
 
 import { useConsent, type OptionalChoices } from "./consent-provider";
 
@@ -21,70 +22,73 @@ import { useConsent, type OptionalChoices } from "./consent-provider";
 export function ConsentPreferences() {
   const t = useT();
   const lang = useLang();
-  const { modalOpen, closePreferences, state, acceptAll, rejectAll, save } =
-    useConsent();
+  const { modalOpen, closePreferences, state, acceptAll, rejectAll, save } = useConsent();
+
+  // Local edits live here (not in the body) so the Save button can sit in the
+  // modal's sticky footer. `null` means "not touched yet": the switches then
+  // mirror the saved decision, and every close path resets to null so the next
+  // open re-seeds from the latest saved choice.
+  const [draft, setDraft] = useState<OptionalChoices | null>(null);
+  const choices: OptionalChoices = draft ?? {
+    functional: state?.functional ?? false,
+    analytics: state?.analytics ?? false,
+    marketing: state?.marketing ?? false,
+  };
+
+  function set(key: keyof OptionalChoices, next: boolean) {
+    setDraft({ ...choices, [key]: next });
+  }
+
+  function close() {
+    setDraft(null);
+    closePreferences();
+  }
+
+  function handleRejectAll() {
+    setDraft(null);
+    rejectAll();
+  }
+
+  function handleAcceptAll() {
+    setDraft(null);
+    acceptAll();
+  }
+
+  function handleSave() {
+    const next = choices;
+    setDraft(null);
+    save(next);
+  }
+
+  const lastUpdated = t.consent.modal.lastUpdated(
+    new Intl.DateTimeFormat(localeFor(lang), {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(new Date(CONSENT_LAST_UPDATED)),
+  );
 
   return (
     <Modal
       open={modalOpen}
-      onClose={closePreferences}
+      onClose={close}
       title={t.consent.modal.title}
-      className="sm:max-w-md"
+      description={t.consent.modal.intro}
+      size="md"
+      footer={
+        <>
+          <Button variant="outline" size="lg" onClick={handleRejectAll} className="sm:h-10 sm:text-sm">
+            {t.consent.modal.rejectAll}
+          </Button>
+          <Button variant="outline" size="lg" onClick={handleAcceptAll} className="sm:h-10 sm:text-sm">
+            {t.consent.modal.acceptAll}
+          </Button>
+          <Button size="lg" onClick={handleSave} className="sm:h-10 sm:text-sm">
+            {t.consent.modal.save}
+          </Button>
+        </>
+      }
     >
-      {/* Remount the body each time the modal opens so the local toggle state
-          re-seeds from the latest saved choice. */}
-      {modalOpen ? (
-        <PreferencesBody
-          initial={{
-            functional: state?.functional ?? false,
-            analytics: state?.analytics ?? false,
-            marketing: state?.marketing ?? false,
-          }}
-          onSave={save}
-          onAcceptAll={acceptAll}
-          onRejectAll={rejectAll}
-          lastUpdated={t.consent.modal.lastUpdated(
-            new Intl.DateTimeFormat(localeFor(lang), {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            }).format(new Date(CONSENT_LAST_UPDATED)),
-          )}
-          version={t.consent.modal.version(CONSENT_VERSION)}
-        />
-      ) : null}
-    </Modal>
-  );
-}
-
-function PreferencesBody({
-  initial,
-  onSave,
-  onAcceptAll,
-  onRejectAll,
-  lastUpdated,
-  version,
-}: {
-  initial: OptionalChoices;
-  onSave: (choices: OptionalChoices) => void;
-  onAcceptAll: () => void;
-  onRejectAll: () => void;
-  lastUpdated: string;
-  version: string;
-}) {
-  const t = useT();
-  const [choices, setChoices] = useState<OptionalChoices>(initial);
-
-  function set(key: keyof OptionalChoices, next: boolean) {
-    setChoices((prev) => ({ ...prev, [key]: next }));
-  }
-
-  return (
-    <div className="space-y-3">
-      <p className="text-xs leading-5 text-stone-600 dark:text-stone-300">
-        {t.consent.modal.intro}
-      </p>
-
       <ul className="space-y-2">
         {/* Necessary — always on, cannot be disabled. */}
         <CategoryRow
@@ -93,18 +97,14 @@ function PreferencesBody({
           cookies={t.consent.categories.necessary.cookies}
           status={t.consent.categories.necessary.status}
           control={
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wide text-stone-600 dark:text-stone-300">
+            <div className="flex items-center gap-2">
+              <StatusPill tone="success" className="hidden sm:inline-flex">
                 {t.consent.modal.alwaysOn}
-              </span>
-              <Toggle
-                checked
-                disabled
-                size="md"
-                label={t.consent.categories.necessary.name}
-              />
+              </StatusPill>
+              <Toggle checked disabled size="md" label={t.consent.categories.necessary.name} />
             </div>
           }
+          note={<span className="sm:hidden">{t.consent.modal.alwaysOn}</span>}
         />
 
         {OPTIONAL_CATEGORIES.map((key) => (
@@ -126,59 +126,22 @@ function PreferencesBody({
         ))}
       </ul>
 
-      <div className="flex items-center gap-3 border-t border-black/10 pt-2 text-xs text-stone-600 dark:border-white/10 dark:text-stone-300">
-        <span>{version}</span>
-        <span>·</span>
-        <span>{lastUpdated}</span>
-      </div>
-
-      <div className="flex flex-col gap-2 border-t border-black/10 pt-3 dark:border-white/10 sm:flex-row sm:items-center sm:justify-between">
-        <a
+      <div className="mt-4 flex flex-col gap-2 border-t pt-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span>{t.consent.modal.version(CONSENT_VERSION)}</span>
+          <span aria-hidden>·</span>
+          <span>{lastUpdated}</span>
+        </div>
+        <Link
           href="/cookies"
-          className="text-xs font-semibold text-black underline underline-offset-4 dark:text-white"
+          onClick={close}
+          className="inline-flex min-h-8 items-center gap-1 font-semibold text-foreground underline-offset-4 hover:underline"
         >
           {t.consent.modal.policyLink}
-        </a>
-        <div className="flex flex-wrap gap-2">
-          <FooterButton variant="secondary" onClick={onRejectAll}>
-            {t.consent.modal.rejectAll}
-          </FooterButton>
-          <FooterButton variant="secondary" onClick={onAcceptAll}>
-            {t.consent.modal.acceptAll}
-          </FooterButton>
-          <FooterButton variant="primary" onClick={() => onSave(choices)}>
-            {t.consent.modal.save}
-          </FooterButton>
-        </div>
+          <Icon icon={ArrowRight01Icon} className="size-3.5" />
+        </Link>
       </div>
-    </div>
-  );
-}
-
-// Compact footer buttons — the shared Button bakes in min-h-10/px-4/text-sm,
-// which is too tall for this dense modal, so use smaller pills here.
-function FooterButton({
-  variant,
-  onClick,
-  children,
-}: {
-  variant: "primary" | "secondary";
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 dark:focus:ring-white dark:focus:ring-offset-stone-900",
-        variant === "primary"
-          ? "bg-black text-white hover:bg-stone-800 dark:bg-white dark:text-black dark:hover:bg-stone-200"
-          : "border border-stone-200 bg-white text-stone-950 hover:bg-stone-50 dark:border-white/15 dark:bg-stone-900 dark:text-stone-100 dark:hover:bg-stone-800",
-      )}
-    >
-      {children}
-    </button>
+    </Modal>
   );
 }
 
@@ -188,31 +151,34 @@ function CategoryRow({
   cookies,
   status,
   control,
+  note,
 }: {
   name: string;
   description: string;
   cookies: string;
   status: string;
-  control: React.ReactNode;
+  control: ReactNode;
+  /** Optional small print next to the status line (e.g. "Always on" on phones). */
+  note?: ReactNode;
 }) {
   const t = useT();
   return (
-    <li className="rounded-lg border border-black/10 p-2.5 dark:border-white/10">
+    <li className="rounded-xl bg-muted/40 p-3 ring-1 ring-foreground/10 sm:p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-black dark:text-white">{name}</p>
-          <p className="mt-0.5 text-xs leading-5 text-stone-600 dark:text-stone-300">
-            {description}
-          </p>
+          <p className="text-sm font-semibold text-foreground">{name}</p>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">{description}</p>
         </div>
         <div className="shrink-0 pt-0.5">{control}</div>
       </div>
-      <div className="mt-1.5 space-y-0.5 text-xs leading-snug text-stone-600 dark:text-stone-300">
+      <div className="mt-3 space-y-1 text-xs leading-5 text-muted-foreground">
         <p>
-          <span className="font-semibold">{t.consent.modal.cookiesUsedLabel}:</span>{" "}
-          {cookies}
+          <span className="font-semibold text-foreground/80">{t.consent.modal.cookiesUsedLabel}:</span> {cookies}
         </p>
-        <p className="italic">{status}</p>
+        <p className="flex flex-wrap items-center gap-x-2">
+          <span className="italic">{status}</span>
+          {note ? <span className="font-semibold text-foreground/80">{note}</span> : null}
+        </p>
       </div>
     </li>
   );

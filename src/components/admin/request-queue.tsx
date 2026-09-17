@@ -1,10 +1,12 @@
 "use client";
 
+import { InboxIcon } from "@hugeicons/core-free-icons";
 import { useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Card, SectionHeader } from "@/components/shared/card";
+import { SectionHeader } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { Icon } from "@/components/shared/icon";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
 import type {
@@ -36,6 +38,11 @@ function matches(status: RequestStatus, filter: FilterKey) {
   }
 }
 
+/**
+ * Request inbox: a filter strip (URL-synced) above a flat list of request
+ * cards. The list is not nested in a Card so each request gets the full phone
+ * width.
+ */
 export function RequestQueue({
   requests,
   proposals,
@@ -101,18 +108,18 @@ export function RequestQueue({
   );
 
   return (
-    <Card className="flex h-full flex-col rounded-2xl p-5">
+    <section className="space-y-4">
       <SectionHeader
-        eyebrow={t.admin.requestsEyebrow}
         title={t.admin.appointmentRequests}
         action={
-          <StatusPill tone={counts.actionable > 0 ? "info" : "neutral"}>
+          <StatusPill tone={counts.actionable > 0 ? "info" : "neutral"} dot={counts.actionable > 0}>
             {t.admin.toHandle(counts.actionable)}
           </StatusPill>
         }
       />
 
-      <div className="mt-4 overflow-x-auto pb-1">
+      {/* Filter strip scrolls horizontally on phones instead of wrapping. */}
+      <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 scrollbar-none">
         <SegmentedControl
           ariaLabel={t.admin.appointmentRequests}
           value={filter}
@@ -126,9 +133,13 @@ export function RequestQueue({
         />
       </div>
 
-      <div className="mt-4 space-y-3">
+      <div className="space-y-3">
         {visible.length === 0 ? (
-          <EmptyState title={t.admin.nothingHere} description={t.admin.nothingHereDescription} />
+          <EmptyState
+            title={t.admin.nothingHere}
+            description={t.admin.nothingHereDescription}
+            icon={<Icon icon={InboxIcon} />}
+          />
         ) : (
           visible.map((request) => (
             <ProposalComposer
@@ -143,6 +154,6 @@ export function RequestQueue({
           ))
         )}
       </div>
-    </Card>
+    </section>
   );
 }

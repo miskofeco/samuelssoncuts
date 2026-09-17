@@ -1,7 +1,10 @@
 "use client";
 
+import { CookieIcon } from "@hugeicons/core-free-icons";
+
 import { Button } from "@/components/shared/button";
-import { Card } from "@/components/shared/card";
+import { Card, SectionHeader } from "@/components/shared/card";
+import { Icon } from "@/components/shared/icon";
 import { useT } from "@/i18n/provider";
 
 import { useConsent } from "./consent-provider";
@@ -13,18 +16,10 @@ export function OpenPreferencesCard() {
   const { openPreferences } = useConsent();
 
   return (
-    <Card className="p-5">
-      <h2 className="text-base font-semibold text-black dark:text-white">
-        {t.consent.modal.title}
-      </h2>
-      <p className="mt-1.5 text-sm leading-6 text-stone-600 dark:text-stone-400">
-        {t.consent.modal.intro}
-      </p>
-      <Button
-        variant="secondary"
-        onClick={openPreferences}
-        className="mt-4"
-      >
+    <Card>
+      <SectionHeader title={t.consent.modal.title} description={t.consent.modal.intro} />
+      <Button variant="outline" onClick={openPreferences} className="mt-4 w-full sm:w-auto">
+        <Icon icon={CookieIcon} />
         {t.nav.cookiePreferences}
       </Button>
     </Card>

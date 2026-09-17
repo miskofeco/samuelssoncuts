@@ -32,8 +32,15 @@ For small visual, color, spacing, copy, content, or documentation changes, make 
 
 When tests are appropriate, prefer focused coverage around the changed behavior first, then broader `pnpm test`, `pnpm lint`, and `pnpm build` as the risk and blast radius justify.
 
-## Mobile Sidebar / Realtime Channels
+## UI Kit
 
-The desktop sidebar stays mounted even on mobile (`lg:hidden` only hides it visually). Opening the mobile drawer mounts a second `Sidebar` instance. Any hook used inside `Sidebar` can therefore run twice at the same time.
+- Primitives are shadcn v4 components in `src/components/ui` (do not hand-edit generated files casually; add new ones with `pnpm dlx shadcn@latest add <name>`). App wrappers with stable props live in `src/components/shared`; prefer those in feature code.
+- Icons: hugeicons only, through `Icon` in `src/components/shared/icon.tsx` (`import { Calendar03Icon } from "@hugeicons/core-free-icons"`). Do not import `lucide-react` and do not write inline `<svg>` icons.
+- Style with the semantic tokens (`bg-card`, `text-muted-foreground`, `bg-primary`, `text-destructive`, `ring-foreground/10`…) rather than hard-coded `stone-*`/black/white pairs; keep emerald/amber/sky/red accents only where they carry meaning.
+- Phones first: 40px controls (44px for primary actions), full-width buttons below `sm`, shared `Modal` for dialogs (drawer on phones), content must clear the bottom tab bar (the shell pads for it).
 
-Do not use a static Supabase realtime channel name from sidebar-mounted hooks. In particular, `useAttentionRefresh` must keep using a per-mount stable channel name (currently derived from `useId`) instead of `supabase.channel("admin-attention")`. Reusing the static channel caused the mobile drawer to crash into the route error page when opened.
+## Navigation / Realtime Channels
+
+The shell renders a desktop sidebar (`md+`) and a phone top bar + bottom tab bar (`<md`); both stay mounted, so hooks placed inside navigation components run twice.
+
+`useAttentionRefresh` is therefore mounted once by `src/components/layout/attention-refresh.tsx` from `AppShell` (admin only). Keep it there, and keep its per-mount stable channel name (derived from `useId`) instead of `supabase.channel("admin-attention")`; a static channel name previously crashed the mobile drawer into the route error page.

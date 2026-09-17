@@ -30,18 +30,19 @@ export function ApprovalsCalendar({
   }
 
   return (
-    <Card className="rounded-2xl p-5">
-      <SectionHeader eyebrow={t.admin.demandEyebrow} title={t.admin.requestedDays} />
-      <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-        {t.admin.requestedDaysDescription}
-      </p>
+    <Card className="h-fit">
+      <SectionHeader
+        eyebrow={t.admin.demandEyebrow}
+        title={t.admin.requestedDays}
+        description={t.admin.requestedDaysDescription}
+      />
       <div className="mt-4">
         <MonthCalendar
           renderDay={(cell) => {
             const count = countByDate.get(cell.date) ?? 0;
             if (count === 0) return null;
             return (
-              <span className="mt-1 inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[0.6rem] font-semibold text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+              <span className="inline-flex items-center rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[0.6rem] font-semibold text-amber-800 tabular-nums dark:bg-amber-400/15 dark:text-amber-300">
                 {t.admin.reqCount(count)}
               </span>
             );

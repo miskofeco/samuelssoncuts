@@ -37,10 +37,12 @@ test("sidebar badge counts are computed server-side and refresh via revalidatePa
   // nudges a router.refresh() for background changes by other admins/clients.
   const dashboardData = readFileSync("src/server/dashboard-data.ts", "utf8");
   const adminLayout = readFileSync("src/app/admin/layout.tsx", "utf8");
-  const sidebar = readFileSync("src/components/layout/sidebar.tsx", "utf8");
+  const appShell = readFileSync("src/components/layout/app-shell.tsx", "utf8");
   assert.match(dashboardData, /export async function loadAttentionCounts/);
   assert.match(adminLayout, /loadAttentionCounts\(\)/);
-  assert.match(sidebar, /attention\?\.requests/);
+  // The shell maps the server counts into nav badges for both navigations.
+  assert.match(appShell, /requests: attention\?\.requests \?\? 0/);
+  assert.match(appShell, /approvals: attention\?\.approvals \?\? 0/);
   assert.match(badgeHook, /export function useAttentionRefresh/);
   assert.match(badgeHook, /router\.refresh\(\)/);
 });
@@ -65,13 +67,16 @@ test("client deletion is rate limited and returns a delete-specific message", ()
 });
 
 test("modal traps focus and restores it on close (Radix Dialog)", () => {
-  // Radix Dialog.Content wraps FocusScope (trap + return focus), DismissableLayer
-  // (Escape/outside dismiss) and RemoveScroll (iOS-safe scroll lock), and wires
-  // aria-labelledby/aria-describedby from Title/Description automatically.
-  assert.match(modal, /<Dialog\.Content/);
-  assert.match(modal, /<Dialog\.Title/);
-  assert.match(modal, /<Dialog\.Description/);
-  assert.match(modal, /<Dialog\.Close/);
+  // The shadcn Dialog/Drawer parts wrap Radix Dialog.Content (FocusScope trap +
+  // return focus, DismissableLayer for Escape/outside dismiss, RemoveScroll for
+  // an iOS-safe scroll lock) and wire aria-labelledby/aria-describedby from
+  // Title/Description automatically; vaul does the same on the phone drawer.
+  assert.match(modal, /<DialogContent/);
+  assert.match(modal, /<DialogTitle/);
+  assert.match(modal, /<DialogDescription/);
+  assert.match(modal, /<DialogClose/);
+  assert.match(modal, /<DrawerTitle/);
+  assert.match(modal, /<DrawerDescription/);
 });
 
 test("clickable data-table rows are keyboard accessible without breaking table semantics", () => {

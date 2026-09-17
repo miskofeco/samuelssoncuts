@@ -1,3 +1,7 @@
+import { Alert02Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
+
+import { Icon } from "@/components/shared/icon";
+import { Alert, AlertTitle } from "@/components/ui/alert";
 import type { ActionResult } from "@/domain/types";
 import { cn } from "@/lib/classnames";
 
@@ -17,17 +21,19 @@ export function Feedback({
   const text = ok ? (result.message ?? <LocalizedDone />) : result.error;
 
   return (
-    <p
+    <Alert
       role={ok ? "status" : "alert"}
+      variant={ok ? "default" : "destructive"}
       className={cn(
-        "rounded-lg px-3 py-2 text-sm font-medium",
+        "items-center border-0",
         ok
-          ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-500/15 dark:text-emerald-300"
-          : "bg-red-50 text-red-800 dark:bg-red-500/15 dark:text-red-300",
+          ? "bg-emerald-500/10 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-200"
+          : "bg-destructive/10 dark:bg-destructive/15",
         className,
       )}
     >
-      {text}
-    </p>
+      <Icon icon={ok ? CheckmarkCircle02Icon : Alert02Icon} strokeWidth={2} />
+      <AlertTitle className="font-medium">{text}</AlertTitle>
+    </Alert>
   );
 }

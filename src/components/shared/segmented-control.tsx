@@ -1,8 +1,8 @@
 "use client";
 
-import { ToggleGroup } from "radix-ui";
 import type { ReactNode } from "react";
 
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/classnames";
 
 type Option<T extends string> = {
@@ -14,7 +14,8 @@ type Option<T extends string> = {
 
 /**
  * Single-select segmented control (Radix ToggleGroup): roving arrow-key focus,
- * `aria-pressed` state, and a value that can never be deselected.
+ * `data-state` styling, and a value that can never be deselected. Stretches to
+ * the container width so every segment is a comfortable tap target.
  */
 export function SegmentedControl<T extends string>({
   options,
@@ -32,38 +33,34 @@ export function SegmentedControl<T extends string>({
   className?: string;
 }) {
   return (
-    <ToggleGroup.Root
+    <ToggleGroup
       type="single"
       value={value}
       onValueChange={(next) => {
         if (next) onChange(next as T);
       }}
       aria-label={ariaLabel}
-      className={cn(
-        "grid rounded-lg border border-black/10 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-stone-900",
-        className,
-      )}
+      spacing={1}
+      className={cn("grid w-full rounded-xl bg-muted p-1", className)}
       style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
     >
       {options.map((option) => (
-        <ToggleGroup.Item
+        <ToggleGroupItem
           key={option.value}
           value={option.value}
           className={cn(
-            "inline-flex items-center justify-center gap-1.5 rounded-md font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-inset dark:focus-visible:ring-white",
-            size === "sm" ? "min-h-8 px-3 text-xs" : "min-h-10 px-4 text-sm",
-            "data-[state=on]:bg-black data-[state=on]:text-white dark:data-[state=on]:bg-white dark:data-[state=on]:text-black",
-            "data-[state=off]:text-stone-600 data-[state=off]:hover:bg-stone-100 dark:data-[state=off]:text-stone-300 dark:data-[state=off]:hover:bg-stone-800",
+            "min-w-0 rounded-lg font-semibold text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:ring-1 data-[state=on]:ring-foreground/10",
+            size === "sm" ? "h-8 px-2 text-xs" : "h-10 px-3 text-sm",
           )}
         >
           <span className="truncate">{option.label}</span>
           {option.count ? (
-            <span className="rounded-full bg-white/20 px-1.5 text-[0.65rem] tabular-nums data-[state=off]:bg-stone-100 dark:bg-black/10">
+            <span className="rounded-full bg-foreground/8 px-1.5 text-[0.65rem] tabular-nums">
               {option.count > 99 ? "99+" : option.count}
             </span>
           ) : null}
-        </ToggleGroup.Item>
+        </ToggleGroupItem>
       ))}
-    </ToggleGroup.Root>
+    </ToggleGroup>
   );
 }

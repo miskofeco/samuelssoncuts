@@ -201,7 +201,7 @@ export async function AdminBookingStrip({
   }));
 
   return (
-    <Card className="rounded-2xl p-5">
+    <Card>
       <SectionHeader title={t.admin.bookingSnapshot} />
       <AdminBookingCarousel
         items={bookingStripItems}

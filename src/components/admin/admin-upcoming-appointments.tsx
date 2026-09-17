@@ -1,9 +1,11 @@
 "use client";
 
+import { Calendar03Icon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
 
 import { Avatar } from "@/components/shared/avatar";
 import { EmptyState } from "@/components/shared/empty-state";
+import { Icon } from "@/components/shared/icon";
 import type { CalendarItem } from "./admin-calendar";
 import { AppointmentDetailModal } from "./appointment-detail-modal";
 import type { BookedSlotInput } from "./admin-booking-carousel";
@@ -18,6 +20,11 @@ export type AdminUpcomingAppointmentItem = {
   calendarItem: CalendarItem;
 };
 
+/**
+ * Next appointments as tappable rows. Each row opens the shared appointment
+ * detail modal; on phones the service moves under the client name so the name
+ * keeps readable space next to the date column.
+ */
 export function AdminUpcomingAppointments({
   items,
   bookedSlots,
@@ -46,48 +53,49 @@ export function AdminUpcomingAppointments({
 
   return (
     <>
-      <div className="mt-5">
+      <div className="mt-4">
         {items.length === 0 ? (
-          <EmptyState title={emptyTitle} />
+          <EmptyState title={emptyTitle} icon={<Icon icon={Calendar03Icon} />} />
         ) : (
           <div className="overflow-hidden">
-            <div className="grid grid-cols-[minmax(0,1fr)_10rem] gap-4 border-b border-black/5 pb-3 text-sm font-medium text-stone-500 dark:border-white/5 dark:text-stone-400 sm:grid-cols-[minmax(0,1fr)_minmax(8rem,0.45fr)_10rem]">
+            <div className="grid grid-cols-[minmax(0,1fr)_10rem] gap-3 border-b px-2 pb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase sm:grid-cols-[minmax(0,1fr)_minmax(8rem,0.45fr)_10rem]">
               <span>{labels.name}</span>
               <span className="hidden sm:block">{labels.service}</span>
               <span className="text-right">{labels.date}</span>
             </div>
-            <div className="divide-y divide-black/5 dark:divide-white/5">
+            <ul className="divide-y">
               {items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setSelected(item.calendarItem)}
-                  className="grid w-full grid-cols-[minmax(0,1fr)_10rem] items-center gap-4 py-4 text-left transition hover:bg-stone-50 dark:hover:bg-stone-800/50 sm:grid-cols-[minmax(0,1fr)_minmax(8rem,0.45fr)_10rem]"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <Avatar
-                      size="sm"
-                      name={item.clientName}
-                      src={item.clientAvatarUrl}
-                    />
-                    <div className="min-w-0">
-                      <p className="break-words text-sm font-semibold text-black sm:truncate dark:text-white">
-                        {item.clientName}
-                      </p>
-                      <p className="truncate text-xs text-stone-500 sm:hidden dark:text-stone-400">
-                        {item.serviceName}
-                      </p>
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelected(item.calendarItem)}
+                    className="grid w-full grid-cols-[minmax(0,1fr)_10rem] min-h-14 items-center gap-3 rounded-lg px-2 py-2.5 text-left transition outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50 active:bg-muted sm:grid-cols-[minmax(0,1fr)_minmax(8rem,0.45fr)_10rem]"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Avatar
+                        size="sm"
+                        name={item.clientName}
+                        src={item.clientAvatarUrl}
+                      />
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-semibold text-foreground sm:truncate">
+                          {item.clientName}
+                        </p>
+                        <p className="truncate text-xs text-stone-500 sm:hidden dark:text-stone-400">
+                          {item.serviceName}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <p className="hidden truncate text-sm font-medium text-stone-500 dark:text-stone-400 sm:block">
-                    {item.serviceName}
-                  </p>
-                  <p className="text-right text-sm font-medium tabular-nums text-stone-600 dark:text-stone-300">
-                    {item.when}
-                  </p>
-                </button>
+                    <p className="hidden truncate text-sm text-muted-foreground sm:block">
+                      {item.serviceName}
+                    </p>
+                    <p className="text-right text-sm font-medium tabular-nums text-foreground/80">
+                      {item.when}
+                    </p>
+                  </button>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         )}
       </div>

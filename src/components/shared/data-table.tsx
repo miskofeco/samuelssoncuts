@@ -1,5 +1,13 @@
 import type { ReactNode } from "react";
 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/classnames";
 
 export type Column<T> = {
@@ -61,56 +69,50 @@ export function DataTable<T>({
                   type="button"
                   onClick={() => onRowClick(row)}
                   aria-label={rowLabel?.(row)}
-                  className="w-full rounded-xl border border-black/10 bg-white p-4 text-left transition hover:border-black/20 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black dark:border-white/10 dark:bg-stone-900 dark:hover:bg-stone-800/60 dark:focus-visible:ring-white"
+                  className="w-full rounded-xl bg-card p-4 text-left ring-1 ring-foreground/10 transition outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50 active:bg-muted/70"
                 >
                   {mobileCard(row)}
                 </button>
               ) : (
-                <div className="rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-stone-900">
-                  {mobileCard(row)}
-                </div>
+                <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">{mobileCard(row)}</div>
               )}
             </li>
           ))}
         </ul>
       ) : null}
 
-      <div className={cn("overflow-x-auto", mobileCard && "hidden sm:block")}>
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-black/10 dark:border-white/10">
+      <div className={cn("-mx-1 rounded-lg", mobileCard && "hidden sm:block")}>
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
               {columns.map((column) => (
-                <th
+                <TableHead
                   key={column.key}
                   scope="col"
                   className={cn(
-                    "px-3 py-2.5 text-xs font-semibold tracking-wide text-stone-500 uppercase dark:text-stone-400",
+                    "h-10 px-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase",
                     alignClass[column.align ?? "left"],
                     column.hideOnMobile && "hidden sm:table-cell",
                     column.className,
                   )}
                 >
                   {column.header}
-                </th>
+                </TableHead>
               ))}
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.map((row) => (
-              <tr
+              <TableRow
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={cn(
-                  "border-b border-black/5 last:border-0 dark:border-white/5",
-                  onRowClick &&
-                    "cursor-pointer transition hover:bg-stone-50 focus-within:bg-stone-50 dark:hover:bg-stone-800/50 dark:focus-within:bg-stone-800/50",
-                )}
+                className={cn(onRowClick && "cursor-pointer focus-within:bg-muted/50")}
               >
                 {columns.map((column, index) => (
-                  <td
+                  <TableCell
                     key={column.key}
                     className={cn(
-                      "px-3 py-3 text-stone-700 dark:text-stone-300",
+                      "px-3 py-3 whitespace-normal text-foreground/90",
                       alignClass[column.align ?? "left"],
                       column.hideOnMobile && "hidden sm:table-cell",
                       onRowClick && index === 0 && "relative",
@@ -126,19 +128,19 @@ export function DataTable<T>({
                             event.stopPropagation();
                             onRowClick(row);
                           }}
-                          className="absolute inset-0 rounded-md opacity-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-inset dark:focus-visible:ring-white"
+                          className="absolute inset-0 rounded-md opacity-0 outline-none focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
                         />
                         {column.cell(row)}
                       </>
                     ) : (
                       column.cell(row)
                     )}
-                  </td>
+                  </TableCell>
                 ))}
-              </tr>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

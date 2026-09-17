@@ -1,237 +1,210 @@
 "use client";
 
-import { BadgeCheck, Clock, Cookie, Shield, User, XCircle } from "lucide-react";
+import { CookieIcon, Logout03Icon, MoreHorizontalIcon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { signOutAction } from "@/app/actions";
 import { useConsent } from "@/components/consent/consent-provider";
 import { Avatar } from "@/components/shared/avatar";
-import { Button } from "@/components/shared/button";
-import { IconBadge } from "@/components/shared/icon-badge";
-import { Logo } from "@/components/shared/logo";
+import { Icon } from "@/components/shared/icon";
+import { Logo, LogoMark } from "@/components/shared/logo";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sidebar as UiSidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import { useT } from "@/i18n/provider";
 import type { AuthProfile } from "@/server/auth";
 import { cn } from "@/lib/classnames";
 
-import { useAttentionRefresh } from "@/hooks/use-realtime-badge";
-import type { AttentionCounts } from "@/server/dashboard-data";
-import type { NavSection } from "./nav-items";
+import { ProfileBadges } from "./account-panel";
+import { badgeFor, formatBadge, isNavActive, type NavCounts, type NavSection } from "./nav-items";
 
-function isActive(pathname: string, href: string) {
-  // Exact match for index routes, prefix match for sub-sections.
-  if (href === "/admin" || href === "/client") return pathname === href;
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-// Sidebar badge counts for admin — pending booking requests and pending
-// (email-confirmed) client registrations. The numbers come from the server via
-// `attention` and refresh through revalidatePath() after any admin action, so
-// they update immediately without a manual reload. Realtime is a live-update
-// nudge for changes made by OTHER admins/clients.
-export function Sidebar({
+/**
+ * Desktop navigation (md and up). Collapses to an icon rail with tooltips;
+ * state persists in the `sidebar_state` cookie via SidebarProvider.
+ * On phones the shell renders MobileNav instead; this component's mobile
+ * branch (a Sheet) is never opened.
+ */
+export function AppSidebar({
   sections,
   profile,
-  attention,
-  unreadNotifications,
+  counts,
 }: {
   sections: NavSection[];
   profile: AuthProfile;
-  attention?: AttentionCounts;
-  unreadNotifications?: number;
-}) {
-  const isAdmin = profile.role === "admin";
-
-  return isAdmin ? (
-    <SidebarWithBadges sections={sections} profile={profile} attention={attention} />
-  ) : (
-    <SidebarInner
-      sections={sections}
-      profile={profile}
-      requests={0}
-      approvals={0}
-      unread={unreadNotifications ?? 0}
-    />
-  );
-}
-
-function SidebarWithBadges({
-  sections,
-  profile,
-  attention,
-}: {
-  sections: NavSection[];
-  profile: AuthProfile;
-  attention?: AttentionCounts;
-}) {
-  // Refresh the server components (and thus these counts) when a booking request
-  // or profile changes in the background. The counts themselves are the
-  // server-provided `attention` values.
-  useAttentionRefresh();
-  return (
-    <SidebarInner
-      sections={sections}
-      profile={profile}
-      requests={attention?.requests ?? 0}
-      approvals={attention?.approvals ?? 0}
-      unread={0}
-    />
-  );
-}
-
-function SidebarInner({
-  sections,
-  profile,
-  requests,
-  approvals,
-  unread,
-}: {
-  sections: NavSection[];
-  profile: AuthProfile;
-  requests: number;
-  approvals: number;
-  unread: number;
+  counts: NavCounts;
 }) {
   const pathname = usePathname();
   const t = useT();
-  const { openPreferences } = useConsent();
-
-  function badgeFor(href: string): number {
-    if (href === "/admin/requests") return requests;
-    if (href === "/admin/approvals") return approvals;
-    if (href === "/client/notifications") return unread;
-    return 0;
-  }
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
 
   return (
-    <div className="flex h-full flex-col">
-      <Link href="/dashboard" className="block px-2 py-1">
-        <Logo className="h-8 lg:h-12" priority />
-        <span className="sr-only">Samuelsson Cuts</span>
-      </Link>
-
-      <nav className="mt-6 flex-1 space-y-6 overflow-y-auto">
-        {sections.map((section, index) => (
-          <div key={section.headingKey ?? index}>
-            {section.headingKey ? (
-              <p className="px-3 pb-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-stone-500 dark:text-stone-400">
-                {t.nav[section.headingKey]}
-              </p>
-            ) : null}
-            <div className="space-y-1">
-              {section.items.map((item) => {
-                const active = isActive(pathname, item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white",
-                      active
-                        ? "bg-black text-white shadow-sm dark:bg-white dark:text-black"
-                        : "text-stone-600 hover:bg-stone-100 hover:text-black dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-white",
-                    )}
-                  >
-                    <span className={cn("flex size-5 items-center justify-center [&_svg]:size-4", active ? "" : "text-stone-500 dark:text-stone-400")}>
-                      {item.icon}
-                    </span>
-                    <span className="flex-1">{t.nav[item.key]}</span>
-                    {badgeFor(item.href) > 0 ? (
-                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[0.6rem] font-bold text-white">
-                        {badgeFor(item.href) > 99 ? "99+" : badgeFor(item.href)}
-                      </span>
-                    ) : null}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      <div className="mt-6 border-t border-black/10 pt-4 dark:border-white/10">
-        <div className="flex items-center gap-3">
-          <Avatar name={profile.full_name} src={profile.avatar_url} size="md" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-black dark:text-white">
-              {profile.full_name}
-            </p>
-            <p className="truncate text-xs text-stone-500 dark:text-stone-400">
-              {profile.email}
-            </p>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center gap-2">
-          {profile.role === "admin" ? (
-            <IconBadge
-              tone="info"
-              icon={<ShieldIcon />}
-              label={t.account.roleAdminHint}
-            />
-          ) : (
-            <IconBadge
-              tone="neutral"
-              icon={<UserIcon />}
-              label={t.account.roleClientHint}
-            />
-          )}
-          {profile.approval_status === "approved" ? (
-            <IconBadge
-              tone="success"
-              icon={<VerifiedIcon />}
-              label={t.account.verifiedHint}
-            />
-          ) : profile.approval_status === "rejected" || profile.approval_status === "blocked" ? (
-            <IconBadge
-              tone="danger"
-              icon={<XIcon />}
-              label={profile.approval_status === "blocked" ? t.account.blockedHint : t.account.rejectedHint}
-            />
-          ) : (
-            <IconBadge
-              tone="warning"
-              icon={<ClockIcon />}
-              label={t.account.approvalPendingHint}
-            />
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={openPreferences}
-          className="mt-3 flex min-h-9 w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold text-stone-500 transition hover:bg-stone-100 hover:text-black dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-white"
+    <UiSidebar collapsible="icon" className="border-r-0 [&_[data-slot=sidebar-inner]]:border-r">
+      {/* Same height as the desktop utility header so the two borders line up. */}
+      <SidebarHeader className="h-14 justify-center border-b px-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-0">
+        <Link
+          href="/dashboard"
+          className="flex h-10 items-center rounded-lg px-1 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 group-data-[collapsible=icon]:size-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+          aria-label="Samuelsson Cuts"
         >
-          <Cookie className="size-3.5" aria-hidden />
-          {t.nav.cookiePreferences}
-        </button>
-        <form action={signOutAction} className="mt-3">
-          <Button type="submit" variant="secondary" className="w-full">
-            {t.common.signOut}
-          </Button>
-        </form>
-      </div>
-    </div>
+          {collapsed ? <LogoMark className="size-8" priority /> : <Logo className="h-8" priority />}
+        </Link>
+      </SidebarHeader>
+
+      <SidebarContent>
+        {sections.map((section, index) => (
+          <SidebarGroup key={section.headingKey ?? index}>
+            {section.headingKey ? (
+              <SidebarGroupLabel className="text-[0.7rem] font-semibold tracking-[0.12em] uppercase">
+                {t.nav[section.headingKey]}
+              </SidebarGroupLabel>
+            ) : null}
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-1">
+                {section.items.map((item) => {
+                  const active = isNavActive(pathname, item.href);
+                  const count = badgeFor(item, counts);
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        tooltip={t.nav[item.key]}
+                        className={cn(
+                          // Expanded: 40px rows. Collapsed (icon rail): shadcn's 32px
+                          // square; the label is removed so nothing peeks past the rail.
+                          "relative h-10 rounded-lg px-3 font-medium text-sidebar-foreground/80",
+                          // Icon rail: 40px squares centred in the 4rem rail, label removed.
+                          "group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:[&>span:last-child]:hidden",
+                          "data-active:bg-primary data-active:font-semibold data-active:text-primary-foreground data-active:hover:bg-primary data-active:hover:text-primary-foreground",
+                          "[&_svg]:size-[18px]",
+                        )}
+                      >
+                        <Link href={item.href} aria-current={active ? "page" : undefined}>
+                          <Icon icon={item.icon} strokeWidth={active ? 2 : 1.8} />
+                          {count > 0 ? (
+                            // Icon rail: the numeric badge is hidden by the primitive, so a
+                            // dot on the icon's corner says "something is waiting here".
+                            // Placed before the label so the label stays `span:last-child`.
+                            <span
+                              aria-hidden
+                              className={cn(
+                                "absolute top-1.5 right-1.5 hidden size-2 rounded-full bg-destructive ring-2 group-data-[collapsible=icon]:block",
+                                active ? "ring-primary" : "ring-sidebar",
+                              )}
+                            />
+                          ) : null}
+                          <span>{t.nav[item.key]}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                      {count > 0 ? (
+                        <SidebarMenuBadge
+                          className={cn(
+                            // `top-1/2!` beats the primitive's size-variant offsets so the
+                            // pill is vertically centred in the 40px row.
+                            "top-1/2! right-3 h-5 min-w-5 -translate-y-1/2 rounded-full bg-destructive px-1.5 text-[0.65rem] font-bold",
+                            // The primitive recolours the badge text on button hover/active
+                            // (`peer-hover…:text-sidebar-accent-foreground`); pin ours through
+                            // the same variants so the number stays legible on the red pill.
+                            active
+                              ? "bg-primary-foreground text-primary peer-hover/menu-button:text-primary peer-data-active/menu-button:text-primary"
+                              : "text-white peer-hover/menu-button:text-white",
+                          )}
+                        >
+                          {formatBadge(count)}
+                        </SidebarMenuBadge>
+                      ) : null}
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
+      </SidebarContent>
+
+      <SidebarFooter className="border-t p-2">
+        <AccountMenu profile={profile} collapsed={collapsed} />
+      </SidebarFooter>
+      <SidebarRail />
+    </UiSidebar>
   );
 }
 
-const iconClass = "size-4";
+function AccountMenu({ profile, collapsed }: { profile: AuthProfile; collapsed: boolean }) {
+  const t = useT();
+  const { openPreferences } = useConsent();
 
-function ShieldIcon() {
-  return <Shield className={iconClass} aria-hidden />;
-}
-
-function UserIcon() {
-  return <User className={iconClass} aria-hidden />;
-}
-
-function VerifiedIcon() {
-  return <BadgeCheck className={iconClass} aria-hidden />;
-}
-
-function ClockIcon() {
-  return <Clock className={iconClass} aria-hidden />;
-}
-
-function XIcon() {
-  return <XCircle className={iconClass} aria-hidden />;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={t.nav.accountMenu}
+          className={cn(
+            "flex w-full items-center gap-3 rounded-lg p-2 text-left outline-none transition hover:bg-sidebar-accent focus-visible:ring-3 focus-visible:ring-ring/50 data-[state=open]:bg-sidebar-accent",
+            collapsed && "justify-center p-0",
+          )}
+        >
+          <Avatar name={profile.full_name} src={profile.avatar_url} size={collapsed ? "md" : "sm"} />
+          {collapsed ? null : (
+            <>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-foreground">{profile.full_name}</span>
+                <span className="block truncate text-xs text-muted-foreground">{profile.email}</span>
+              </span>
+              <Icon icon={MoreHorizontalIcon} className="text-muted-foreground" />
+            </>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-64">
+        <DropdownMenuLabel className="flex items-center gap-3 py-2">
+          <Avatar name={profile.full_name} src={profile.avatar_url} size="md" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold text-foreground">{profile.full_name}</span>
+            <span className="block truncate text-xs font-normal text-muted-foreground">{profile.email}</span>
+          </span>
+        </DropdownMenuLabel>
+        <div className="px-2 pb-2">
+          <ProfileBadges profile={profile} />
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={openPreferences}>
+          <Icon icon={CookieIcon} />
+          {t.nav.cookiePreferences}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <form action={signOutAction}>
+          <DropdownMenuItem asChild>
+            <button type="submit" className="w-full">
+              <Icon icon={Logout03Icon} />
+              {t.common.signOut}
+            </button>
+          </DropdownMenuItem>
+        </form>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }

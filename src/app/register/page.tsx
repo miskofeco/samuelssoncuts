@@ -50,7 +50,7 @@ export default async function RegisterPage({
           hint={t.auth.passwordHint}
           placeholder={t.auth.passwordPlaceholder}
         />
-        <SubmitButton className="w-full" pendingLabel={t.common.sending}>
+        <SubmitButton size="lg" className="w-full" pendingLabel={t.common.sending}>
           {t.auth.createAccount}
         </SubmitButton>
       </form>

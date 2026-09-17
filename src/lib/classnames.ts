@@ -1,11 +1,7 @@
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
 /**
- * Merge class names. `clsx` handles conditionals/arrays and `tailwind-merge`
- * resolves conflicting Tailwind utilities (the last one wins), so callers can
- * safely override primitive defaults via `className`.
+ * Merge class names. Re-exports shadcn's compiled `cn` (clsx + tailwind-merge
+ * semantics: conditionals/arrays are flattened and conflicting Tailwind
+ * utilities resolve last-wins), so callers can safely override primitive
+ * defaults via `className`. `@/lib/utils` is the shadcn alias for the same.
  */
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+export { cn } from "cn";

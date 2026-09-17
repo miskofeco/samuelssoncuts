@@ -4,17 +4,15 @@ import { initials } from "@/lib/initials";
 import { cn } from "@/lib/classnames";
 
 const sizes = {
-  sm: "h-8 w-8 text-[0.7rem]",
-  md: "h-10 w-10 text-xs",
-  lg: "h-12 w-12 text-sm",
+  xs: "size-6 text-[0.6rem]",
+  sm: "size-8 text-[0.7rem]",
+  md: "size-10 text-xs",
+  lg: "size-12 text-sm",
+  xl: "size-16 text-lg",
 };
 
 // Pixel dimensions matching the size classes above — needed for next/image.
-const pixels = {
-  sm: 32,
-  md: 40,
-  lg: 48,
-};
+const pixels = { xs: 24, sm: 32, md: 40, lg: 48, xl: 64 };
 
 export function Avatar({
   name,
@@ -39,7 +37,7 @@ export function Avatar({
         width={px}
         height={px}
         className={cn(
-          "shrink-0 rounded-full object-cover",
+          "shrink-0 rounded-full object-cover ring-1 ring-foreground/10",
           sizes[size],
           className,
         )}
@@ -50,11 +48,9 @@ export function Avatar({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full font-bold",
+        "inline-flex shrink-0 items-center justify-center rounded-full font-bold select-none",
         sizes[size],
-        tone === "dark"
-          ? "bg-black text-white dark:bg-white dark:text-black"
-          : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
+        tone === "dark" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
         className,
       )}
       aria-hidden

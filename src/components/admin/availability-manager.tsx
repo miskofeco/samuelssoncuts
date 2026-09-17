@@ -1,5 +1,6 @@
 "use client";
 
+import { CalendarCheckIn01Icon, CalendarRemove01Icon, UnavailableIcon } from "@hugeicons/core-free-icons";
 import { useState, useTransition } from "react";
 
 import { blockDateAction, unblockDateAction } from "@/app/actions";
@@ -8,6 +9,7 @@ import { Card, SectionHeader } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
 import { Field } from "@/components/shared/form";
+import { Icon } from "@/components/shared/icon";
 import { MonthCalendar } from "@/components/shared/month-calendar";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
@@ -15,7 +17,6 @@ import { addDays, formatFullDay } from "@/domain/schedule";
 import type { ActionResult } from "@/domain/types";
 import { localeFor } from "@/i18n/config";
 import { useLang, useT } from "@/i18n/provider";
-import { cn } from "@/lib/classnames";
 
 type BlockedRange = { id: string; start: string; end: string; reason: string | null };
 
@@ -64,84 +65,16 @@ export function AvailabilityManager({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
-      <Card className="rounded-2xl p-5">
-        <SectionHeader eyebrow={t.admin.vacation} title={t.admin.blockDates} />
-        <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-          {t.admin.blockDatesDescription}
-        </p>
-
-        <form className="mt-4" onSubmit={block}>
-        <SegmentedControl
-          ariaLabel={t.admin.availabilityMode}
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: "days", label: t.admin.availabilityDays },
-            { value: "slice", label: t.admin.availabilityTimeSlice },
-          ]}
-          size="sm"
-          className="max-w-sm"
-        />
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Field
-            type="date"
-            label={t.admin.from}
-            value={start}
-            min={addDays(0)}
-            onChange={(event) => {
-              setStart(event.target.value);
-              if (event.target.value > end) setEnd(event.target.value);
-            }}
-          />
-          {sliceMode ? (
-            <div className="grid grid-cols-2 gap-3">
-              <Field
-                type="time"
-                label={t.admin.startTime}
-                value={startTime}
-                step={1800}
-                onChange={(event) => setStartTime(event.target.value)}
-              />
-              <Field
-                type="time"
-                label={t.admin.endTime}
-                value={endTime}
-                step={1800}
-                onChange={(event) => setEndTime(event.target.value)}
-              />
-            </div>
-          ) : (
-            <Field
-              type="date"
-              label={t.admin.to}
-              value={end}
-              min={start}
-              onChange={(event) => setEnd(event.target.value)}
-            />
-          )}
-        </div>
-        {invalidRange ? (
-          <p className="mt-2 text-xs font-medium text-red-700 dark:text-red-300">
-            {t.admin.availabilityInvalidRange}
-          </p>
-        ) : null}
-        <Field
-          label={`${t.admin.reason} ${t.common.optional}`}
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-          placeholder={t.admin.reasonPlaceholder}
-          className="mt-3"
+    <div className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.6fr)]">
+      <Card className="rounded-2xl">
+        <SectionHeader
+          eyebrow={t.admin.vacation}
+          title={t.admin.blockDates}
+          description={t.admin.blockDatesDescription}
         />
 
-        <Feedback result={feedback} className="mt-3" />
-
-        <Button type="submit" disabled={pending || invalidRange} className="mt-3">
-          {pending ? t.common.saving : sliceMode ? t.admin.blockThisSlot : t.admin.blockTheseDates}
-        </Button>
-        </form>
-
-        <div className="mt-6">
+        {/* Pick a day on the calendar first, then fine-tune the range below. */}
+        <div className="mt-4">
           <MonthCalendar
             isDisabled={(cell) => cell.date < today}
             isSelected={(cell) => cell.date === start}
@@ -176,47 +109,136 @@ export function AvailabilityManager({
             }
           />
         </div>
+
+        <form className="mt-5 space-y-4 border-t pt-5" onSubmit={block}>
+          <SegmentedControl
+            ariaLabel={t.admin.availabilityMode}
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: "days", label: t.admin.availabilityDays },
+              { value: "slice", label: t.admin.availabilityTimeSlice },
+            ]}
+            className="sm:max-w-sm"
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field
+              type="date"
+              label={t.admin.from}
+              value={start}
+              min={addDays(0)}
+              onChange={(event) => {
+                setStart(event.target.value);
+                if (event.target.value > end) setEnd(event.target.value);
+              }}
+            />
+            {sliceMode ? (
+              <div className="grid grid-cols-2 gap-3">
+                <Field
+                  type="time"
+                  label={t.admin.startTime}
+                  value={startTime}
+                  step={1800}
+                  onChange={(event) => setStartTime(event.target.value)}
+                />
+                <Field
+                  type="time"
+                  label={t.admin.endTime}
+                  value={endTime}
+                  step={1800}
+                  onChange={(event) => setEndTime(event.target.value)}
+                  error={invalidRange ? t.admin.availabilityInvalidRange : undefined}
+                />
+              </div>
+            ) : (
+              <Field
+                type="date"
+                label={t.admin.to}
+                value={end}
+                min={start}
+                onChange={(event) => setEnd(event.target.value)}
+                error={invalidRange ? t.admin.availabilityInvalidRange : undefined}
+              />
+            )}
+          </div>
+          <Field
+            label={`${t.admin.reason} ${t.common.optional}`}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder={t.admin.reasonPlaceholder}
+          />
+
+          <Feedback result={feedback} />
+
+          <Button
+            type="submit"
+            size="lg"
+            variant="destructive"
+            disabled={invalidRange}
+            loading={pending}
+            className="w-full sm:w-auto"
+          >
+            {pending ? (
+              t.common.saving
+            ) : (
+              <>
+                <Icon icon={UnavailableIcon} strokeWidth={2} />
+                {sliceMode ? t.admin.blockThisSlot : t.admin.blockTheseDates}
+              </>
+            )}
+          </Button>
+        </form>
       </Card>
 
-      <Card className="rounded-2xl p-5">
+      <Card className="rounded-2xl">
         <SectionHeader
           title={t.admin.blockedPeriods}
-          action={<StatusPill tone={ranges.length > 0 ? "danger" : "success"}>{ranges.length}</StatusPill>}
+          action={
+            <StatusPill tone={ranges.length > 0 ? "danger" : "success"} dot>
+              {ranges.length}
+            </StatusPill>
+          }
         />
         <div className="mt-4 space-y-2">
           {ranges.length === 0 ? (
-            <EmptyState title={t.admin.noBlockedDates} description={t.admin.noBlockedDescription} />
+            <EmptyState
+              title={t.admin.noBlockedDates}
+              description={t.admin.noBlockedDescription}
+              icon={<Icon icon={CalendarCheckIn01Icon} />}
+            />
           ) : (
-            ranges.map((range) => (
-              <div
-                key={range.id}
-                className={cn(
-                  "flex items-center justify-between gap-3 rounded-xl border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-stone-900",
-                )}
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-black dark:text-white">
-                    {range.start === range.end
-                      ? formatFullDay(range.start, locale)
-                      : `${formatFullDay(range.start, locale)} → ${formatFullDay(range.end, locale)}`}
-                  </p>
-                  {range.reason ? (
-                    <p className="truncate text-xs text-stone-500 dark:text-stone-400">
-                      {range.reason}
-                    </p>
-                  ) : null}
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={pending}
-                  onClick={() => unblock(range.id)}
-                  className="shrink-0 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+            <ul className="space-y-2">
+              {ranges.map((range) => (
+                <li
+                  key={range.id}
+                  className="flex items-center gap-3 rounded-xl bg-card p-3 ring-1 ring-foreground/10"
                 >
-                  {t.admin.reopen}
-                </Button>
-              </div>
-            ))
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+                    <Icon icon={CalendarRemove01Icon} className="size-[18px]" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      {range.start === range.end
+                        ? formatFullDay(range.start, locale)
+                        : `${formatFullDay(range.start, locale)} → ${formatFullDay(range.end, locale)}`}
+                    </p>
+                    {range.reason ? (
+                      <p className="truncate text-xs text-muted-foreground">{range.reason}</p>
+                    ) : null}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={pending}
+                    onClick={() => unblock(range.id)}
+                    className="h-9 shrink-0"
+                  >
+                    {t.admin.reopen}
+                  </Button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </Card>

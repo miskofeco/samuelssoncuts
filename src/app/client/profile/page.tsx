@@ -18,7 +18,7 @@ export default async function ClientProfilePage() {
         title={t.client.profileTitle}
         description={t.client.profileDescription}
       />
-      <div className="max-w-xl space-y-6">
+      <div className="max-w-2xl space-y-4 sm:space-y-6">
         <ProfileForm
           fullName={profile.full_name}
           phone={profile.phone ?? ""}

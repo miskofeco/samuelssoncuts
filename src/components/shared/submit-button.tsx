@@ -3,7 +3,7 @@
 import { useFormStatus } from "react-dom";
 import type { ReactNode } from "react";
 
-import { Button } from "@/components/shared/button";
+import { Button, type ButtonSize, type ButtonVariant } from "@/components/shared/button";
 
 // A submit button for plain server-action <form action={...}> flows. It reads
 // the parent form's pending state via useFormStatus and disables itself while
@@ -13,14 +13,18 @@ export function SubmitButton({
   children,
   pendingLabel,
   className,
+  variant,
+  size = "lg",
 }: {
   children: ReactNode;
   pendingLabel?: ReactNode;
   className?: string;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
 }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" className={className} disabled={pending} aria-busy={pending}>
+    <Button type="submit" variant={variant} size={size} className={className} loading={pending}>
       {pending && pendingLabel ? pendingLabel : children}
     </Button>
   );

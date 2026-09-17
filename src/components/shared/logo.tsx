@@ -34,3 +34,30 @@ export function Logo({
     </>
   );
 }
+
+// Square "S" mark for compact spots (collapsed sidebar rail). Black mark in
+// light mode, white mark in dark mode.
+const MARK = { width: 300, height: 300 };
+
+export function LogoMark({ className, priority = false }: { className?: string; priority?: boolean }) {
+  return (
+    <>
+      <Image
+        src="/icon-light.png"
+        alt="Samuelsson Cuts"
+        width={MARK.width}
+        height={MARK.height}
+        priority={priority}
+        className={cn("size-8 dark:hidden", className)}
+      />
+      <Image
+        src="/icon-dark.png"
+        alt="Samuelsson Cuts"
+        width={MARK.width}
+        height={MARK.height}
+        priority={priority}
+        className={cn("hidden size-8 dark:block", className)}
+      />
+    </>
+  );
+}

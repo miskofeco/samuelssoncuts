@@ -1,7 +1,7 @@
 @AGENTS.md
 
-## Mobile Sidebar / Realtime Channels
+## Navigation / Realtime Channels
 
-The desktop sidebar remains mounted on mobile and the mobile drawer mounts a second sidebar when opened. Sidebar-mounted hooks can run twice concurrently.
+Desktop sidebar and phone navigation both stay mounted. Never call `useAttentionRefresh` from navigation components; it is mounted once by `src/components/layout/attention-refresh.tsx` in `AppShell`.
 
-Never use a static Supabase realtime channel name from those hooks. Keep `useAttentionRefresh` on a per-mount stable channel name, not `supabase.channel("admin-attention")`, or the mobile drawer can crash into the route error page.
+Never use a static Supabase realtime channel name from that hook. Keep `useAttentionRefresh` on a per-mount stable channel name, not `supabase.channel("admin-attention")`.

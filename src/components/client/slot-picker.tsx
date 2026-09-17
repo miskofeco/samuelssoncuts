@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Calendar03Icon, Clock01Icon, InformationCircleIcon } from "@hugeicons/core-free-icons";
+import { useMemo, useSyncExternalStore } from "react";
+import type { ReactNode } from "react";
 
+import { Icon } from "@/components/shared/icon";
 import { MonthCalendar } from "@/components/shared/month-calendar";
 import {
   clientSlotsForService,
@@ -43,6 +46,56 @@ function apptDuration(appt: Appointment, services: Service[]): number {
   return serviceById(appt.serviceId, services).duration;
 }
 
+// The browser time zone is an external, never-changing value: read it through
+// useSyncExternalStore so the server render (null) and the hydrated client
+// render stay consistent without a setState-in-effect.
+function subscribeNoop() {
+  return () => {};
+}
+function readBrowserTimeZone(): string | null {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+}
+function readServerTimeZone(): string | null {
+  return null;
+}
+
+/** Numbered step marker used by the booking stepper (optional). */
+export function StepBadge({ step, className }: { step: number; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground tabular-nums",
+        className,
+      )}
+    >
+      {step}
+    </span>
+  );
+}
+
+function PanelTitle({
+  step,
+  icon,
+  children,
+  trailing,
+}: {
+  step?: number;
+  icon: typeof Calendar03Icon;
+  children: ReactNode;
+  trailing?: ReactNode;
+}) {
+  return (
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
+        {step ? <StepBadge step={step} /> : <Icon icon={icon} className="size-[18px] text-muted-foreground" />}
+        <span className="truncate">{children}</span>
+      </p>
+      {trailing ? <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{trailing}</span> : null}
+    </div>
+  );
+}
+
 export function SlotPicker({
   service,
   services,
@@ -55,6 +108,7 @@ export function SlotPicker({
   pendingRequests,
   blockedDates,
   businessHours,
+  steps,
 }: {
   service: Service;
   services: Service[];
@@ -67,17 +121,15 @@ export function SlotPicker({
   pendingRequests: BookingRequest[];
   blockedDates: ReadonlySet<string>;
   businessHours: BusinessHoursDay[];
+  /** Step numbers to show next to the date/time panel titles (booking stepper). */
+  steps?: { date: number; time: number };
 }) {
   const t = useT();
   const locale = localeFor(useLang());
   const today = todayIso();
   const latestDate = latestClientBookingDate();
   const shopTimeZone = process.env.NEXT_PUBLIC_SHOP_TIME_ZONE ?? "Europe/Bratislava";
-  const [browserTimeZone, setBrowserTimeZone] = useState<string | null>(null);
-
-  useEffect(() => {
-    setBrowserTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone ?? null);
-  }, []);
+  const browserTimeZone = useSyncExternalStore(subscribeNoop, readBrowserTimeZone, readServerTimeZone);
 
   const formattedLatestDate = new Intl.DateTimeFormat(locale, {
     day: "numeric",
@@ -138,9 +190,9 @@ export function SlotPicker({
     <div className="grid gap-6 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       {/* Date */}
       <div className="px-4 sm:rounded-xl sm:border sm:border-black/10 sm:p-3 sm:dark:border-white/10">
-        <p className="mb-2 text-sm font-semibold text-black dark:text-white">
+        <PanelTitle step={steps?.date} icon={Calendar03Icon}>
           {t.client.pickDate}
-        </p>
+        </PanelTitle>
         <MonthCalendar
           minMonth={monthKey(today)}
           maxMonth={monthKey(latestDate)}
@@ -190,31 +242,29 @@ export function SlotPicker({
             ) : null;
           }}
         />
-        <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-          {t.client.bookingsOpenUntil(formattedLatestDate)}
+        <p className="mt-3 flex items-start gap-1.5 text-xs text-muted-foreground">
+          <Icon icon={InformationCircleIcon} className="mt-px size-3.5" />
+          <span>{t.client.bookingsOpenUntil(formattedLatestDate)}</span>
         </p>
       </div>
 
       {/* Times */}
       <div className="px-4 sm:rounded-xl sm:border sm:border-black/10 sm:p-3 sm:dark:border-white/10">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-semibold text-black dark:text-white">{t.client.pickTime}</p>
-          <span className="text-xs text-stone-500 dark:text-stone-400">
-            {service.duration} min · {service.price} €
-          </span>
-        </div>
+        <PanelTitle
+          step={steps?.time}
+          icon={Clock01Icon}
+          trailing={`${service.duration} min · ${service.price} €`}
+        >
+          {t.client.pickTime}
+        </PanelTitle>
 
         {!date ? (
-          <p className="py-8 text-center text-sm text-stone-500 dark:text-stone-400">
-            {t.client.chooseDateFirst}
-          </p>
+          <SlotPlaceholder>{t.client.chooseDateFirst}</SlotPlaceholder>
         ) : slots.length === 0 ? (
-          <p className="py-8 text-center text-sm text-stone-500 dark:text-stone-400">
-            {t.client.noSlotsThatDay}
-          </p>
+          <SlotPlaceholder>{t.client.noSlotsThatDay}</SlotPlaceholder>
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
               {slots.map((slot) => {
                 const active = slot.time === selectedTime;
                 const basePriceSlot = slot.preferred && slot.priceKind === "base";
@@ -239,18 +289,18 @@ export function SlotPicker({
                     }
                     title={slot.status === "requested" ? t.client.requestedHint : undefined}
                     className={cn(
-                      "flex min-h-12 flex-col items-center justify-center rounded-lg border px-1 py-1.5 text-center transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-1 dark:focus-visible:ring-white",
+                      "flex min-h-14 flex-col items-center justify-center rounded-lg border px-1 py-1.5 text-center transition outline-none active:scale-[0.97] focus-visible:ring-3 focus-visible:ring-ring/50",
                       active
                         ? basePriceSlot
                           ? "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-400 dark:bg-emerald-500 dark:text-white"
                           : vipPriceSlot
                             ? "border-sky-600 bg-sky-600 text-white dark:border-sky-400 dark:bg-sky-500 dark:text-white"
-                          : "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
+                          : "border-primary bg-primary text-primary-foreground"
                         : basePriceSlot
                           ? "border-emerald-500 bg-emerald-50 text-emerald-950 hover:border-emerald-600 hover:bg-emerald-100 dark:border-emerald-500/70 dark:bg-emerald-500/10 dark:text-emerald-100 dark:hover:border-emerald-400 dark:hover:bg-emerald-500/15"
                           : vipPriceSlot
                             ? "border-sky-500 bg-sky-50 text-sky-950 hover:border-sky-600 hover:bg-sky-100 dark:border-sky-400/70 dark:bg-sky-500/10 dark:text-sky-100 dark:hover:border-sky-300 dark:hover:bg-sky-500/15"
-                          : "border-black/10 bg-white hover:border-black dark:border-white/10 dark:bg-stone-900 dark:hover:border-white",
+                          : "bg-card text-foreground hover:border-foreground",
                     )}
                   >
                     <span className="text-sm font-semibold tabular-nums">{slot.time}</span>
@@ -261,7 +311,7 @@ export function SlotPicker({
                           ? "opacity-90"
                           : vipPriceSlot
                             ? "rounded-full bg-sky-100 px-1.5 py-0.5 text-sky-800 dark:bg-sky-400/20 dark:text-sky-200"
-                            : "text-stone-500 dark:text-stone-400",
+                            : "text-muted-foreground",
                       )}
                     >
                       {slot.priceKind === "base"
@@ -273,7 +323,7 @@ export function SlotPicker({
                     {slot.status === "requested" ? (
                       <span
                         className={cn(
-                          "mt-0.5 rounded px-1 text-xs font-semibold uppercase tracking-wide",
+                          "mt-0.5 rounded px-1 text-[0.65rem] font-semibold tracking-wide uppercase",
                           active
                             ? "bg-white/20"
                             : "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
@@ -288,30 +338,42 @@ export function SlotPicker({
             </div>
 
             {/* Legend */}
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
-              <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" /> {t.client.bestPrice}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full border border-stone-500 bg-white dark:bg-stone-900" />{" "}
+            <ul className="mt-3 flex flex-wrap gap-1.5 text-xs text-muted-foreground" aria-label={t.client.priceLabel}>
+              <LegendChip dotClass="bg-emerald-500">{t.client.bestPrice}</LegendChip>
+              <LegendChip dotClass="border border-muted-foreground bg-card">
                 {t.client.extraPrice(pricingSettings.gapSurchargePercent)}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-sky-500" />{" "}
+              </LegendChip>
+              <LegendChip dotClass="bg-sky-500">
                 {t.client.vipPrice(pricingSettings.vipSurchargePercent)}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-amber-300" /> {t.client.requestedBadge}
-              </span>
-            </div>
+              </LegendChip>
+              <LegendChip dotClass="bg-amber-400">{t.client.requestedBadge}</LegendChip>
+            </ul>
           </>
         )}
         {browserTimeZone && browserTimeZone !== shopTimeZone ? (
-          <p className="mt-3 text-xs text-stone-500 dark:text-stone-400">
-            {t.client.shopTimeZoneHint(shopTimeZone)}
+          <p className="mt-3 flex items-start gap-1.5 text-xs text-muted-foreground">
+            <Icon icon={InformationCircleIcon} className="mt-px size-3.5" />
+            <span>{t.client.shopTimeZoneHint(shopTimeZone)}</span>
           </p>
         ) : null}
       </div>
     </div>
+  );
+}
+
+function SlotPlaceholder({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
+      {children}
+    </div>
+  );
+}
+
+function LegendChip({ dotClass, children }: { dotClass: string; children: ReactNode }) {
+  return (
+    <li className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-1 font-medium">
+      <span aria-hidden className={cn("size-2 rounded-full", dotClass)} />
+      {children}
+    </li>
   );
 }

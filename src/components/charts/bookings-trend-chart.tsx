@@ -10,16 +10,19 @@ import {
   YAxis,
 } from "recharts";
 
+import { chartTooltipStyle } from "./chart-theme";
+
+// Monochrome area chart: the stroke/fill follow `currentColor` so the parent
+// ChartCard's `text-foreground` drives both themes.
 export function BookingsTrendChart({
   data,
 }: {
   data: { label: string; bookings: number }[];
 }) {
   const accent = "currentColor";
-  const grid = "#e7e5e4";
 
   return (
-    <div className="h-full text-stone-950 dark:text-white">
+    <div className="h-full text-foreground">
       <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 600, height: 256 }}>
         <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <defs>
@@ -28,19 +31,21 @@ export function BookingsTrendChart({
               <stop offset="100%" stopColor={accent} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke={grid} strokeOpacity={0.8} vertical={false} />
-          <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#78716c" }} />
-          <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} tick={{ fontSize: 12, fill: "#78716c" }} />
-          <Tooltip
-            cursor={{ stroke: accent, strokeOpacity: 0.2 }}
-            contentStyle={{
-              borderRadius: 8,
-              border: "1px solid rgba(120,120,120,0.2)",
-              background: "var(--surface)",
-              color: "var(--foreground)",
-              fontSize: 12,
-            }}
+          <CartesianGrid stroke="var(--border)" vertical={false} />
+          <XAxis
+            dataKey="label"
+            tickLine={false}
+            axisLine={false}
+            tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
           />
+          <YAxis
+            allowDecimals={false}
+            tickLine={false}
+            axisLine={false}
+            width={28}
+            tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+          />
+          <Tooltip cursor={{ stroke: accent, strokeOpacity: 0.2 }} contentStyle={chartTooltipStyle} />
           <Area
             type="monotone"
             dataKey="bookings"

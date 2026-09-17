@@ -9,6 +9,11 @@ export type MetricBarChartItem = {
   ariaLabel: string;
 };
 
+/**
+ * Column chart drawn with plain divs: a y-axis of scale ticks on the left, one
+ * progress-style column per item, and value/label captions underneath. Fills
+ * follow `currentColor` so the parent controls the monochrome accent.
+ */
 export function MetricBarChart({
   items,
   className,
@@ -23,18 +28,18 @@ export function MetricBarChart({
   return (
     <div
       className={cn(
-        "grid h-full grid-cols-[2rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 text-stone-950 sm:gap-x-4 dark:text-white",
+        "grid h-full grid-cols-[2rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 text-foreground sm:gap-x-4",
         className,
       )}
     >
-      <div className="col-start-1 row-start-1 flex h-full flex-col justify-between pt-1 text-sm font-medium tabular-nums text-stone-700 dark:text-stone-300">
+      <div className="col-start-1 row-start-1 flex h-full flex-col justify-between pt-1 text-xs font-medium text-muted-foreground tabular-nums sm:text-sm">
         {scale.map((tick) => (
           <span key={tick}>{tick}</span>
         ))}
       </div>
 
       <div
-        className="col-start-2 row-start-1 grid min-h-0 min-w-0 gap-3 sm:gap-4"
+        className="col-start-2 row-start-1 grid min-h-0 min-w-0 gap-2 sm:gap-4"
         style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
       >
         {items.map((item) => {
@@ -44,12 +49,12 @@ export function MetricBarChart({
           return (
             <div
               key={item.key}
-              className="relative min-h-0 min-w-0 overflow-hidden rounded-lg bg-[#f1f2f5] dark:bg-stone-800"
+              className="relative min-h-0 min-w-0 overflow-hidden rounded-lg bg-[#f1f2f5] dark:bg-muted"
               role="img"
               aria-label={item.ariaLabel}
             >
               <div
-                className="absolute bottom-0 left-0 right-0 rounded-lg bg-current"
+                className="absolute bottom-0 left-0 right-0 rounded-lg bg-current transition-[height] duration-300"
                 style={{
                   height: `${height}%`,
                 }}
@@ -60,15 +65,15 @@ export function MetricBarChart({
       </div>
 
       <div
-        className="col-start-2 row-start-2 grid min-w-0 gap-3 sm:gap-4"
+        className="col-start-2 row-start-2 grid min-w-0 gap-2 sm:gap-4"
         style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
       >
         {items.map((item) => (
           <div key={item.key} className="min-w-0 text-center">
-            <p className="truncate text-lg font-medium tabular-nums text-stone-900 dark:text-stone-100 sm:text-2xl">
+            <p className="truncate text-base font-semibold text-foreground tabular-nums sm:text-xl">
               {item.valueLabel}
             </p>
-            <p className="mt-1 truncate text-sm font-medium text-stone-400 dark:text-stone-500 sm:text-base">
+            <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground sm:text-sm">
               {item.label}
             </p>
           </div>
