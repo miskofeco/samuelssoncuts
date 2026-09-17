@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { MonthCalendar } from "@/components/shared/month-calendar";
 import {
@@ -12,6 +12,7 @@ import {
   isPreferredClientStart,
   latestClientBookingDate,
   minutesOf,
+  monthKey,
   priceKindForSlot,
   priceForSlot,
   serviceById,
@@ -25,7 +26,8 @@ import type {
   PricingSettings,
   Service,
 } from "@/domain/types";
-import { useT } from "@/i18n/provider";
+import { localeFor } from "@/i18n/config";
+import { useLang, useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
 import { zonedDateTimeToUtcIso } from "@/lib/time-zone";
 
@@ -67,8 +69,21 @@ export function SlotPicker({
   businessHours: BusinessHoursDay[];
 }) {
   const t = useT();
+  const locale = localeFor(useLang());
   const today = todayIso();
   const latestDate = latestClientBookingDate();
+  const shopTimeZone = process.env.NEXT_PUBLIC_SHOP_TIME_ZONE ?? "Europe/Bratislava";
+  const [browserTimeZone, setBrowserTimeZone] = useState<string | null>(null);
+
+  useEffect(() => {
+    setBrowserTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone ?? null);
+  }, []);
+
+  const formattedLatestDate = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${latestDate}T12:00:00`));
 
   // Confirmed appointments shaped for the slot helpers (with resolved duration).
   const confirmed = useMemo(
@@ -127,17 +142,15 @@ export function SlotPicker({
           {t.client.pickDate}
         </p>
         <MonthCalendar
-          onDayClick={(cell) => {
-            const closedForBusinessHours = isDateClosedForBusinessHours(cell.date, businessHours);
-            if (
-              !isDateInClientBookingWindow(cell.date) ||
-              cell.date < today ||
-              cell.date > latestDate ||
-              blockedDates.has(cell.date) ||
-              closedForBusinessHours
-            ) return;
-            onDateChange(cell.date);
-          }}
+          minMonth={monthKey(today)}
+          maxMonth={monthKey(latestDate)}
+          isDisabled={(cell) =>
+            !isDateInClientBookingWindow(cell.date) ||
+            blockedDates.has(cell.date) ||
+            isDateClosedForBusinessHours(cell.date, businessHours)
+          }
+          isSelected={(cell) => cell.date === date}
+          onDayClick={(cell) => onDateChange(cell.date)}
           dayClassName={(cell) => {
             const closedForBusinessHours = isDateClosedForBusinessHours(cell.date, businessHours);
             const outOfWindow =
@@ -177,6 +190,9 @@ export function SlotPicker({
             ) : null;
           }}
         />
+        <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+          {t.client.bookingsOpenUntil(formattedLatestDate)}
+        </p>
       </div>
 
       {/* Times */}
@@ -223,7 +239,7 @@ export function SlotPicker({
                     }
                     title={slot.status === "requested" ? t.client.requestedHint : undefined}
                     className={cn(
-                      "flex flex-col items-center rounded-lg border px-1 py-1.5 text-center transition",
+                      "flex min-h-12 flex-col items-center justify-center rounded-lg border px-1 py-1.5 text-center transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-1 dark:focus-visible:ring-white",
                       active
                         ? basePriceSlot
                           ? "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-400 dark:bg-emerald-500 dark:text-white"
@@ -240,7 +256,7 @@ export function SlotPicker({
                     <span className="text-sm font-semibold tabular-nums">{slot.time}</span>
                     <span
                       className={cn(
-                        "mt-0.5 text-[0.6rem] font-medium",
+                        "mt-0.5 text-xs font-medium",
                         active
                           ? "opacity-90"
                           : vipPriceSlot
@@ -257,7 +273,7 @@ export function SlotPicker({
                     {slot.status === "requested" ? (
                       <span
                         className={cn(
-                          "mt-0.5 rounded px-1 text-[0.55rem] font-semibold uppercase tracking-wide",
+                          "mt-0.5 rounded px-1 text-xs font-semibold uppercase tracking-wide",
                           active
                             ? "bg-white/20"
                             : "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
@@ -272,12 +288,12 @@ export function SlotPicker({
             </div>
 
             {/* Legend */}
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[0.7rem] text-stone-500 dark:text-stone-400">
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
               <span className="inline-flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" /> {t.client.bestPrice}
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />{" "}
+                <span className="h-2 w-2 rounded-full border border-stone-500 bg-white dark:bg-stone-900" />{" "}
                 {t.client.extraPrice(pricingSettings.gapSurchargePercent)}
               </span>
               <span className="inline-flex items-center gap-1">
@@ -290,6 +306,11 @@ export function SlotPicker({
             </div>
           </>
         )}
+        {browserTimeZone && browserTimeZone !== shopTimeZone ? (
+          <p className="mt-3 text-xs text-stone-500 dark:text-stone-400">
+            {t.client.shopTimeZoneHint(shopTimeZone)}
+          </p>
+        ) : null}
       </div>
     </div>
   );

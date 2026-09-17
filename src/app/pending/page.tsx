@@ -5,6 +5,7 @@ import { LanguageToggle } from "@/components/shared/language-toggle";
 import { StatusPill } from "@/components/shared/status-pill";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { getDict } from "@/i18n/server";
+import { getShopPhone } from "@/lib/env";
 import { requireProfile } from "@/server/auth";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export default async function PendingPage() {
   const profile = await requireProfile();
   const t = await getDict();
   const rejected = profile.approval_status === "rejected";
+  const phone = getShopPhone();
   const statusLabel =
     profile.approval_status === "approved"
       ? t.statuses.approved
@@ -41,6 +43,17 @@ export default async function PendingPage() {
             ? t.pending.rejected(profile.full_name)
             : t.pending.waiting(profile.full_name)}
         </p>
+        {phone ? (
+          <p className="mt-4 text-sm text-stone-600 dark:text-stone-300">
+            {t.pending.contactShop}: {" "}
+            <a
+              href={`tel:${phone.replace(/\s/g, "")}`}
+              className="font-semibold text-black underline underline-offset-4 dark:text-white"
+            >
+              {phone}
+            </a>
+          </p>
+        ) : null}
         <form action={signOutAction} className="mt-5">
           <Button type="submit" variant="secondary">
             {t.common.signOut}

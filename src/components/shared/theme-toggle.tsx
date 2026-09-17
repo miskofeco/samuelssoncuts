@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
+import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
 
 type Theme = "light" | "dark";
@@ -22,6 +23,7 @@ function getSnapshot(): Theme {
 }
 
 export function ThemeToggle({ className }: { className?: string }) {
+  const t = useT();
   // Server renders "light"; the class is reconciled on the client after mount.
   const theme = useSyncExternalStore(subscribe, getSnapshot, () => "light" as Theme);
   const isDark = theme === "dark";
@@ -40,8 +42,8 @@ export function ThemeToggle({ className }: { className?: string }) {
     <button
       type="button"
       onClick={toggle}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      title={isDark ? "Light mode" : "Dark mode"}
+      aria-label={isDark ? t.theme.switchToLight : t.theme.switchToDark}
+      title={isDark ? t.theme.light : t.theme.dark}
       className={cn(
         "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-black/10 bg-white text-stone-600 transition hover:bg-stone-100 dark:border-white/10 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800",
         className,

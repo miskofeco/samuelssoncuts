@@ -47,7 +47,7 @@ test("sidebar badge counts are computed server-side and refresh via revalidatePa
 
 test("service image upload failure keeps the modal open and surfaces the error", () => {
   const saveBody = serviceManager.slice(
-    serviceManager.indexOf("async function save()"),
+    serviceManager.indexOf("async function save("),
     serviceManager.indexOf("function toggle("),
   );
   assert.match(saveBody, /setUploadFeedback\(uploadResult\)/);
@@ -88,9 +88,11 @@ test("oauth callback handles provider errors and failed code exchange", () => {
   assert.match(authCallback, /\/login\?error=/);
 });
 
-test("approval queue disables all row actions during any pending transition", () => {
-  assert.match(approvalQueue, /if \(pendingTransition\) return/);
-  assert.match(approvalQueue, /disabled=\{pendingTransition\}/);
+test("approval queue confirms rejection and only disables the active row", () => {
+  assert.match(approvalQueue, /busyIds\.has\(client\.id\)/);
+  assert.match(approvalQueue, /disabled=\{busy\}/);
+  assert.match(approvalQueue, /<ConfirmDialog/);
+  assert.doesNotMatch(approvalQueue, /disabled=\{pendingTransition\}/);
 });
 
 test("notification or-filter is guarded against delimiter-bearing emails", () => {

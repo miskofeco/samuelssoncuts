@@ -41,7 +41,7 @@ export function MarkNotificationReadButton({ notificationId }: { notificationId:
     <Button
       type="button"
       variant="ghost"
-      className="min-h-7 px-2 text-xs"
+      className="min-h-9 px-2 text-xs"
       disabled={pending}
       onClick={() =>
         startTransition(async () => {

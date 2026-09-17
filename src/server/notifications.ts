@@ -199,17 +199,17 @@ async function sendPushToUsers(
 }
 
 function toNotificationRow(notification: NotificationInput): NotificationInsert {
-  const row = { ...notification };
-  delete row.pushUserIds;
-  delete row.pushUrl;
-  return row;
+  const { pushUserIds: _pushUserIds, pushUrl, ...row } = notification;
+  return { ...row, action_url: pushUrl ?? row.action_url ?? null };
 }
 
 export async function createNotification(
   supabase: Supabase,
   { pushUserIds, pushUrl, ...notification }: NotificationInput,
 ) {
-  const { error } = await supabase.from("notifications").insert(notification);
+  const { error } = await supabase
+    .from("notifications")
+    .insert({ ...notification, action_url: pushUrl ?? notification.action_url ?? null });
   if (error) {
     await reportError("notification-insert", error, { recipient: notification.recipient });
     return;

@@ -30,6 +30,7 @@ export function LanguageToggle({ className }: { className?: string }) {
 
   return (
     <div
+      role="group"
       aria-label={t.language.label}
       className={cn(
         "inline-flex h-9 items-center rounded-lg border border-black/10 bg-white p-0.5 text-xs font-semibold dark:border-white/10 dark:bg-stone-900",

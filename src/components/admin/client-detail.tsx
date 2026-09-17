@@ -18,7 +18,6 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { totalRevenueCents, outcomeSummary } from "@/domain/analytics";
 import { formatFullDay, serviceById, todayIso } from "@/domain/schedule";
 import type {
-  ApprovalStatus,
   Appointment,
   BookingRequest,
   ClientProfile,
@@ -26,26 +25,11 @@ import type {
   Service,
 } from "@/domain/types";
 import type { ActionResult } from "@/domain/types";
-import type { Dict } from "@/i18n/dictionaries";
 import { useT } from "@/i18n/provider";
 
 import { statusMeta } from "@/components/client/status-meta";
+import { clientStatusLabel, clientStatusTone } from "./client-status";
 
-const statusTone = {
-  approved: "success",
-  pending: "warning",
-  rejected: "danger",
-  blocked: "danger",
-} as const;
-
-function approvalLabel(t: Dict, status: ApprovalStatus) {
-  switch (status) {
-    case "approved": return t.statuses.approved;
-    case "pending":  return t.statuses.approvalPending;
-    case "rejected": return t.statuses.rejected;
-    case "blocked":  return t.statuses.blocked;
-  }
-}
 
 export function ClientDetail({
   client,
@@ -105,7 +89,7 @@ export function ClientDetail({
           </div>
           <div className="flex flex-col items-start gap-3 sm:items-end">
             <div className="flex flex-wrap gap-2">
-              <StatusPill tone={statusTone[client.status]}>{approvalLabel(t, client.status)}</StatusPill>
+              <StatusPill tone={clientStatusTone[client.status]}>{clientStatusLabel(t, client.status)}</StatusPill>
               <StatusPill tone={client.emailConfirmed ? "success" : "neutral"}>
                 {client.emailConfirmed ? t.admin.emailVerified : t.admin.emailUnverified}
               </StatusPill>

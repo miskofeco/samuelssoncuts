@@ -70,12 +70,14 @@ export async function NotificationList({
                   {notification.body}
                 </p>
               ) : null}
-              <Link
-                href="/client/reservations"
-                className="mt-2 inline-block text-xs font-semibold text-sky-700 underline underline-offset-4 dark:text-sky-400"
-              >
-                {t.client.viewReservations}
-              </Link>
+              {notification.actionUrl?.startsWith("/client/reservations") ? (
+                <Link
+                  href={notification.actionUrl}
+                  className="mt-2 inline-block text-xs font-semibold text-sky-700 underline underline-offset-4 dark:text-sky-400"
+                >
+                  {t.client.viewReservations}
+                </Link>
+              ) : null}
             </div>
           ))
         )}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
@@ -10,6 +11,7 @@ import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
 import {
   CLOSE_MINUTES,
+  addMinutesToTime,
   formatDay,
   formatFullDay,
   minutesOf,
@@ -21,6 +23,7 @@ import {
   weekLabel,
   weekStart,
 } from "@/domain/schedule";
+import { nowMinutesInShopTimeZone } from "@/lib/time-zone";
 
 import { CalendarExport } from "@/components/shared/calendar-export";
 
@@ -70,6 +73,18 @@ export type BookedSlot = {
   durationMinutes: number;
 };
 
+const MOBILE_QUERY = "(max-width: 1023px)";
+
+function subscribeMobile(callback: () => void) {
+  const media = window.matchMedia(MOBILE_QUERY);
+  media.addEventListener("change", callback);
+  return () => media.removeEventListener("change", callback);
+}
+
+function mobileSnapshot() {
+  return window.matchMedia(MOBILE_QUERY).matches;
+}
+
 export function AdminCalendar({
   appointments,
   proposals,
@@ -89,12 +104,42 @@ export function AdminCalendar({
 }) {
   const t = useT();
   const locale = localeFor(useLang());
-  const [view, setView] = useState<"day" | "week" | "month">("week");
-  const [weekMonday, setWeekMonday] = useState<string>(() => weekStart(todayIso()));
-  const [dayDate, setDayDate] = useState<string>(() => todayIso());
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const isMobile = useSyncExternalStore(subscribeMobile, mobileSnapshot, () => false);
   const [draft, setDraft] = useState<{ date?: string; time?: string } | null>(null);
   const [selected, setSelected] = useState<CalendarItem | null>(null);
   const today = todayIso();
+  const requestedView = searchParams.get("view");
+  const view =
+    requestedView === "day" || requestedView === "week" || requestedView === "month"
+      ? requestedView
+      : isMobile
+        ? "day"
+        : "week";
+  const requestedDate = searchParams.get("date");
+  const selectedDate = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)
+    ? requestedDate
+    : today;
+  const weekMonday = weekStart(selectedDate);
+
+  function navigateCalendar(nextView: typeof view, nextDate = selectedDate, replace = false) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", nextView);
+    params.set("date", nextDate);
+    const href = `${pathname}?${params.toString()}`;
+    if (replace) router.replace(href, { scroll: false });
+    else router.push(href, { scroll: false });
+  }
+
+  useEffect(() => {
+    if (requestedView !== view || requestedDate !== selectedDate) {
+      navigateCalendar(view, selectedDate, true);
+    }
+    // Canonicalize only when URL state is absent or invalid.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedView, requestedDate, selectedDate, view]);
 
   const itemsByDate = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
@@ -210,7 +255,7 @@ export function AdminCalendar({
         <SegmentedControl
           ariaLabel={t.admin.calendarView}
           value={view}
-          onChange={setView}
+          onChange={(next) => navigateCalendar(next)}
           options={[
             { label: t.admin.day, value: "day" },
             { label: t.admin.week, value: "week" },
@@ -223,10 +268,10 @@ export function AdminCalendar({
         <DayAgenda
           t={t}
           locale={locale}
-          date={dayDate}
-          onDateChange={setDayDate}
-          items={itemsByDate.get(dayDate) ?? []}
-          blocked={blockedDates.has(dayDate)}
+          date={selectedDate}
+          onDateChange={(date) => navigateCalendar("day", date)}
+          items={itemsByDate.get(selectedDate) ?? []}
+          blocked={blockedDates.has(selectedDate)}
           onAddSlot={(date, time) => setDraft({ date, time })}
           onSelect={setSelected}
         />
@@ -235,7 +280,7 @@ export function AdminCalendar({
           t={t}
           locale={locale}
           weekMonday={weekMonday}
-          onWeekChange={setWeekMonday}
+          onWeekChange={(date) => navigateCalendar("week", date)}
           itemsByDate={itemsByDate}
           blockedDates={blockedDates}
           onAddSlot={(date, time) => setDraft({ date, time })}
@@ -244,6 +289,9 @@ export function AdminCalendar({
       ) : (
         <div className="mt-5">
           <MonthCalendar
+            month={selectedDate.slice(0, 7)}
+            onMonthChange={(month) => navigateCalendar("month", `${month}-01`)}
+            isSelected={(cell) => cell.date === selectedDate}
             onDayClick={(cell) => {
               const items = itemsByDate.get(cell.date) ?? [];
               if (items.length === 0 && !blockedDates.has(cell.date) && cell.date >= today) {
@@ -251,8 +299,7 @@ export function AdminCalendar({
                 return;
               }
               // Drill into week view for that day — works for any date (past or future).
-              setWeekMonday(weekStart(cell.date));
-              setView("week");
+              navigateCalendar("week", cell.date);
             }}
             dayClassName={(cell) => {
               if (cell.date < today) {
@@ -342,12 +389,6 @@ function minutesFromStart(time: string) {
   return (hours - START_HOUR) * 60 + minutes;
 }
 
-export function addMinutesToTime(time: string, minutes: number) {
-  const [hours, mins] = time.split(":").map(Number);
-  const total = hours * 60 + mins + minutes;
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-}
-
 // "yyyy-mm-dd" shifted by whole days (noon anchor avoids DST edge cases).
 function shiftDay(date: string, days: number) {
   const d = new Date(`${date}T12:00:00`);
@@ -378,6 +419,7 @@ function DayAgenda({
 }) {
   const today = todayIso();
   const sorted = [...items].sort((a, b) => (a.time < b.time ? -1 : 1));
+  const addTime = firstFreeSlot(sorted, date === today);
 
   return (
     <div className="mt-5">
@@ -414,7 +456,24 @@ function DayAgenda({
         </Button>
       </div>
 
+      {date >= today && !blocked ? (
+        <div className="mt-3 flex justify-end">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => onAddSlot(date, addTime)}
+          >
+            <span aria-hidden>+</span> {t.admin.addAt(addTime)}
+          </Button>
+        </div>
+      ) : null}
+
       <div className="mt-4 space-y-2">
+        {date === today ? (
+          <p className="border-l-2 border-red-500 pl-3 text-xs font-semibold text-red-700 dark:text-red-300">
+            {t.admin.currentTime(timeOfMinutes(nowMinutesInShopTimeZone()))}
+          </p>
+        ) : null}
         {blocked ? (
           <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200">
             {t.admin.off}
@@ -441,14 +500,14 @@ function DayAgenda({
               type="button"
               onClick={() => onSelect(item)}
               className={cn(
-                "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition",
+                "grid min-h-14 w-full grid-cols-[3.75rem_0.25rem_minmax(0,1fr)] items-center gap-3 rounded-xl px-3 py-3 text-left transition",
                 neutralChipClasses,
               )}
             >
-              <span className={cn("h-8 w-1 shrink-0 rounded-full", accentToneClasses(item.type))} />
               <span className="w-14 shrink-0 text-sm font-semibold tabular-nums text-black dark:text-white">
                 {item.time}
               </span>
+              <span className={cn("h-8 w-1 shrink-0 rounded-full", accentToneClasses(item.type))} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-black dark:text-white">
                   {item.title}
@@ -467,8 +526,7 @@ function DayAgenda({
 
 // Pixel offset of the current time within the grid (clamped to the visible band).
 function nowOffsetPx() {
-  const now = new Date();
-  const minutes = (now.getHours() - START_HOUR) * 60 + now.getMinutes();
+  const minutes = nowMinutesInShopTimeZone() - START_HOUR * 60;
   const max = GRID_HOURS * 60;
   const clamped = Math.min(Math.max(minutes, 0), max);
   return (clamped / 60) * HOUR_HEIGHT;
@@ -564,7 +622,7 @@ function WeekGrid({
       <div className="mt-5 flex items-center gap-2">
         <button
           type="button"
-          aria-label={t.common.previousMonth}
+          aria-label={t.admin.previousWeek}
           onClick={() => onWeekChange(shiftWeek(weekMonday, -1))}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-black/10 text-stone-600 transition hover:bg-stone-100 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-800"
         >
@@ -577,7 +635,7 @@ function WeekGrid({
         </span>
         <button
           type="button"
-          aria-label={t.common.nextMonth}
+          aria-label={t.admin.nextWeek}
           onClick={() => onWeekChange(shiftWeek(weekMonday, 1))}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-black/10 text-stone-600 transition hover:bg-stone-100 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-800"
         >
@@ -770,8 +828,7 @@ function snapPointerToMinutes(clientY: number, rect: Pick<DOMRect, "top" | "heig
 // First bookable minute on a day: opening, or "now" rounded up if it's today.
 function earliestMinute(isToday: boolean) {
   if (!isToday) return OPEN_MINUTES;
-  const now = new Date();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const nowMin = nowMinutesInShopTimeZone();
   return Math.ceil(Math.max(OPEN_MINUTES, nowMin) / SNAP_MINUTES) * SNAP_MINUTES;
 }
 
@@ -788,6 +845,28 @@ function firstFreeSlot(items: CalendarItem[], isToday: boolean) {
     if (!busy.some((b) => minute >= b.start && minute < b.end)) return timeOfMinutes(minute);
   }
   return timeOfMinutes(Math.min(start, CLOSE_MINUTES - SNAP_MINUTES));
+}
+
+function layoutOverlappingItems(items: CalendarItem[]) {
+  const sorted = [...items].sort((a, b) => a.time.localeCompare(b.time));
+  const active: Array<{ end: number; column: number }> = [];
+  const positioned: Array<{ item: CalendarItem; column: number }> = [];
+  let columnCount = 1;
+
+  for (const item of sorted) {
+    const start = minutesOf(item.time);
+    for (let index = active.length - 1; index >= 0; index -= 1) {
+      if (active[index].end <= start) active.splice(index, 1);
+    }
+    const occupied = new Set(active.map((entry) => entry.column));
+    let column = 0;
+    while (occupied.has(column)) column += 1;
+    active.push({ end: start + item.durationMinutes, column });
+    columnCount = Math.max(columnCount, active.length, column + 1);
+    positioned.push({ item, column });
+  }
+
+  return positioned.map((entry) => ({ ...entry, columnCount }));
 }
 
 function DayColumn({
@@ -886,8 +965,7 @@ function DayColumn({
       {/* Click-to-add surface — snaps to the cursor's 15-min slot. Sits beneath
           the booking chips (z-10) so clicks on bookings select rather than add. */}
       {!isBlocked ? (
-        isBlocked ? null : (
-          <div
+        <div
             className="absolute inset-0 cursor-pointer"
             onMouseMove={handleMove}
             onMouseLeave={() => setHoverMin(null)}
@@ -911,19 +989,24 @@ function DayColumn({
                 {timeOfMinutes(hoverMin)}
               </span>
             ) : null}
-          </div>
-        )
+        </div>
       ) : null}
 
       {/* Bookings positioned by start time, sized by duration */}
-      {items.map((item) => {
+      {layoutOverlappingItems(items).map(({ item, column, columnCount }) => {
         const top = (minutesFromStart(item.time) / 60) * HOUR_HEIGHT;
         const height = Math.max((item.durationMinutes / 60) * HOUR_HEIGHT, 22);
+        const widthPercent = 100 / columnCount;
         return (
           <CalendarChip
             key={item.id}
             item={item}
-            style={{ top, height }}
+            style={{
+              top,
+              height,
+              left: `calc(${column * widthPercent}% + 0.25rem)`,
+              width: `calc(${widthPercent}% - 0.5rem)`,
+            }}
             onSelect={onSelect}
           />
         );
@@ -994,7 +1077,7 @@ function CalendarChip({
         onMouseLeave={() => setTip(null)}
         style={style}
         className={cn(
-          "absolute inset-x-1 z-10 flex overflow-hidden rounded-md py-0.5 pl-3.5 pr-1.5 text-left leading-tight transition",
+          "absolute z-10 flex overflow-hidden rounded-md py-0.5 pl-3.5 pr-1.5 text-left leading-tight transition",
           neutralChipClasses,
         )}
       >

@@ -4,6 +4,7 @@ import test from "node:test";
 
 const cronRoute = readFileSync("src/app/api/cron/reminders/route.ts", "utf8");
 const actions = readFileSync("src/app/actions.ts", "utf8");
+const bookingGuards = readFileSync("src/server/booking-guards.ts", "utf8");
 
 test("reminder cron fails closed when CRON_SECRET is not configured", () => {
   assert.match(cronRoute, /if \(!secret\)/);
@@ -12,12 +13,13 @@ test("reminder cron fails closed when CRON_SECRET is not configured", () => {
 });
 
 test("booking-producing actions use shared server-side availability guards", () => {
-  assert.match(actions, /hasBlockedTimeOverlap/);
-  assert.match(actions, /hasConfirmedAppointmentOverlap/);
-  assert.match(actions, /isSlotInsideConfiguredBusinessHours/);
-  assert.match(actions, /createBookingRequestAction[\s\S]*hasBlockedTimeOverlap/);
-  assert.match(actions, /confirmRequestAction[\s\S]*hasConfirmedAppointmentOverlap/);
-  assert.match(actions, /respondToProposalAction[\s\S]*hasBlockedTimeOverlap/);
+  assert.match(bookingGuards, /export async function guardSlot/);
+  assert.match(bookingGuards, /hasBlockedTimeOverlap/);
+  assert.match(bookingGuards, /hasConfirmedAppointmentOverlap/);
+  assert.match(bookingGuards, /isSlotInsideConfiguredBusinessHours/);
+  assert.match(actions, /createBookingRequestAction[\s\S]*guardSlot/);
+  assert.match(actions, /confirmRequestAction[\s\S]*guardSlot/);
+  assert.match(actions, /respondToProposalAction[\s\S]*guardSlot/);
 });
 
 test("business-hours updates are validated server-side without stale type casts", () => {

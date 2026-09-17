@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { buildCalendarLinks } from "@/emails/calendar-links";
+import { ConfirmedAppointmentActions } from "@/components/client/confirmed-appointment-actions";
 import { ButtonLink } from "@/components/shared/button";
 import { Card } from "@/components/shared/card";
 import { PageHeader } from "@/components/shared/page-header";
@@ -11,7 +12,7 @@ import { localeFor } from "@/i18n/config";
 import { getDict, getLang } from "@/i18n/server";
 import { getShopAddress, getShopMapUrl, getShopPhone } from "@/lib/env";
 import { requireApprovedClient } from "@/server/auth";
-import { loadClientAppointmentDetail } from "@/server/dashboard-data";
+import { loadBookingData, loadClientAppointmentDetail } from "@/server/dashboard-data";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,10 @@ export default async function AppointmentDetailPage({
 }) {
   const profile = await requireApprovedClient();
   const { id } = await params;
-  const appt = await loadClientAppointmentDetail(profile, id);
+  const [appt, bookingData] = await Promise.all([
+    loadClientAppointmentDetail(profile, id),
+    loadBookingData(),
+  ]);
   if (!appt) notFound();
 
   const t = await getDict();
@@ -36,6 +40,12 @@ export default async function AppointmentDetailPage({
     startIso: appt.startIso,
     endIso: appt.endIso,
   });
+  const service = bookingData.services.find((item) => item.id === appt.serviceId) ?? {
+    id: appt.serviceId,
+    name: appt.serviceName,
+    duration: appt.serviceDuration,
+    price: Math.round((appt.priceCents ?? 0) / 100),
+  };
 
   return (
     <div className="space-y-6">
@@ -53,8 +63,8 @@ export default async function AppointmentDetailPage({
           <h2 className="text-lg font-semibold text-black dark:text-white">
             {appt.serviceName}
           </h2>
-          <StatusPill tone={appt.status === "confirmed" ? "success" : "neutral"}>
-            {appt.status}
+          <StatusPill tone={appt.status === "confirmed" ? "success" : "danger"}>
+            {appt.status === "confirmed" ? t.statuses.confirmed : t.statuses.cancelled}
           </StatusPill>
         </div>
 
@@ -112,6 +122,25 @@ export default async function AppointmentDetailPage({
               </ButtonLink>
             </div>
           </div>
+        ) : null}
+
+        {appt.status === "confirmed" ? (
+          <ConfirmedAppointmentActions
+            appointment={{
+              id: appt.id,
+              serviceId: appt.serviceId,
+              date: appt.date,
+              time: appt.time,
+              canModify: appt.canModify,
+            }}
+            service={service}
+            services={bookingData.services}
+            pricingSettings={bookingData.pricingSettings}
+            bookedSlots={bookingData.appointments}
+            pendingRequests={bookingData.pendingRequests}
+            blockedDates={bookingData.blockedDates}
+            businessHours={bookingData.businessHours}
+          />
         ) : null}
 
         <p className="mt-5 rounded-lg bg-stone-50 px-3 py-2 text-xs text-stone-500 dark:bg-stone-800/60 dark:text-stone-400">

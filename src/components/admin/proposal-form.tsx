@@ -3,10 +3,16 @@
 import { useMemo, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 
-import { confirmRequestAction, proposeTimeFromAdminAction } from "@/app/actions";
+import {
+  confirmRequestAction,
+  declineRequestAdminAction,
+  proposeTimeFromAdminAction,
+} from "@/app/actions";
 import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Feedback } from "@/components/shared/feedback";
+import { TextAreaField } from "@/components/shared/form";
 import { StatusPill } from "@/components/shared/status-pill";
 import {
   addDays,
@@ -16,6 +22,8 @@ import {
   hoursInWindow,
   monthGrid,
   monthKey,
+  minutesOf,
+  overlaps,
   serviceById,
   shiftMonth,
   todayIso,
@@ -89,7 +97,7 @@ export function ProposalComposer({
     ? appointments.filter((a) => a.clientId === client.id && a.outcome === "no_show").length
     : 0;
 
-  const [open, setOpen] = useState(request.status === "pending");
+  const [open, setOpen] = useState(request.status !== "pending");
   const [proposalControlsOpen, setProposalControlsOpen] = useState(false);
   const initialDate = request.preferences[0]?.date ?? addDays(1);
   const [date, setDate] = useState(initialDate);
@@ -100,13 +108,23 @@ export function ProposalComposer({
   const [note, setNote] = useState(t.admin.defaultProposalNote);
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
+  const [declineOpen, setDeclineOpen] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
   const proposalControlsId = `proposal-controls-${request.id}`;
 
   function takenAt(targetDate: string, targetTime: string) {
-    return appointments.some(
-      (appointment) =>
-        appointment.date === targetDate && appointment.time === targetTime,
-    );
+    if (blockedDates.has(targetDate)) return true;
+    const start = minutesOf(targetTime);
+    return appointments.some((appointment) => {
+      if (appointment.date !== targetDate) return false;
+      const appointmentService = serviceById(appointment.serviceId, services);
+      return overlaps(
+        start,
+        service.duration,
+        minutesOf(appointment.time),
+        appointmentService.duration,
+      );
+    });
   }
 
   function firstFreeTime(targetDate: string) {
@@ -153,6 +171,21 @@ export function ProposalComposer({
       const result = await confirmRequestAction(request.id);
       setFeedback(result);
       if (result.ok) setOpen(false);
+    });
+  }
+
+  function decline() {
+    setFeedback(null);
+    startTransition(async () => {
+      const result = await declineRequestAdminAction({
+        requestId: request.id,
+        reason: declineReason.trim() || undefined,
+      });
+      setFeedback(result);
+      if (result.ok) {
+        setDeclineOpen(false);
+        setOpen(false);
+      }
     });
   }
 
@@ -247,9 +280,19 @@ export function ProposalComposer({
                 ) : null}
               </p>
             </div>
-            <Button type="button" onClick={confirm} disabled={pending}>
-              {pending ? t.common.working : t.admin.confirmRequest}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="dangerOutline"
+                onClick={() => setDeclineOpen(true)}
+                disabled={pending}
+              >
+                {t.admin.declineRequest}
+              </Button>
+              <Button type="button" onClick={confirm} disabled={pending}>
+                {pending ? t.common.working : t.admin.confirmRequest}
+              </Button>
+            </div>
           </div>
           <Feedback result={feedback} className="mt-3" />
         </div>
@@ -441,8 +484,39 @@ export function ProposalComposer({
               </div>
             </>
           ) : null}
+
+          {!hasChosenSlot && (request.status === "pending" || request.status === "proposed") ? (
+            <Button
+              type="button"
+              variant="dangerOutline"
+              className="mt-3 w-full"
+              disabled={pending}
+              onClick={() => setDeclineOpen(true)}
+            >
+              {t.admin.declineRequest}
+            </Button>
+          ) : null}
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={declineOpen}
+        onOpenChange={setDeclineOpen}
+        title={t.admin.declineRequestTitle}
+        description={t.admin.declineRequestBody}
+        confirmLabel={pending ? t.common.working : t.admin.declineRequest}
+        loading={pending}
+        onConfirm={decline}
+      >
+        <TextAreaField
+          label={t.admin.declineRequestReason}
+          value={declineReason}
+          onChange={(event) => setDeclineReason(event.target.value)}
+          placeholder={t.admin.declineRequestReasonPlaceholder}
+          maxLength={1000}
+          rows={3}
+        />
+      </ConfirmDialog>
     </article>
   );
 }

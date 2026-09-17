@@ -52,7 +52,9 @@ test("push API routes require auth and same-origin subscription changes", () => 
   assert.match(publicKeyRoute, /getWebPushPublicKey\(\)/);
   assert.doesNotMatch(publicKeyRoute, /getWebPushPrivateKey/);
   assert.match(subscriptionsRoute, /assertSameOrigin\(request\)/);
-  assert.match(subscriptionsRoute, /requireProfile\(\)/);
+  assert.match(subscriptionsRoute, /getCurrentProfile\(\)/);
+  assert.match(subscriptionsRoute, /status:\s*401/);
+  assert.doesNotMatch(subscriptionsRoute, /redirect\(/);
   assert.match(subscriptionsRoute, /subscriptionSchema\.safeParse/);
   assert.match(subscriptionsRoute, /\.upsert\(/);
   assert.match(subscriptionsRoute, /export async function DELETE/);

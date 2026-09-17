@@ -7,6 +7,7 @@ const actions = readFileSync("src/app/actions.ts", "utf8");
 const slotPicker = readFileSync("src/components/client/slot-picker.tsx", "utf8");
 const requestForm = readFileSync("src/components/client/request-form.tsx", "utf8");
 const addBookingModal = readFileSync("src/components/admin/add-booking-modal.tsx", "utf8");
+const bookingPricing = readFileSync("src/server/booking-pricing.ts", "utf8");
 
 test("domain exposes a single client booking window of today through 14 days ahead", () => {
   assert.match(schedule, /export const CLIENT_BOOKING_WINDOW_DAYS = 14/);
@@ -89,10 +90,11 @@ test("client booking calendar disables configured closed weekdays", () => {
 });
 
 test("server rejects client booking requests outside generated client slots", () => {
-  assert.match(actions, /clientSlotsForService/);
+  assert.match(actions, /quoteClientSlot/);
+  assert.match(bookingPricing, /clientSlotsForService/);
   assert.match(
-    actions,
-    /!clientSlotsForService\(\s*parsed\.data\.date,\s*service\.duration_minutes,\s*confirmedForDay,\s*businessHours,\s*\)\.includes\(parsed\.data\.time\)/,
+    bookingPricing,
+    /!generated\.includes\(input\.time\)/,
   );
   assert.match(actions, /t\.feedback\.pickGeneratedSlot/);
 });
@@ -103,10 +105,7 @@ test("best-price client slots use green borders", () => {
   assert.match(schedule, /startMin === bookingEnd/);
   assert.match(slotPicker, /slot\.preferred/);
   assert.match(slotPicker, /isPreferredClientStart\(date, startMin, service\.duration, confirmed, businessHours\)/);
-  assert.match(
-    actions,
-    /isPreferredClientStart\(\s*parsed\.data\.date,\s*startMin,\s*service\.duration_minutes,\s*confirmedForDay,\s*businessHours,\s*\)/,
-  );
+  assert.match(bookingPricing, /isPreferredClientStart/);
   assert.match(slotPicker, /border-emerald-500/);
   assert.match(slotPicker, /bg-emerald-50/);
 });
@@ -124,6 +123,6 @@ test("first client booking of the day uses configured opening time as best price
 test("admin add booking date input cannot submit past starts from the UI", () => {
   assert.match(addBookingModal, /todayIso\(\)/);
   assert.match(addBookingModal, /min=\{today\}/);
-  assert.match(addBookingModal, /timeOptions\(duration, date \? bookedByDate\.get\(date\) \?\? \[\] : \[\], t, date\)/);
-  assert.match(addBookingModal, /startMin <= nowMinutes/);
+  assert.match(addBookingModal, /adminSlotOptions\(\{/);
+  assert.match(schedule, /nowMinutesInShopTimeZone\(now\)/);
 });

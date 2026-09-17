@@ -138,3 +138,61 @@ export async function hasConfirmedAppointmentOverlap(
   if (error) return true;
   return data === true;
 }
+
+export type SlotGuardInput = {
+  date: string;
+  time: string;
+  durationMinutes: number;
+  start: string;
+  end: string;
+  barberId?: string;
+  excludeAppointmentId?: string;
+};
+
+export type SlotGuardResult =
+  | { ok: true }
+  | { ok: false; reason: "outside-hours" | "blocked" | "conflict" };
+
+/**
+ * Shared server-side availability gate for every action that creates or moves
+ * a booking. Keeping the three checks together prevents one mutation path from
+ * accidentally omitting business hours, blocked time, or overlap protection.
+ */
+export async function guardSlot(
+  supabase: SupabaseClient,
+  input: SlotGuardInput,
+): Promise<SlotGuardResult> {
+  if (
+    !(await isSlotInsideConfiguredBusinessHours(supabase, {
+      barberId: input.barberId,
+      date: input.date,
+      time: input.time,
+      durationMinutes: input.durationMinutes,
+    }))
+  ) {
+    return { ok: false, reason: "outside-hours" };
+  }
+
+  if (
+    await hasBlockedTimeOverlap(supabase, {
+      barberId: input.barberId,
+      start: input.start,
+      end: input.end,
+    })
+  ) {
+    return { ok: false, reason: "blocked" };
+  }
+
+  if (
+    await hasConfirmedAppointmentOverlap(supabase, {
+      barberId: input.barberId,
+      start: input.start,
+      end: input.end,
+      excludeAppointmentId: input.excludeAppointmentId,
+    })
+  ) {
+    return { ok: false, reason: "conflict" };
+  }
+
+  return { ok: true };
+}

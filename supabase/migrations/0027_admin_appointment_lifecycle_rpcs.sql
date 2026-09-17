@@ -37,7 +37,7 @@ returns uuid
 language plpgsql
 volatile
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_appt public.appointments%rowtype;
@@ -85,6 +85,7 @@ begin
 end;
 $$;
 
+revoke execute on function public.admin_cancel_appointment(uuid, boolean) from public, anon;
 grant execute on function public.admin_cancel_appointment(uuid, boolean) to authenticated;
 
 -- Move a confirmed client appointment: release its slot and send the client a
@@ -100,7 +101,7 @@ returns uuid
 language plpgsql
 volatile
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_appt public.appointments%rowtype;
@@ -166,4 +167,5 @@ begin
 end;
 $$;
 
+revoke execute on function public.admin_reschedule_appointment_to_proposal(uuid, timestamptz, timestamptz, text) from public, anon;
 grant execute on function public.admin_reschedule_appointment_to_proposal(uuid, timestamptz, timestamptz, text) to authenticated;

@@ -81,7 +81,7 @@ function PreferencesBody({
 
   return (
     <div className="space-y-3">
-      <p className="text-[0.7rem] leading-[1.15rem] text-stone-500 dark:text-stone-400">
+      <p className="text-xs leading-5 text-stone-600 dark:text-stone-300">
         {t.consent.modal.intro}
       </p>
 
@@ -94,13 +94,13 @@ function PreferencesBody({
           status={t.consent.categories.necessary.status}
           control={
             <div className="flex items-center gap-1.5">
-              <span className="text-[0.6rem] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500">
+              <span className="text-xs font-semibold uppercase tracking-wide text-stone-600 dark:text-stone-300">
                 {t.consent.modal.alwaysOn}
               </span>
               <Toggle
                 checked
                 disabled
-                size="sm"
+                size="md"
                 label={t.consent.categories.necessary.name}
               />
             </div>
@@ -118,7 +118,7 @@ function PreferencesBody({
               <Toggle
                 checked={choices[key]}
                 onChange={(next) => set(key, next)}
-                size="sm"
+                size="md"
                 label={t.consent.categories[key].name}
               />
             }
@@ -126,7 +126,7 @@ function PreferencesBody({
         ))}
       </ul>
 
-      <div className="flex items-center gap-3 border-t border-black/10 pt-2 text-[0.65rem] text-stone-400 dark:border-white/10 dark:text-stone-500">
+      <div className="flex items-center gap-3 border-t border-black/10 pt-2 text-xs text-stone-600 dark:border-white/10 dark:text-stone-300">
         <span>{version}</span>
         <span>·</span>
         <span>{lastUpdated}</span>
@@ -201,13 +201,13 @@ function CategoryRow({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-semibold text-black dark:text-white">{name}</p>
-          <p className="mt-0.5 text-[0.7rem] leading-[1.15rem] text-stone-600 dark:text-stone-400">
+          <p className="mt-0.5 text-xs leading-5 text-stone-600 dark:text-stone-300">
             {description}
           </p>
         </div>
         <div className="shrink-0 pt-0.5">{control}</div>
       </div>
-      <div className="mt-1.5 space-y-0.5 text-[0.65rem] leading-snug text-stone-500 dark:text-stone-400">
+      <div className="mt-1.5 space-y-0.5 text-xs leading-snug text-stone-600 dark:text-stone-300">
         <p>
           <span className="font-semibold">{t.consent.modal.cookiesUsedLabel}:</span>{" "}
           {cookies}

@@ -23,7 +23,8 @@ export function PricingSettingsForm({
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
 
-  function save() {
+  function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     startTransition(async () => {
       setFeedback(
         await savePricingSettingsAction({
@@ -43,6 +44,7 @@ export function PricingSettingsForm({
       <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
         {t.admin.pricingDescription}
       </p>
+      <form onSubmit={save}>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <Field
           type="number"
@@ -69,10 +71,11 @@ export function PricingSettingsForm({
       </div>
       <Feedback result={feedback} className="mt-4" />
       <div className="mt-4 flex justify-end">
-        <Button type="button" onClick={save} disabled={pending}>
+        <Button type="submit" disabled={pending}>
           {pending ? t.common.saving : t.common.save}
         </Button>
       </div>
+      </form>
     </Card>
   );
 }

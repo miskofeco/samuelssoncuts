@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes } from 
 
 import { Avatar } from "@/components/shared/avatar";
 import { StatusPill } from "@/components/shared/status-pill";
+import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
 
 import { AppointmentDetailModal } from "./appointment-detail-modal";
@@ -26,6 +27,7 @@ export type AdminBookingCarouselItem = {
     durationMinutes: number;
     priceCents: number;
     surcharge?: boolean;
+    surchargePercent?: number;
     calendarItem: CalendarItem;
   } | null;
   tone: "current" | "past" | "future";
@@ -116,6 +118,7 @@ function BookingSummaryCard({
   onSelect: (item: CalendarItem) => void;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onSelect">) {
   const { booking, tone } = item;
+  const t = useT();
 
   return (
     <button
@@ -135,7 +138,9 @@ function BookingSummaryCard({
         <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
           {item.title}
         </p>
-        {booking?.surcharge ? <StatusPill tone="warning">+10%</StatusPill> : null}
+        {booking?.surcharge ? (
+          <StatusPill tone="warning">+{booking.surchargePercent}%</StatusPill>
+        ) : null}
       </div>
 
       {booking ? (
@@ -158,7 +163,7 @@ function BookingSummaryCard({
                 {booking.day}
               </p>
               <p className="mt-0.5 text-sm font-medium tabular-nums text-stone-800 dark:text-stone-200">
-                {booking.time} · {booking.durationMinutes} min
+                {booking.time} · {booking.durationMinutes} {t.admin.minutesShort}
               </p>
             </div>
             <p className="text-xl font-semibold tabular-nums text-black dark:text-white">

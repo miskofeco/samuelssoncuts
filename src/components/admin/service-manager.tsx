@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import type { FormEvent } from "react";
 import Image from "next/image";
 
 import {
@@ -126,7 +127,8 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
     }
   }
 
-  async function save() {
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (!draft) return;
     const payload = {
       name: draft.name,
@@ -248,7 +250,7 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
         title={draft?.id ? t.admin.editService : t.admin.addService}
       >
         {draft ? (
-          <div className="space-y-4">
+          <form className="space-y-4" onSubmit={save}>
             <Field
               label={t.admin.serviceName}
               value={draft.name}
@@ -296,7 +298,7 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
                     {uploadPending ? t.profile.uploading : t.profile.changePhoto}
                   </Button>
                   <p className="text-xs text-stone-400 dark:text-stone-500">
-                    JPG, PNG, WebP · max 3 MB
+                    {t.admin.serviceImageHint}
                   </p>
                 </div>
               </div>
@@ -308,12 +310,18 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
             <div className="grid grid-cols-2 gap-3">
               <Field
                 type="number"
+                min={15}
+                max={480}
+                step={15}
                 label={t.admin.serviceDuration}
                 value={draft.duration}
                 onChange={(event) => setDraft({ ...draft, duration: event.target.value })}
               />
               <Field
                 type="number"
+                min={0}
+                max={1000}
+                step={0.5}
                 label={t.admin.servicePrice}
                 value={draft.price}
                 onChange={(event) => setDraft({ ...draft, price: event.target.value })}
@@ -324,11 +332,14 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
               <Button type="button" variant="secondary" onClick={onClose}>
                 {t.common.cancel}
               </Button>
-              <Button type="button" onClick={save} disabled={pending || uploadPending}>
+              <Button
+                type="submit"
+                disabled={pending || uploadPending || draft.name.trim().length === 0}
+              >
                 {pending ? t.common.saving : t.common.save}
               </Button>
             </div>
-          </div>
+          </form>
         ) : null}
       </Modal>
     </Card>

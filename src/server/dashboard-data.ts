@@ -17,7 +17,18 @@ import type { AuthProfile } from "@/server/auth";
 
 type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
-type AppointmentRow = Database["public"]["Tables"]["appointments"]["Row"];
+type AppointmentRow = Pick<
+  Database["public"]["Tables"]["appointments"]["Row"],
+  | "id"
+  | "request_id"
+  | "client_id"
+  | "customer_name"
+  | "service_id"
+  | "starts_at"
+  | "ends_at"
+  | "status"
+  | "outcome"
+>;
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 type PricingSettingsRow = Pick<
   Database["public"]["Tables"]["pricing_settings"]["Row"],
@@ -33,6 +44,8 @@ type RequestRow = Database["public"]["Tables"]["booking_requests"]["Row"] & {
 
 const REQUEST_SELECT =
   "*, booking_preferences(*), appointment_proposals!appointment_proposals_request_id_fkey(*)";
+const APPOINTMENT_SELECT =
+  "id, request_id, client_id, customer_name, service_id, starts_at, ends_at, status, outcome";
 
 // ---------------------------------------------------------------------------
 // Shared row -> domain mappers (single source of truth for conventions like
@@ -163,6 +176,7 @@ export function mapNotificationRow(row: NotificationRow): Notification {
     subject: row.subject,
     body: row.body,
     read: row.read_at != null,
+    actionUrl: row.action_url,
     createdAt: shortDate(row.created_at),
   };
 }
@@ -394,6 +408,7 @@ export async function loadClientReservations(profile: AuthProfile): Promise<{
 
 export type ClientAppointmentDetail = {
   id: string;
+  serviceId: string;
   serviceName: string;
   serviceDuration: number;
   date: string;
@@ -434,6 +449,7 @@ export async function loadClientAppointmentDetail(
 
   return {
     id: appt.id,
+    serviceId: appt.service_id,
     serviceName: service?.name ?? "",
     serviceDuration: service?.duration_minutes ?? 0,
     date: dateFromIso(appt.starts_at),
@@ -469,7 +485,7 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
         .order("created_at", { ascending: false }),
       supabase
         .from("appointments")
-        .select("*")
+        .select(APPOINTMENT_SELECT)
         .eq("client_id", profile.id)
         .eq("status", "confirmed")
         .order("starts_at"),
@@ -572,7 +588,7 @@ export async function loadAdminOverview(): Promise<{
     supabase.from("booking_requests").select(REQUEST_SELECT).order("created_at", {
       ascending: false,
     }),
-    supabase.from("appointments").select("*").order("starts_at"),
+    supabase.from("appointments").select(APPOINTMENT_SELECT).order("starts_at"),
     supabase
       .from("notifications")
       .select("*")
@@ -615,7 +631,7 @@ export async function loadAdminCalendar(): Promise<{
       supabase.from("booking_requests").select(REQUEST_SELECT).order("created_at", {
         ascending: false,
       }),
-      supabase.from("appointments").select("*").order("starts_at"),
+      supabase.from("appointments").select(APPOINTMENT_SELECT).order("starts_at"),
       loadBlockedDays(),
     ]);
 
@@ -677,7 +693,7 @@ export async function loadRequestQueue(): Promise<{
       supabase.from("booking_requests").select(REQUEST_SELECT).order("created_at", {
         ascending: false,
       }),
-      supabase.from("appointments").select("*").order("starts_at"),
+      supabase.from("appointments").select(APPOINTMENT_SELECT).order("starts_at"),
       loadBlockedDays(),
     ]);
 
@@ -728,7 +744,7 @@ export async function loadClientHistory(clientId: string): Promise<{
         .order("created_at", { ascending: false }),
       supabase
         .from("appointments")
-        .select("*")
+        .select(APPOINTMENT_SELECT)
         .eq("client_id", clientId)
         .order("starts_at"),
       supabase.from("services").select("*"),
@@ -777,7 +793,7 @@ export async function loadExportAppointments(
   const supabase = await createClient();
   let appointmentsQuery = supabase
     .from("appointments")
-    .select("*")
+    .select(APPOINTMENT_SELECT)
     .eq("status", "confirmed")
     .gte("starts_at", fromIso)
     .lt("starts_at", toIso)

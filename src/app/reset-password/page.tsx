@@ -13,7 +13,7 @@ import { getDict } from "@/i18n/server";
 export default async function ResetPasswordPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; message?: string }>;
+  searchParams: Promise<{ error?: string; message?: string; email?: string }>;
 }) {
   const params = await searchParams;
   const t = await getDict();
@@ -39,9 +39,7 @@ export default async function ResetPasswordPage({
           <Feedback result={{ ok: false, error: params.error }} className="mt-4" />
         ) : null}
         {params.message ? (
-          <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 dark:bg-emerald-500/15 dark:text-emerald-300">
-            {params.message}
-          </p>
+          <Feedback result={{ ok: true, message: params.message }} className="mt-4" />
         ) : null}
 
         <form action={requestPasswordResetAction} className="mt-5 space-y-4">
@@ -50,6 +48,8 @@ export default async function ResetPasswordPage({
             label={t.common.email}
             name="email"
             type="email"
+            autoComplete="email"
+            defaultValue={params.email}
             placeholder={t.auth.emailPlaceholder}
           />
           <SubmitButton className="w-full" pendingLabel={t.common.sending}>

@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Card, SectionHeader } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
 import type {
   Appointment,
@@ -14,7 +16,6 @@ import type {
   Service,
 } from "@/domain/types";
 import { useT } from "@/i18n/provider";
-import { cn } from "@/lib/classnames";
 
 import { ProposalComposer } from "./proposal-form";
 
@@ -51,14 +52,24 @@ export function RequestQueue({
   blockedDates: ReadonlySet<string>;
 }) {
   const t = useT();
-  const [filter, setFilter] = useState<FilterKey>("actionable");
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const filterParam = searchParams.get("filter");
+  const filter: FilterKey =
+    filterParam === "pending" ||
+    filterParam === "proposed" ||
+    filterParam === "confirmed" ||
+    filterParam === "all"
+      ? filterParam
+      : "actionable";
 
-  const filters: { key: FilterKey; label: string }[] = [
-    { key: "actionable", label: t.admin.filterActionable },
-    { key: "pending", label: t.admin.filterNew },
-    { key: "proposed", label: t.admin.filterAwaiting },
-    { key: "confirmed", label: t.admin.filterConfirmed },
-    { key: "all", label: t.admin.filterAll },
+  const filters: { value: FilterKey; label: string }[] = [
+    { value: "actionable", label: t.admin.filterActionable },
+    { value: "pending", label: t.admin.filterNew },
+    { value: "proposed", label: t.admin.filterAwaiting },
+    { value: "confirmed", label: t.admin.filterConfirmed },
+    { value: "all", label: t.admin.filterAll },
   ];
 
   const counts = useMemo(() => {
@@ -72,6 +83,14 @@ export function RequestQueue({
       all: requests.length,
     } satisfies Record<FilterKey, number>;
   }, [requests]);
+
+  function setFilter(next: FilterKey) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "actionable") params.delete("filter");
+    else params.set("filter", next);
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
   const visible = useMemo(
     () =>
@@ -93,35 +112,18 @@ export function RequestQueue({
         }
       />
 
-      <div className="-mx-1 mt-4 flex gap-1.5 overflow-x-auto px-1 pb-1">
-        {filters.map((item) => {
-          const active = filter === item.key;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setFilter(item.key)}
-              className={cn(
-                "flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold transition",
-                active
-                  ? "bg-black text-white dark:bg-white dark:text-black"
-                  : "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700",
-              )}
-            >
-              {item.label}
-              <span
-                className={cn(
-                  "rounded-full px-1.5 text-xs tabular-nums",
-                  active
-                    ? "bg-white/20 text-white dark:bg-black/20 dark:text-black"
-                    : "bg-white text-stone-500 dark:bg-stone-900 dark:text-stone-400",
-                )}
-              >
-                {counts[item.key]}
-              </span>
-            </button>
-          );
-        })}
+      <div className="mt-4 overflow-x-auto pb-1">
+        <SegmentedControl
+          ariaLabel={t.admin.appointmentRequests}
+          value={filter}
+          onChange={setFilter}
+          options={filters.map((item) => ({
+            ...item,
+            count: counts[item.value],
+          }))}
+          size="sm"
+          className="min-w-max"
+        />
       </div>
 
       <div className="mt-4 space-y-3">

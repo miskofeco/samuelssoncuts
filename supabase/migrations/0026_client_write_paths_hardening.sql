@@ -26,7 +26,7 @@ returns uuid
 language plpgsql
 volatile
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_request public.booking_requests%rowtype;
@@ -59,7 +59,11 @@ begin
 end;
 $$;
 
+revoke execute on function public.client_cancel_request(uuid) from public, anon;
 grant execute on function public.client_cancel_request(uuid) to authenticated;
+
+revoke execute on function public.client_cancel_confirmed_appointment(uuid) from public, anon;
+grant execute on function public.client_cancel_confirmed_appointment(uuid) to authenticated;
 
 revoke execute on function public.check_rate_limit(text, integer, integer) from public;
 revoke execute on function public.check_rate_limit(text, integer, integer) from anon, authenticated;

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import { cancelRequestAction, respondToProposalAction } from "@/app/actions";
 import { Button } from "@/components/shared/button";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
 import { StatusPill } from "@/components/shared/status-pill";
@@ -75,6 +76,7 @@ function ReservationCard({
   const locale = localeFor(useLang());
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const meta = statusMeta(t)[request.status];
   const liveProposal = proposal && proposal.status === "sent" ? proposal : undefined;
   const pendingExactSlot =
@@ -98,7 +100,9 @@ function ReservationCard({
     setFeedback(null);
     startTransition(async () => {
       try {
-        setFeedback(await cancelRequestAction(request.id));
+        const result = await cancelRequestAction(request.id);
+        setFeedback(result);
+        if (result.ok) setConfirmingCancel(false);
       } catch {
         setFeedback({ ok: false, error: t.common.somethingWentWrong });
       }
@@ -195,13 +199,23 @@ function ReservationCard({
             type="button"
             variant="ghost"
             disabled={pending}
-            onClick={cancel}
+            onClick={() => setConfirmingCancel(true)}
             className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
           >
             {t.client.cancelRequest}
           </Button>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={confirmingCancel}
+        onOpenChange={setConfirmingCancel}
+        title={t.client.confirmCancelRequestTitle}
+        description={t.client.confirmCancelRequestBody}
+        confirmLabel={pending ? t.common.working : t.client.cancelRequest}
+        loading={pending}
+        onConfirm={cancel}
+      />
     </article>
   );
 }

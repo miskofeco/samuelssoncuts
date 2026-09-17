@@ -135,18 +135,23 @@ export function ProfileForm({
           value={email}
           disabled
           readOnly
+          autoComplete="email"
           className="opacity-70"
         />
         <Field
           required
           label={t.common.fullName}
           value={name}
+          autoComplete="name"
           onChange={(event) => setName(event.target.value)}
         />
         <Field
           required
           label={t.common.phone}
           value={phoneValue}
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
           onChange={(event) => setPhoneValue(event.target.value)}
         />
         <Feedback result={feedback} />

@@ -3,14 +3,14 @@ import Link from "next/link";
 import { signInAction } from "@/app/actions";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
-import { Field } from "@/components/shared/form";
+import { Field, PasswordField } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
 import { getDict } from "@/i18n/server";
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; message?: string }>;
+  searchParams: Promise<{ error?: string; message?: string; email?: string }>;
 }) {
   const params = await searchParams;
   const t = await getDict();
@@ -23,13 +23,17 @@ export default async function LoginPage({
           label={t.common.email}
           name="email"
           type="email"
+          autoComplete="email"
+          defaultValue={params.email}
           placeholder={t.auth.emailPlaceholder}
         />
-        <Field
+        <PasswordField
           required
           label={t.auth.passwordLabel}
           name="password"
-          type="password"
+          autoComplete="current-password"
+          minLength={8}
+          hint={t.auth.passwordHint}
           placeholder={t.auth.passwordPlaceholder}
         />
         <SubmitButton className="w-full" pendingLabel={t.common.sending}>

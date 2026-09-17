@@ -15,44 +15,14 @@ import { Combobox } from "@/components/shared/combobox";
 import { Feedback } from "@/components/shared/feedback";
 import { Modal } from "@/components/shared/modal";
 import { StatusPill } from "@/components/shared/status-pill";
-import { addMinutesToTime } from "@/components/admin/admin-calendar";
 import type { BookedSlot, CalendarItem } from "@/components/admin/admin-calendar";
-import { formatFullDay, minutesOf, overlaps, slotsForService, todayIso } from "@/domain/schedule";
+import { addMinutesToTime, adminSlotOptions, formatFullDay, todayIso } from "@/domain/schedule";
 import type { ActionResult } from "@/domain/types";
 import { localeFor } from "@/i18n/config";
-import type { Dict } from "@/i18n/dictionaries";
 import { useLang, useT } from "@/i18n/provider";
+import { shopDateTimeToEpochMs } from "@/lib/time-zone";
 
 type Mode = "view" | "reschedule" | "cancel";
-
-// Reschedule time options for a service duration, disabling slots that overlap
-// any *other* booking on `date` (the appointment being moved is excluded).
-function rescheduleOptions(
-  durationMinutes: number,
-  bookedToday: BookedSlot[],
-  excludeId: string | undefined,
-  t: Dict,
-  date?: string,
-) {
-  const now = new Date();
-  const today = todayIso();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  return slotsForService(durationMinutes).map((time) => {
-    const startMin = minutesOf(time);
-    const clash = bookedToday.some(
-      (slot) =>
-        slot.id !== excludeId &&
-        overlaps(startMin, durationMinutes, minutesOf(slot.time), slot.durationMinutes),
-    );
-    const past = Boolean(date && (date < today || (date === today && startMin <= nowMinutes)));
-    return {
-      value: time,
-      label: time,
-      disabled: clash || past,
-      hint: past ? t.feedback.chooseFutureTime : clash ? t.admin.slotTakenHint : undefined,
-    };
-  });
-}
 
 export function AppointmentDetailModal({
   item,
@@ -98,19 +68,28 @@ function DetailBody({
   const today = todayIso();
 
   const isWalkIn = !item.clientId;
-  const isConfirmed = item.type === "Confirmed";
+  const isConfirmed = item.type !== "Proposed";
   const endTime = addMinutesToTime(item.time, item.durationMinutes);
+  const hasEnded = shopDateTimeToEpochMs(item.date, endTime) <= Date.now();
   const finalPrice = Math.round(item.finalPriceCents / 100);
 
   const timeOptions = useMemo(
     () =>
-      rescheduleOptions(
-        item.durationMinutes,
-        date ? bookedByDate.get(date) ?? [] : [],
-        item.id,
-        t,
+      adminSlotOptions({
+        durationMinutes: item.durationMinutes,
+        bookedToday: date ? bookedByDate.get(date) ?? [] : [],
+        excludeId: item.id,
         date,
-      ),
+      }).map((option) => ({
+        ...option,
+        disabled: option.disabledReason !== null,
+        hint:
+          option.disabledReason === "past"
+            ? t.feedback.chooseFutureTime
+            : option.disabledReason === "conflict"
+              ? t.admin.slotTakenHint
+              : undefined,
+      })),
     [item.durationMinutes, item.id, date, bookedByDate, t],
   );
   const selectedOption = timeOptions.find((option) => option.value === time);
@@ -221,7 +200,7 @@ function DetailBody({
           <Feedback result={feedback && !feedback.ok ? feedback : null} />
 
           {/* Outcome section — only for past confirmed appointments */}
-          {isConfirmed && item.date < today ? (
+          {isConfirmed && hasEnded ? (
             item.outcome ? (
               <div className="flex items-center gap-2">
                 <StatusPill tone={item.outcome === "completed" ? "success" : "danger"}>
@@ -301,6 +280,7 @@ function DetailBody({
               value={time}
               onChange={setTime}
               options={timeOptions}
+              searchable={false}
             />
           </div>
           {dateInvalid ? (
@@ -331,7 +311,11 @@ function DetailBody({
               onClick={submitReschedule}
               disabled={pending || !date || !time || dateInvalid || timeInvalid}
             >
-              {pending ? t.common.sending : t.admin.proposeNewTime}
+              {pending
+                ? t.common.sending
+                : isConfirmed
+                  ? t.admin.reschedule
+                  : t.admin.proposeNewTime}
             </Button>
           </div>
         </div>

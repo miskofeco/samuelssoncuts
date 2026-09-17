@@ -1,5 +1,5 @@
 import { Card, SectionHeader } from "@/components/shared/card";
-import { formatFullDay, serviceById } from "@/domain/schedule";
+import { formatFullDay, isVipStart, serviceById } from "@/domain/schedule";
 import type {
   Appointment,
   BookingRequest,
@@ -8,6 +8,8 @@ import type {
 } from "@/domain/types";
 import { localeFor } from "@/i18n/config";
 import { getDict, getLang } from "@/i18n/server";
+import { shopDateTimeToEpochMs } from "@/lib/time-zone";
+import { loadPricingSettings } from "@/server/dashboard-data";
 
 import {
   AdminBookingCarousel,
@@ -26,11 +28,12 @@ type BookingCard = {
   startsAt: Date;
   endsAt: Date;
   surcharge?: boolean;
+  surchargePercent?: number;
   calendarItem: CalendarItem;
 };
 
 function dateTimeOf(appointment: Appointment) {
-  return new Date(`${appointment.date}T${appointment.time}:00`);
+  return new Date(shopDateTimeToEpochMs(appointment.date, appointment.time));
 }
 
 function buildBookingCards({
@@ -39,12 +42,16 @@ function buildBookingCards({
   clients,
   services,
   clientFallback,
+  gapSurchargePercent,
+  vipSurchargePercent,
 }: {
   appointments: Appointment[];
   requests: BookingRequest[];
   clients: ClientProfile[];
   services: Service[];
   clientFallback: string;
+  gapSurchargePercent: number;
+  vipSurchargePercent: number;
 }) {
   const requestsById = new Map(requests.map((request) => [request.id, request]));
   const clientsById = new Map(clients.map((client) => [client.id, client]));
@@ -72,6 +79,12 @@ function buildBookingCards({
         surcharge: appointment.requestId
           ? requestsById.get(appointment.requestId)?.surcharge
           : undefined,
+        surchargePercent:
+          appointment.requestId && requestsById.get(appointment.requestId)?.surcharge
+            ? isVipStart(appointment.time)
+              ? vipSurchargePercent
+              : gapSurchargePercent
+            : undefined,
         calendarItem: {
           id: appointment.id,
           title: client?.name ?? appointment.clientName ?? clientFallback,
@@ -126,7 +139,7 @@ export async function AdminBookingStrip({
   appointments: Appointment[];
   services: Service[];
 }) {
-  const t = await getDict();
+  const [t, pricingSettings] = await Promise.all([getDict(), loadPricingSettings()]);
   const locale = localeFor(await getLang());
   const { currentBooking, lastBooking, nextBooking } = selectBookingCards(
     buildBookingCards({
@@ -135,6 +148,8 @@ export async function AdminBookingStrip({
       clients,
       services,
       clientFallback: t.admin.clientFallback,
+      gapSurchargePercent: pricingSettings.gapSurchargePercent,
+      vipSurchargePercent: pricingSettings.vipSurchargePercent,
     }),
     new Date(),
   );
@@ -149,6 +164,7 @@ export async function AdminBookingStrip({
           durationMinutes: booking.durationMinutes,
           priceCents: booking.priceCents,
           surcharge: booking.surcharge,
+          surchargePercent: booking.surchargePercent,
           calendarItem: booking.calendarItem,
         }
       : null;

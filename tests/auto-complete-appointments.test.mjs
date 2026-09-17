@@ -72,12 +72,62 @@ test("auto-complete update only touches finished confirmed appointments without 
   ]);
 });
 
+test("stale pending requests and sent proposals are closed after their start", async () => {
+  const { expireStaleBookingState } = await loadOutcomesModule();
+  const calls = [];
+  const counts = { booking_requests: 2, appointment_proposals: 3 };
+  const supabase = {
+    from(table) {
+      calls.push(["from", table]);
+      const builder = {
+        update(value, options) {
+          calls.push(["update", table, value, options]);
+          return builder;
+        },
+        eq(column, value) {
+          calls.push(["eq", table, column, value]);
+          return builder;
+        },
+        lt(column, value) {
+          calls.push(["lt", table, column, value]);
+          return builder;
+        },
+        select(columns) {
+          calls.push(["select", table, columns]);
+          return Promise.resolve({ count: counts[table], error: null });
+        },
+      };
+      return builder;
+    },
+  };
+
+  const result = await expireStaleBookingState(
+    supabase,
+    new Date("2026-07-24T15:30:00.000Z"),
+  );
+
+  assert.deepEqual(result, { declinedRequests: 2, expiredProposals: 3 });
+  assert.deepEqual(calls, [
+    ["from", "booking_requests"],
+    ["update", "booking_requests", { status: "declined" }, { count: "exact" }],
+    ["eq", "booking_requests", "status", "pending"],
+    ["lt", "booking_requests", "requested_start", "2026-07-24T15:30:00.000Z"],
+    ["select", "booking_requests", "id"],
+    ["from", "appointment_proposals"],
+    ["update", "appointment_proposals", { status: "expired" }, { count: "exact" }],
+    ["eq", "appointment_proposals", "status", "sent"],
+    ["lt", "appointment_proposals", "starts_at", "2026-07-24T15:30:00.000Z"],
+    ["select", "appointment_proposals", "id"],
+  ]);
+});
+
 test("auto-complete cron route is secret-protected and reports the completed count", () => {
   const route = read("src/app/api/cron/complete-appointments/route.ts");
 
   assert.match(route, /getCronSecret/);
   assert.match(route, /Authorization|authorization/);
   assert.match(route, /autoCompleteFinishedAppointments/);
+  assert.match(route, /expireStaleBookingState/);
   assert.match(route, /NextResponse\.json\(\{ ok: true, completed/);
 });
 

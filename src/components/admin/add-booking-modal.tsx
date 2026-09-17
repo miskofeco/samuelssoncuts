@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import type { FormEvent } from "react";
+import { toast } from "sonner";
 
 import { createAdminBookingAction } from "@/app/actions";
 import type { BookedSlot } from "@/components/admin/admin-calendar";
@@ -10,34 +12,11 @@ import { Feedback } from "@/components/shared/feedback";
 import { Field, SelectField } from "@/components/shared/form";
 import { Modal } from "@/components/shared/modal";
 import { SegmentedControl } from "@/components/shared/segmented-control";
-import { minutesOf, overlaps, slotsForService, todayIso } from "@/domain/schedule";
+import { adminSlotOptions, todayIso } from "@/domain/schedule";
 import type { ActionResult, ClientProfile, Service } from "@/domain/types";
-import type { Dict } from "@/i18n/dictionaries";
 import { useT } from "@/i18n/provider";
 
 type CustomerMode = "client" | "walkin";
-
-// Time-picker options for a service duration, with slots that overlap an existing
-// booking on `date` marked disabled. `slotsForService` already drops starts whose
-// end would run past closing, so the remaining list always fits the service.
-function timeOptions(durationMinutes: number, bookedToday: BookedSlot[], t: Dict, date?: string) {
-  const now = new Date();
-  const today = todayIso();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  return slotsForService(durationMinutes).map((time) => {
-    const startMin = minutesOf(time);
-    const clash = bookedToday.some((slot) =>
-      overlaps(startMin, durationMinutes, minutesOf(slot.time), slot.durationMinutes),
-    );
-    const past = Boolean(date && (date < today || (date === today && startMin <= nowMinutes)));
-    return {
-      value: time,
-      label: time,
-      disabled: clash || past,
-      hint: past ? t.feedback.chooseFutureTime : clash ? t.admin.slotTakenHint : undefined,
-    };
-  });
-}
 
 export function AddBookingModal({
   open,
@@ -110,7 +89,21 @@ function BookingForm({
 
   const duration = services.find((s) => s.id === serviceId)?.duration ?? 30;
   const options = useMemo(
-    () => timeOptions(duration, date ? bookedByDate.get(date) ?? [] : [], t, date),
+    () =>
+      adminSlotOptions({
+        durationMinutes: duration,
+        bookedToday: date ? bookedByDate.get(date) ?? [] : [],
+        date,
+      }).map((option) => ({
+        ...option,
+        disabled: option.disabledReason !== null,
+        hint:
+          option.disabledReason === "past"
+            ? t.feedback.chooseFutureTime
+            : option.disabledReason === "conflict"
+              ? t.admin.slotTakenHint
+              : undefined,
+      })),
     [duration, date, bookedByDate, t],
   );
   const [time, setTime] = useState(initialTime ?? options[0]?.value ?? "");
@@ -121,7 +114,8 @@ function BookingForm({
   const dateInvalid = Boolean(date && date < today);
   const allTaken = options.length > 0 && options.every((option) => option.disabled);
 
-  function submit() {
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setFeedback(null);
     startTransition(async () => {
       const result = await createAdminBookingAction({
@@ -133,7 +127,10 @@ function BookingForm({
         note: note.trim() || undefined,
       });
       setFeedback(result);
-      if (result.ok) onClose();
+      if (result.ok) {
+        toast.success(result.message ?? t.feedback.bookingAdded);
+        onClose();
+      }
     });
   }
 
@@ -146,7 +143,7 @@ function BookingForm({
     (mode === "client" ? !clientId : customerName.trim().length === 0);
 
   return (
-    <div className="space-y-4">
+    <form className="space-y-4" onSubmit={submit}>
         <div>
           <span className="mb-2 block text-sm font-medium text-stone-700 dark:text-stone-300">
             {t.admin.customer}
@@ -215,6 +212,7 @@ function BookingForm({
             value={time}
             onChange={setTime}
             options={options}
+            searchable={false}
           />
         </div>
         {dateInvalid ? (
@@ -239,10 +237,10 @@ function BookingForm({
           <Button type="button" variant="secondary" onClick={onClose}>
             {t.common.cancel}
           </Button>
-          <Button type="button" onClick={submit} disabled={disabled}>
+          <Button type="submit" disabled={disabled}>
             {pending ? t.admin.adding : t.admin.addBooking}
           </Button>
         </div>
-    </div>
+    </form>
   );
 }

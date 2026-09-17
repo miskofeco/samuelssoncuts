@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { toast } from "sonner";
 
 import { approveClientAction, rejectClientAction } from "@/app/actions";
 import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
 import { StatusPill } from "@/components/shared/status-pill";
@@ -30,8 +32,9 @@ export function ApprovalQueue({
 }) {
   const t = useT();
   const locale = localeFor(useLang());
-  const [pendingTransition, startTransition] = useTransition();
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+  const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set());
+  const [rejecting, setRejecting] = useState<ClientProfile | null>(null);
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
 
   const people = useMemo(
@@ -46,17 +49,25 @@ export function ApprovalQueue({
   ).length;
 
   function run(action: (id: string) => Promise<ActionResult>, id: string) {
-    if (pendingTransition) return; // guard against overlapping cross-row actions
+    if (busyIds.has(id)) return;
     setFeedback(null);
-    setBusyId(id);
+    setBusyIds((current) => new Set(current).add(id));
     startTransition(async () => {
       try {
         const result = await action(id);
         setFeedback(result);
+        if (result.ok) {
+          toast.success(result.message);
+          setRejecting(null);
+        }
       } catch {
         setFeedback({ ok: false, error: t.common.somethingWentWrong });
       } finally {
-        setBusyId(null);
+        setBusyIds((current) => {
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
       }
     });
   }
@@ -91,7 +102,7 @@ export function ApprovalQueue({
           />
         ) : (
           pending.map((client) => {
-            const busy = pendingTransition && busyId === client.id;
+            const busy = busyIds.has(client.id);
             const clientRequests = requests.filter(
               (request) => request.clientId === client.id,
             );
@@ -141,7 +152,7 @@ export function ApprovalQueue({
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <Button
                     type="button"
-                    disabled={pendingTransition}
+                    disabled={busy}
                     onClick={() => run(approveClientAction, client.id)}
                   >
                     {busy ? t.common.working : t.admin.approve}
@@ -149,8 +160,8 @@ export function ApprovalQueue({
                   <Button
                     type="button"
                     variant="secondary"
-                    disabled={pendingTransition}
-                    onClick={() => run(rejectClientAction, client.id)}
+                    disabled={busy}
+                    onClick={() => setRejecting(client)}
                   >
                     {busy ? t.common.working : t.admin.reject}
                   </Button>
@@ -160,6 +171,20 @@ export function ApprovalQueue({
           })
         )}
       </div>
+
+      <ConfirmDialog
+        open={rejecting !== null}
+        onOpenChange={(open) => {
+          if (!open) setRejecting(null);
+        }}
+        title={t.admin.confirmRejectTitle}
+        description={t.admin.confirmRejectBody}
+        confirmLabel={t.admin.reject}
+        loading={rejecting ? busyIds.has(rejecting.id) : false}
+        onConfirm={() => {
+          if (rejecting) run(rejectClientAction, rejecting.id);
+        }}
+      />
     </Card>
   );
 }

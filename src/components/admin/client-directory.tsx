@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Avatar } from "@/components/shared/avatar";
 import { Card, SectionHeader } from "@/components/shared/card";
@@ -9,29 +9,24 @@ import { DataTable, type Column } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusPill } from "@/components/shared/status-pill";
 import type { ApprovalStatus, ClientProfile } from "@/domain/types";
-import type { Dict } from "@/i18n/dictionaries";
 import { useT } from "@/i18n/provider";
 
-const statusTone: Record<ApprovalStatus, "success" | "warning" | "danger"> = {
-  approved: "success",
-  pending: "warning",
-  rejected: "danger",
-  blocked: "danger",
-};
-
-function statusLabel(t: Dict, status: ApprovalStatus) {
-  switch (status) {
-    case "approved": return t.statuses.approved;
-    case "pending":  return t.statuses.approvalPending;
-    case "rejected": return t.statuses.rejected;
-    case "blocked":  return t.statuses.blocked;
-  }
-}
+import { clientStatusLabel, clientStatusTone } from "./client-status";
 
 export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
   const t = useT();
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const query = searchParams.get("q") ?? "";
+
+  function setQuery(next: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next.trim()) params.set("q", next);
+    else params.delete("q");
+    const suffix = params.toString();
+    router.replace(suffix ? `${pathname}?${suffix}` : pathname, { scroll: false });
+  }
 
   const people = useMemo(
     () => clients.filter((client) => client.role !== "admin"),
@@ -89,7 +84,7 @@ export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
       header: t.admin.colStatus,
       align: "right",
       cell: (client) => (
-        <StatusPill tone={statusTone[client.status]}>{statusLabel(t, client.status)}</StatusPill>
+        <StatusPill tone={clientStatusTone[client.status]}>{clientStatusLabel(t, client.status)}</StatusPill>
       ),
     },
   ];
@@ -115,6 +110,27 @@ export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
           rows={rows}
           rowKey={(client) => client.id}
           onRowClick={(client) => router.push(`/admin/clients/${client.id}`)}
+          rowLabel={(client) => t.admin.openClient(client.name)}
+          mobileCard={(client) => (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar name={client.name} src={client.avatarUrl} size="sm" tone="muted" />
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-black dark:text-white">{client.name}</p>
+                    <p className="truncate text-xs text-stone-500 dark:text-stone-400">{client.email}</p>
+                  </div>
+                </div>
+                <StatusPill tone={clientStatusTone[client.status]}>
+                  {clientStatusLabel(t, client.status)}
+                </StatusPill>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-600 dark:text-stone-300">
+                <span>{client.phone || "—"}</span>
+                <span>{client.emailConfirmed ? t.admin.verified : t.admin.unverified}</span>
+              </div>
+            </div>
+          )}
           empty={<EmptyState title={t.admin.noClientsFound} description={t.admin.nothingMatches(query)} />}
         />
       </div>

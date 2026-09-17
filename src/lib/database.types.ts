@@ -266,6 +266,7 @@ export type Database = {
           provider_message_id: string | null;
           sent_at: string | null;
           read_at: string | null;
+          action_url: string | null;
           created_at: string;
         };
         Insert: {
@@ -278,6 +279,7 @@ export type Database = {
           provider_message_id?: string | null;
           sent_at?: string | null;
           read_at?: string | null;
+          action_url?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;
@@ -449,6 +451,13 @@ export type Database = {
           p_new_start: string;
           p_new_end: string;
           p_note?: string | null;
+        };
+        Returns: string;
+      };
+      admin_decline_booking_request: {
+        Args: {
+          p_request_id: string;
+          p_reason?: string | null;
         };
         Returns: string;
       };

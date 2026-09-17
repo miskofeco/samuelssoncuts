@@ -25,7 +25,34 @@ export default async function AdminAuditPage() {
             <EmptyState title={t.admin.auditEmpty} />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <p className="border-b border-black/10 px-4 py-3 text-xs text-stone-500 dark:border-white/10 dark:text-stone-400">
+            {t.admin.auditLatest(100)}
+          </p>
+          <ul className="divide-y divide-black/5 md:hidden dark:divide-white/5">
+            {entries.map((entry) => (
+              <li key={entry.id} className="space-y-2 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <code className="rounded bg-stone-100 px-1.5 py-0.5 text-xs text-stone-800 dark:bg-stone-800 dark:text-stone-200">
+                    {entry.action}
+                  </code>
+                  <time className="text-right text-xs text-stone-500 dark:text-stone-400">
+                    {entry.createdAt}
+                  </time>
+                </div>
+                <p className="text-sm font-medium text-stone-700 dark:text-stone-300">{entry.actor}</p>
+                <p className="break-words text-xs text-stone-500 dark:text-stone-400">
+                  {entry.target ?? "—"}
+                </p>
+                {entry.detail ? (
+                  <p className="break-words rounded-lg bg-stone-50 p-2 text-xs text-stone-600 dark:bg-stone-800/60 dark:text-stone-300">
+                    {entry.detail}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-black/10 text-left dark:border-white/10">
@@ -72,6 +99,7 @@ export default async function AdminAuditPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
     </div>

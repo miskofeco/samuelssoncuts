@@ -102,6 +102,7 @@ export type Notification = {
   subject: string;
   body?: string | null;
   read: boolean;
+  actionUrl?: string | null;
   createdAt: string;
 };
 

@@ -18,7 +18,7 @@ returns uuid
 language plpgsql
 volatile
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_appt public.appointments%rowtype;
@@ -80,4 +80,5 @@ begin
 end;
 $$;
 
+revoke execute on function public.client_request_reschedule(uuid, timestamptz, integer, boolean) from public, anon;
 grant execute on function public.client_request_reschedule(uuid, timestamptz, integer, boolean) to authenticated;

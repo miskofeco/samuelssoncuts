@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { appointmentUid, buildIcs, type IcsEvent } from "@/lib/ics";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getCurrentProfile } from "@/server/auth";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,15 @@ export async function GET(
   { params }: { params: Promise<{ appointmentId: string }> },
 ) {
   const { appointmentId } = await params;
+  if (!z.uuid().safeParse(appointmentId).success) {
+    return new NextResponse("Not found", { status: 404 });
+  }
+
+  const { configured, profile } = await getCurrentProfile();
+  if (!configured || !profile) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
+
   const supabase = getSupabaseAdminClient();
 
   const { data: appointment, error } = await supabase
@@ -20,6 +31,9 @@ export async function GET(
     .maybeSingle();
 
   if (error || !appointment) {
+    return new NextResponse("Not found", { status: 404 });
+  }
+  if (profile.role !== "admin" && appointment.client_id !== profile.id) {
     return new NextResponse("Not found", { status: 404 });
   }
 

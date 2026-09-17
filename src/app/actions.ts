@@ -17,28 +17,30 @@ import { AppointmentProposedEmail } from "@/emails/appointment-proposed";
 import { AppointmentRescheduledEmail } from "@/emails/appointment-rescheduled";
 import { BookingReceivedEmail } from "@/emails/booking-received";
 import { BookingRequestEmail } from "@/emails/booking-request";
+import { BookingRequestDeclinedEmail } from "@/emails/booking-request-declined";
 import { ClientRespondedEmail } from "@/emails/client-responded";
 import { SlotTakenEmail } from "@/emails/slot-taken";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { zonedDateTimeToUtcIso, timeInShopTimeZone, dateInShopTimeZone } from "@/lib/time-zone";
+import {
+  addDaysToDate,
+  zonedDateTimeToUtcIso,
+  timeInShopTimeZone,
+  dateInShopTimeZone,
+} from "@/lib/time-zone";
 import { CONSENT_VERSION } from "@/lib/consent/config";
 import {
-  clientSlotsForService,
-  isPreferredClientStart,
   isStartInClientBookingWindow,
   isStartInFuture,
   minutesOf,
-  priceForSlot,
 } from "@/domain/schedule";
 import {
-  hasBlockedTimeOverlap,
-  hasConfirmedAppointmentOverlap,
-  isSlotInsideConfiguredBusinessHours,
+  guardSlot,
 } from "@/server/booking-guards";
 import { dashboardPathFor, getCurrentProfile, requireAdmin, requireApprovedClient, requireProfile } from "@/server/auth";
 import { recordAdminAction } from "@/server/audit";
-import { loadBusinessHours, loadPricingSettings, notificationOrFilter } from "@/server/dashboard-data";
+import { notificationOrFilter } from "@/server/dashboard-data";
+import { quoteClientSlot } from "@/server/booking-pricing";
 import { enforceRateLimit } from "@/server/rate-limit";
 import { createAdminNotification, createNotification, createNotifications } from "@/server/notifications";
 import type { ActionResult } from "@/domain/types";
@@ -104,6 +106,19 @@ const rescheduleSchema = z.object({
 const cancelAppointmentSchema = z.object({
   appointmentId: z.uuid(),
   note: z.string().max(1000).optional(),
+});
+
+const uuidSchema = z.uuid();
+const appointmentOutcomeSchema = z.enum(["completed", "no_show"]);
+const toggleServiceSchema = z.object({ serviceId: z.uuid(), active: z.boolean() });
+const clientRescheduleSchema = z.object({
+  appointmentId: z.uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  time: z.string().regex(/^\d{2}:\d{2}$/),
+});
+const declineRequestSchema = z.object({
+  requestId: z.uuid(),
+  reason: z.string().trim().max(1000).optional(),
 });
 
 const profileSchema = z.object({
@@ -192,13 +207,14 @@ function timeFromIso(iso: string) {
 
 export async function signInAction(formData: FormData) {
   const t = await getDict();
+  const emailValue = formString(formData, "email");
   const input = signInSchema.safeParse({
-    email: formString(formData, "email"),
+    email: emailValue,
     password: formString(formData, "password"),
   });
 
   if (!input.success) {
-    redirect(`/login?error=${encodeURIComponent(t.feedback.checkEmailPassword)}`);
+    redirect(`/login?error=${encodeURIComponent(t.feedback.checkEmailPassword)}&email=${encodeURIComponent(emailValue)}`);
   }
 
   const limit = await enforceRateLimit("auth:sign-in", {
@@ -207,14 +223,14 @@ export async function signInAction(formData: FormData) {
     windowSeconds: 15 * 60,
   });
   if (!limit.ok) {
-    redirect(`/login?error=${encodeURIComponent(limit.error)}`);
+    redirect(`/login?error=${encodeURIComponent(limit.error)}&email=${encodeURIComponent(input.data.email)}`);
   }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(input.data);
 
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    redirect(`/login?error=${encodeURIComponent(t.feedback.checkEmailPassword)}&email=${encodeURIComponent(input.data.email)}`);
   }
 
   redirect("/dashboard");
@@ -222,7 +238,8 @@ export async function signInAction(formData: FormData) {
 
 export async function requestPasswordResetAction(formData: FormData) {
   const t = await getDict();
-  const email = signInSchema.shape.email.safeParse(formString(formData, "email"));
+  const emailValue = formString(formData, "email");
+  const email = signInSchema.shape.email.safeParse(emailValue);
 
   // Always show the same neutral message (don't leak which emails are registered).
   const sentUrl = `/reset-password?message=${encodeURIComponent(t.auth.resetSent)}`;
@@ -236,7 +253,7 @@ export async function requestPasswordResetAction(formData: FormData) {
     windowSeconds: 15 * 60,
   });
   if (!limit.ok) {
-    redirect(`/reset-password?error=${encodeURIComponent(limit.error)}`);
+    redirect(`/reset-password?error=${encodeURIComponent(limit.error)}&email=${encodeURIComponent(email.data)}`);
   }
 
   const supabase = await createClient();
@@ -262,7 +279,8 @@ export async function updatePasswordAction(formData: FormData) {
   const { error } = await supabase.auth.updateUser({ password: password.data });
 
   if (error) {
-    redirect(`/auth/update-password?error=${encodeURIComponent(error.message)}`);
+    await reportError("auth-update-password", error);
+    redirect(`/auth/update-password?error=${encodeURIComponent(t.common.somethingWentWrong)}`);
   }
 
   await supabase.auth.signOut();
@@ -286,7 +304,10 @@ export async function signInWithOAuthAction(formData: FormData) {
   });
 
   if (error || !data.url) {
-    redirect(`/login?error=${encodeURIComponent(error?.message ?? t.feedback.couldNotStartSignIn)}`);
+    if (error) {
+      await reportError("auth-oauth", error, { provider: provider.data });
+    }
+    redirect(`/login?error=${encodeURIComponent(t.feedback.couldNotStartSignIn)}`);
   }
 
   // Hand off to the provider's consent screen.
@@ -295,15 +316,16 @@ export async function signInWithOAuthAction(formData: FormData) {
 
 export async function registerAction(formData: FormData) {
   const t = await getDict();
+  const emailValue = formString(formData, "email");
   const input = registerSchema.safeParse({
-    email: formString(formData, "email"),
+    email: emailValue,
     password: formString(formData, "password"),
     fullName: formString(formData, "fullName"),
     phone: formString(formData, "phone"),
   });
 
   if (!input.success) {
-    redirect(`/register?error=${encodeURIComponent(t.feedback.fillAllFields)}`);
+    redirect(`/register?error=${encodeURIComponent(t.feedback.fillAllFields)}&email=${encodeURIComponent(emailValue)}`);
   }
 
   const registrationLimit = await enforceRateLimit("auth:register", {
@@ -312,7 +334,7 @@ export async function registerAction(formData: FormData) {
     windowSeconds: 60 * 60,
   });
   if (!registrationLimit.ok) {
-    redirect(`/register?error=${encodeURIComponent(registrationLimit.error)}`);
+    redirect(`/register?error=${encodeURIComponent(registrationLimit.error)}&email=${encodeURIComponent(input.data.email)}`);
   }
 
   const phone = input.data.phone.trim();
@@ -320,7 +342,7 @@ export async function registerAction(formData: FormData) {
 
   // Reject a phone number that's already in use before creating the auth user.
   if (await isPhoneTaken(supabase, phone)) {
-    redirect(`/register?error=${encodeURIComponent(t.feedback.phoneTaken)}`);
+    redirect(`/register?error=${encodeURIComponent(t.feedback.phoneTaken)}&email=${encodeURIComponent(input.data.email)}`);
   }
 
   const { error } = await supabase.auth.signUp({
@@ -339,8 +361,11 @@ export async function registerAction(formData: FormData) {
     // Backstop for a race between the check above and the trigger insert.
     const message = isDuplicatePhoneError(error.message)
       ? t.feedback.phoneTaken
-      : error.message;
-    redirect(`/register?error=${encodeURIComponent(message)}`);
+      : t.common.somethingWentWrong;
+    if (!isDuplicatePhoneError(error.message)) {
+      await reportError("auth-register", error);
+    }
+    redirect(`/register?error=${encodeURIComponent(message)}&email=${encodeURIComponent(input.data.email)}`);
   }
 
   redirect(`/login?message=${encodeURIComponent(t.feedback.registrationCreated)}`);
@@ -357,15 +382,25 @@ export async function signOutAction() {
 // `cookie_consent` cookie; this only mirrors the decision to the DB and is a
 // no-op for logged-out visitors. It never blocks the UI — failures are silent.
 export async function recordConsentAction(input: unknown): Promise<ActionResult> {
+  const t = await getDict();
   const parsed = consentSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: "Invalid consent payload." };
+    return { ok: false, error: t.common.somethingWentWrong };
   }
 
   // Logged-out visitors are fine — their choice lives only in the cookie.
   const { configured, profile } = await getCurrentProfile();
   if (!configured || !profile) {
     return { ok: true };
+  }
+
+  const limit = await enforceRateLimit("privacy:record-consent", {
+    identity: profile.id,
+    limit: 30,
+    windowSeconds: 60 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
   }
 
   const userAgent = (await headers()).get("user-agent")?.slice(0, 500) ?? null;
@@ -382,7 +417,8 @@ export async function recordConsentAction(input: unknown): Promise<ActionResult>
   });
 
   if (error) {
-    return { ok: false, error: error.message };
+    await reportError("record-consent", error, { userId: profile.id });
+    return { ok: false, error: t.common.somethingWentWrong };
   }
 
   return { ok: true };
@@ -416,11 +452,14 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
     .eq("id", parsed.data.serviceId)
     .single();
 
-  if (serviceError || !service) {
-    return { ok: false, error: serviceError?.message ?? t.feedback.serviceNotFound };
+  if (serviceError) {
+    await reportError("booking-create", serviceError, { phase: "load-service" });
+    return { ok: false, error: t.common.somethingWentWrong };
+  }
+  if (!service) {
+    return { ok: false, error: t.feedback.serviceNotFound };
   }
 
-  const startMin = minutesOf(parsed.data.time);
   const start = startsAt(parsed.data.date, parsed.data.time);
   const end = addMinutes(start, service.duration_minutes);
 
@@ -431,63 +470,31 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
   if (!isStartInClientBookingWindow(start)) {
     return { ok: false, error: t.feedback.chooseWithinTwoWeeks };
   }
-  if (
-    !(await isSlotInsideConfiguredBusinessHours(supabase, {
-      date: parsed.data.date,
-      time: parsed.data.time,
-      durationMinutes: service.duration_minutes,
-    }))
-  ) {
-    return { ok: false, error: t.feedback.slotOutsideHours };
-  }
-  if (await hasBlockedTimeOverlap(supabase, { start, end })) {
-    return { ok: false, error: t.feedback.slotUnavailable };
-  }
-  if (await hasConfirmedAppointmentOverlap(supabase, { start, end })) {
-    return { ok: false, error: t.feedback.slotNoLongerFree };
+  const guarded = await guardSlot(supabase, {
+    date: parsed.data.date,
+    time: parsed.data.time,
+    durationMinutes: service.duration_minutes,
+    start,
+    end,
+  });
+  if (!guarded.ok) {
+    const error = guarded.reason === "outside-hours"
+      ? t.feedback.slotOutsideHours
+      : guarded.reason === "blocked"
+        ? t.feedback.slotUnavailable
+        : t.feedback.slotNoLongerFree;
+    return { ok: false, error };
   }
 
-  // The slot must not overlap a CONFIRMED appointment that day (pending requests
-  // from other clients are allowed to coexist).
-  const dayStart = startsAt(parsed.data.date, "00:00");
-  const dayEnd = addMinutes(dayStart, 24 * 60);
-  const { data: dayAppts } = await supabase.rpc("confirmed_appointment_slots");
-
-  // Gap pricing: base only if the slot opens the day or extends the gapless
-  // block anchored at opening; otherwise +10%.
-  const confirmedForDay = (dayAppts ?? [])
-    .filter((a) => a.starts_at >= dayStart && a.starts_at < dayEnd)
-    .map((a) => ({
-      date: parsed.data.date,
-      time: timeFromIso(a.starts_at),
-      durationMinutes: Math.round(
-        (new Date(a.ends_at).getTime() - new Date(a.starts_at).getTime()) / 60000,
-      ),
-    }));
-  const businessHours = await loadBusinessHours();
-  if (
-    !clientSlotsForService(
-      parsed.data.date,
-      service.duration_minutes,
-      confirmedForDay,
-      businessHours,
-    ).includes(parsed.data.time)
-  ) {
+  const quote = await quoteClientSlot(supabase, {
+    date: parsed.data.date,
+    time: parsed.data.time,
+    durationMinutes: service.duration_minutes,
+    basePriceCents: service.price_cents,
+  });
+  if (!quote.ok) {
     return { ok: false, error: t.feedback.pickGeneratedSlot };
   }
-  const preferred = isPreferredClientStart(
-    parsed.data.date,
-    startMin,
-    service.duration_minutes,
-    confirmedForDay,
-    businessHours,
-  );
-  const pricingSettings = await loadPricingSettings();
-  const basePrice = Math.round(service.price_cents / 100);
-  const priceCents = priceForSlot(basePrice, preferred, {
-    startsAt: parsed.data.time,
-    ...pricingSettings,
-  }) * 100;
 
   const { error: requestError } = await supabase.from("booking_requests").insert({
     client_id: profile.id,
@@ -496,12 +503,13 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
     status: "pending",
     requested_start: start,
     requested_end: end,
-    price_cents: priceCents,
-    surcharge: !preferred,
+    price_cents: quote.priceCents,
+    surcharge: quote.surcharge,
   });
 
   if (requestError) {
-    return { ok: false, error: requestError.message };
+    await reportError("booking-create", requestError, { phase: "insert-request" });
+    return { ok: false, error: t.common.somethingWentWrong };
   }
 
   const barberEmail = getBarberEmail();
@@ -563,15 +571,21 @@ export async function createRequestFromClientAction(
 export async function approveClientAction(clientId: string): Promise<ActionResult> {
   await requireAdmin();
   const t = await getDict();
+  if (!uuidSchema.safeParse(clientId).success) {
+    return { ok: false, error: t.feedback.chooseValidClient };
+  }
   const supabase = await createClient();
 
   // Don't approve anyone who hasn't verified their email yet.
   const { data: candidate } = await supabase
     .from("profiles")
-    .select("email_confirmed_at")
+    .select("email_confirmed_at, role")
     .eq("id", clientId)
     .single();
 
+  if (!candidate || candidate.role !== "client") {
+    return { ok: false, error: t.feedback.chooseValidClient };
+  }
   if (!candidate?.email_confirmed_at) {
     return { ok: false, error: t.feedback.emailNotConfirmed };
   }
@@ -580,6 +594,7 @@ export async function approveClientAction(clientId: string): Promise<ActionResul
     .from("profiles")
     .update({ approval_status: "approved" })
     .eq("id", clientId)
+    .eq("role", "client")
     .select("id, email, full_name")
     .single();
 
@@ -611,17 +626,24 @@ export async function approveClientAction(clientId: string): Promise<ActionResul
 export async function rejectClientAction(clientId: string): Promise<ActionResult> {
   await requireAdmin();
   const t = await getDict();
+  if (!uuidSchema.safeParse(clientId).success) {
+    return { ok: false, error: t.feedback.chooseValidClient };
+  }
   const supabase = await createClient();
 
   const { data: profile, error } = await supabase
     .from("profiles")
     .update({ approval_status: "rejected" })
     .eq("id", clientId)
+    .eq("role", "client")
     .select("id, email, full_name")
     .single();
 
   if (error || !profile) {
-    return { ok: false, error: error?.message ?? t.feedback.couldNotUpdateClient };
+    return {
+      ok: false,
+      error: error?.message ?? t.feedback.chooseValidClient,
+    };
   }
 
   await createNotification(supabase, {
@@ -649,33 +671,61 @@ export async function rejectClientAction(clientId: string): Promise<ActionResult
 export async function blockClientAction(clientId: string): Promise<ActionResult> {
   await requireAdmin();
   const t = await getDict();
+  if (!uuidSchema.safeParse(clientId).success) {
+    return { ok: false, error: t.feedback.chooseValidClient };
+  }
   const supabase = await createClient();
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .update({ approval_status: "blocked" })
     .eq("id", clientId)
+    .eq("role", "client")
     .select("id, email, full_name")
     .single();
 
   if (profileError || !profile) {
-    return { ok: false, error: profileError?.message ?? t.feedback.couldNotUpdateClient };
+    return {
+      ok: false,
+      error: profileError?.message ?? t.feedback.chooseValidClient,
+    };
   }
 
-  // Cancel all pending/proposed booking requests.
+  const { data: openRequests } = await supabase
+    .from("booking_requests")
+    .select("id")
+    .eq("client_id", clientId)
+    .in("status", ["pending", "proposed"]);
+  const openRequestIds = (openRequests ?? []).map((request) => request.id);
+  if (openRequestIds.length > 0) {
+    await supabase
+      .from("appointment_proposals")
+      .update({ status: "expired" })
+      .in("request_id", openRequestIds)
+      .eq("status", "sent");
+  }
+
   await supabase
     .from("booking_requests")
     .update({ status: "cancelled" })
     .eq("client_id", clientId)
     .in("status", ["pending", "proposed"]);
 
-  // Cancel future confirmed appointments — just delete them (same as the admin cancel flow).
+  // Preserve appointment history: soft-cancel each future booking through the
+  // same transactional lifecycle RPC used by the calendar action.
   const now = new Date().toISOString();
-  await supabase
+  const { data: futureAppointments } = await supabase
     .from("appointments")
-    .delete()
+    .select("id")
     .eq("client_id", clientId)
+    .eq("status", "confirmed")
     .gt("starts_at", now);
+  for (const appointment of futureAppointments ?? []) {
+    await supabase.rpc("admin_cancel_appointment", {
+      p_appointment_id: appointment.id,
+      p_allow_past: false,
+    });
+  }
 
   await createNotification(supabase, {
     user_id: profile.id,
@@ -701,12 +751,16 @@ export async function blockClientAction(clientId: string): Promise<ActionResult>
 export async function unblockClientAction(clientId: string): Promise<ActionResult> {
   await requireAdmin();
   const t = await getDict();
+  if (!uuidSchema.safeParse(clientId).success) {
+    return { ok: false, error: t.feedback.chooseValidClient };
+  }
   const supabase = await createClient();
 
   const { error } = await supabase
     .from("profiles")
     .update({ approval_status: "approved" })
-    .eq("id", clientId);
+    .eq("id", clientId)
+    .eq("role", "client");
 
   if (error) {
     return { ok: false, error: error.message };
@@ -726,6 +780,19 @@ export async function unblockClientAction(clientId: string): Promise<ActionResul
 export async function deleteClientAction(clientId: string): Promise<ActionResult> {
   const admin = await requireAdmin();
   const t = await getDict();
+  if (!uuidSchema.safeParse(clientId).success) {
+    return { ok: false, error: t.feedback.chooseValidClient };
+  }
+
+  const supabase = await createClient();
+  const { data: target } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (!target || target.role !== "client") {
+    return { ok: false, error: t.feedback.chooseValidClient };
+  }
 
   // Destructive + service-role powered — cap how fast it can be invoked.
   const limit = await enforceRateLimit("admin:delete-client", {
@@ -829,6 +896,15 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
     return { ok: false, error: t.feedback.pickValidDateTime };
   }
 
+  const limit = await enforceRateLimit("booking:propose-appointment", {
+    identity: admin.id,
+    limit: 60,
+    windowSeconds: 10 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
+
   const supabase = await createClient();
   const start = startsAt(parsed.data.date, parsed.data.time);
 
@@ -846,7 +922,7 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
     return { ok: false, error: requestError?.message ?? t.feedback.requestNotFound };
   }
 
-  if (request.status === "confirmed") {
+  if (request.status !== "pending" && request.status !== "proposed") {
     return { ok: false, error: t.feedback.alreadyConfirmed };
   }
 
@@ -868,21 +944,21 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
 
   const end = addMinutes(start, service.duration_minutes);
 
-  if (
-    !(await isSlotInsideConfiguredBusinessHours(supabase, {
-      barberId: admin.id,
-      date: parsed.data.date,
-      time: parsed.data.time,
-      durationMinutes: service.duration_minutes,
-    }))
-  ) {
-    return { ok: false, error: t.feedback.slotOutsideHours };
-  }
-  if (await hasBlockedTimeOverlap(supabase, { barberId: admin.id, start, end })) {
-    return { ok: false, error: t.feedback.slotUnavailable };
-  }
-  if (await hasConfirmedAppointmentOverlap(supabase, { barberId: admin.id, start, end })) {
-    return { ok: false, error: t.feedback.slotTaken };
+  const guarded = await guardSlot(supabase, {
+    barberId: admin.id,
+    date: parsed.data.date,
+    time: parsed.data.time,
+    durationMinutes: service.duration_minutes,
+    start,
+    end,
+  });
+  if (!guarded.ok) {
+    const error = guarded.reason === "outside-hours"
+      ? t.feedback.slotOutsideHours
+      : guarded.reason === "blocked"
+        ? t.feedback.slotUnavailable
+        : t.feedback.slotTaken;
+    return { ok: false, error };
   }
 
   // Supersede any earlier outstanding proposal so the client only sees the latest.
@@ -955,12 +1031,90 @@ export async function proposeTimeFromAdminAction(
   return proposeAppointmentAction({ requestId, date, time, note });
 }
 
+export async function declineRequestAdminAction(input: unknown): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const t = await getDict();
+  const parsed = declineRequestSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: t.feedback.unableDeclineRequest };
+  }
+
+  const limit = await enforceRateLimit("booking:decline-request", {
+    identity: admin.id,
+    limit: 60,
+    windowSeconds: 10 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
+
+  const supabase = await createClient();
+  const { data: request, error: requestError } = await supabase
+    .from("booking_requests")
+    .select("id, client_id, status")
+    .eq("id", parsed.data.requestId)
+    .maybeSingle();
+  if (
+    requestError ||
+    !request ||
+    (request.status !== "pending" && request.status !== "proposed")
+  ) {
+    return { ok: false, error: t.feedback.unableDeclineRequest };
+  }
+
+  const { data: clientProfile } = await supabase
+    .from("profiles")
+    .select("email, full_name")
+    .eq("id", request.client_id)
+    .maybeSingle();
+
+  const { error: declineError } = await supabase.rpc("admin_decline_booking_request", {
+    p_request_id: request.id,
+    p_reason: parsed.data.reason || null,
+  });
+  if (declineError) {
+    return { ok: false, error: t.feedback.unableDeclineRequest };
+  }
+
+  if (clientProfile?.email) {
+    await createNotification(supabase, {
+      user_id: request.client_id,
+      channel: "email",
+      recipient: clientProfile.email,
+      subject: t.feedback.requestDeclinedSubject,
+      body: parsed.data.reason || t.feedback.requestDeclinedBody,
+      pushUrl: "/client/reservations",
+    });
+    await sendEmail({
+      to: clientProfile.email,
+      subject: t.feedback.requestDeclinedSubject,
+      react: BookingRequestDeclinedEmail({
+        clientName: clientProfile.full_name ?? "klient",
+        reason: parsed.data.reason,
+      }),
+    });
+  }
+
+  await recordAdminAction("request.decline", {
+    targetType: "booking_request",
+    targetId: request.id,
+    detail: parsed.data.reason ? { reason: parsed.data.reason } : undefined,
+  });
+
+  revalidatePath("/admin", "layout");
+  revalidatePath("/client", "layout");
+  return { ok: true, message: t.feedback.requestDeclined };
+}
+
 // Barber confirms a client's exact-slot request as-is → a confirmed appointment.
 // Other pending requests for the SAME slot are auto-declined and those clients
 // notified (the slot is now taken).
 export async function confirmRequestAction(requestId: string): Promise<ActionResult> {
   const admin = await requireAdmin();
   const t = await getDict();
+  if (!uuidSchema.safeParse(requestId).success) {
+    return { ok: false, error: t.feedback.requestNotFound };
+  }
   const limit = await enforceRateLimit("booking:confirm-request", {
     identity: admin.id,
     limit: 60,
@@ -996,34 +1150,24 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
     (new Date(request.requested_end).getTime() - new Date(request.requested_start).getTime()) / 60000,
   );
 
-  if (
-    requestedDuration <= 0 ||
-    !(await isSlotInsideConfiguredBusinessHours(supabase, {
-      barberId: admin.id,
-      date: requestedDate,
-      time: requestedTime,
-      durationMinutes: requestedDuration,
-    }))
-  ) {
+  if (requestedDuration <= 0) {
     return { ok: false, error: t.feedback.slotOutsideHours };
   }
-  if (
-    await hasBlockedTimeOverlap(supabase, {
-      barberId: admin.id,
-      start: request.requested_start,
-      end: request.requested_end,
-    })
-  ) {
-    return { ok: false, error: t.feedback.slotUnavailable };
-  }
-  if (
-    await hasConfirmedAppointmentOverlap(supabase, {
-      barberId: admin.id,
-      start: request.requested_start,
-      end: request.requested_end,
-    })
-  ) {
-    return { ok: false, error: t.feedback.slotNoLongerFree };
+  const guarded = await guardSlot(supabase, {
+    barberId: admin.id,
+    date: requestedDate,
+    time: requestedTime,
+    durationMinutes: requestedDuration,
+    start: request.requested_start,
+    end: request.requested_end,
+  });
+  if (!guarded.ok) {
+    const error = guarded.reason === "outside-hours"
+      ? t.feedback.slotOutsideHours
+      : guarded.reason === "blocked"
+        ? t.feedback.slotUnavailable
+        : t.feedback.slotNoLongerFree;
+    return { ok: false, error };
   }
 
   // Fetch client + service details for emails (non-fatal if missing).
@@ -1129,6 +1273,15 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
     return { ok: false, error: t.feedback.pickValidNewDateTime };
   }
 
+  const limit = await enforceRateLimit("booking:admin-reschedule", {
+    identity: admin.id,
+    limit: 60,
+    windowSeconds: 10 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
+
   const supabase = await createClient();
 
   const { data: appointment, error: appointmentError } = await supabase
@@ -1146,6 +1299,9 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
       ok: false,
       error: t.feedback.walkInNoReschedule,
     };
+  }
+  if (appointment.status !== "confirmed") {
+    return { ok: false, error: t.feedback.appointmentNotFound };
   }
 
   const start = startsAt(parsed.data.date, parsed.data.time);
@@ -1165,33 +1321,22 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
 
   const end = addMinutes(start, service.duration_minutes);
 
-  if (
-    !(await isSlotInsideConfiguredBusinessHours(supabase, {
-      barberId: admin.id,
-      date: parsed.data.date,
-      time: parsed.data.time,
-      durationMinutes: service.duration_minutes,
-    }))
-  ) {
-    return { ok: false, error: t.feedback.slotOutsideHours };
-  }
-  if (await hasBlockedTimeOverlap(supabase, { barberId: admin.id, start, end })) {
-    return { ok: false, error: t.feedback.slotUnavailable };
-  }
-
-  // Conflict-check the new slot against *other* confirmed appointments, using a
-  // half-open interval overlap [start, end): an existing booking clashes when it
-  // starts before our end AND ends after our start. (Exact-start alone misses
-  // partial overlaps like 16:00–17:15 vs a new 17:00 start.)
-  if (
-    await hasConfirmedAppointmentOverlap(supabase, {
-      barberId: admin.id,
-      start,
-      end,
-      excludeAppointmentId: appointment.id,
-    })
-  ) {
-    return { ok: false, error: t.feedback.slotTaken };
+  const guarded = await guardSlot(supabase, {
+    barberId: admin.id,
+    date: parsed.data.date,
+    time: parsed.data.time,
+    durationMinutes: service.duration_minutes,
+    start,
+    end,
+    excludeAppointmentId: appointment.id,
+  });
+  if (!guarded.ok) {
+    const error = guarded.reason === "outside-hours"
+      ? t.feedback.slotOutsideHours
+      : guarded.reason === "blocked"
+        ? t.feedback.slotUnavailable
+        : t.feedback.slotTaken;
+    return { ok: false, error };
   }
 
   const [{ data: clientProfile }, { data: rescheduleService }] = await Promise.all([
@@ -1201,43 +1346,18 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
     supabase.from("services").select("name").eq("id", appointment.service_id).single(),
   ]);
 
-  // Free the current slot.
-  const { error: deleteError } = await supabase
-    .from("appointments")
-    .delete()
-    .eq("id", appointment.id);
-
-  if (deleteError) {
-    return { ok: false, error: deleteError.message };
+  const { error: rescheduleError } = await supabase.rpc(
+    "admin_reschedule_appointment_to_proposal",
+    {
+      p_appointment_id: appointment.id,
+      p_new_start: start,
+      p_new_end: end,
+      p_note: parsed.data.note ?? null,
+    },
+  );
+  if (rescheduleError) {
+    return { ok: false, error: t.feedback.unableSendNewTime };
   }
-
-  // Supersede any earlier outstanding proposal, then send the new one.
-  await supabase
-    .from("appointment_proposals")
-    .update({ status: "expired" })
-    .eq("request_id", appointment.request_id)
-    .eq("status", "sent");
-
-  const { data: proposal, error: proposalError } = await supabase
-    .from("appointment_proposals")
-    .insert({
-      request_id: appointment.request_id,
-      barber_id: admin.id,
-      starts_at: start,
-      ends_at: end,
-      note: parsed.data.note ?? null,
-    })
-    .select("id")
-    .single();
-
-  if (proposalError || !proposal) {
-    return { ok: false, error: proposalError?.message ?? t.feedback.unableSendNewTime };
-  }
-
-  await supabase
-    .from("booking_requests")
-    .update({ status: "proposed", selected_proposal_id: proposal.id })
-    .eq("id", appointment.request_id);
 
   await createNotification(supabase, {
     user_id: appointment.client_id,
@@ -1275,12 +1395,21 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
 // Cancel a confirmed appointment from the calendar. Frees the slot; for a
 // client booking it also cancels the request and notifies the client.
 export async function cancelAppointmentAdminAction(input: unknown): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const t = await getDict();
   const parsed = cancelAppointmentSchema.safeParse(input);
 
   if (!parsed.success) {
     return { ok: false, error: t.feedback.couldNotCancelAppointment };
+  }
+
+  const limit = await enforceRateLimit("booking:admin-cancel", {
+    identity: admin.id,
+    limit: 60,
+    windowSeconds: 10 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
   }
 
   const supabase = await createClient();
@@ -1302,26 +1431,12 @@ export async function cancelAppointmentAdminAction(input: unknown): Promise<Acti
     supabase.from("services").select("name").eq("id", appointment.service_id).single(),
   ]);
 
-  const { error: deleteError } = await supabase
-    .from("appointments")
-    .delete()
-    .eq("id", appointment.id);
-
-  if (deleteError) {
-    return { ok: false, error: deleteError.message };
-  }
-
-  if (appointment.request_id) {
-    await supabase
-      .from("appointment_proposals")
-      .update({ status: "expired" })
-      .eq("request_id", appointment.request_id)
-      .eq("status", "sent");
-
-    await supabase
-      .from("booking_requests")
-      .update({ status: "cancelled" })
-      .eq("id", appointment.request_id);
+  const { error: cancelError } = await supabase.rpc("admin_cancel_appointment", {
+    p_appointment_id: appointment.id,
+    p_allow_past: false,
+  });
+  if (cancelError) {
+    return { ok: false, error: t.feedback.couldNotCancelAppointment };
   }
 
   // Walk-ins (no client_id) have nobody to notify.
@@ -1404,27 +1519,21 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
 
   const end = addMinutes(start, service.duration_minutes);
 
-  if (
-    !(await isSlotInsideConfiguredBusinessHours(supabase, {
-      barberId: admin.id,
-      date: parsed.data.date,
-      time: parsed.data.time,
-      durationMinutes: service.duration_minutes,
-    }))
-  ) {
-    return { ok: false, error: t.feedback.slotOutsideHours };
-  }
-  if (await hasBlockedTimeOverlap(supabase, { barberId: admin.id, start, end })) {
-    return { ok: false, error: t.feedback.slotUnavailable };
-  }
-
-  // Pre-check the slot for any OVERLAP with confirmed appointments (half-open
-  // interval [start, end)): a booking clashes when it starts before our end AND
-  // ends after our start. The appointments_unique_start index is the hard
-  // backstop for the exact-start race, but only overlap-checking here stops a new
-  // booking from landing partway inside an existing one (e.g. 17:00 over 16:00–17:15).
-  if (await hasConfirmedAppointmentOverlap(supabase, { barberId: admin.id, start, end })) {
-    return { ok: false, error: t.feedback.slotTaken };
+  const guarded = await guardSlot(supabase, {
+    barberId: admin.id,
+    date: parsed.data.date,
+    time: parsed.data.time,
+    durationMinutes: service.duration_minutes,
+    start,
+    end,
+  });
+  if (!guarded.ok) {
+    const error = guarded.reason === "outside-hours"
+      ? t.feedback.slotOutsideHours
+      : guarded.reason === "blocked"
+        ? t.feedback.slotUnavailable
+        : t.feedback.slotTaken;
+    return { ok: false, error };
   }
 
   const { error: insertError } = await supabase.from("appointments").insert({
@@ -1461,6 +1570,13 @@ export async function respondToProposalAction(
 ): Promise<ActionResult> {
   const profile = await requireApprovedClient();
   const t = await getDict();
+  const response = z.object({ proposalId: z.uuid(), accepted: z.boolean() }).safeParse({
+    proposalId,
+    accepted,
+  });
+  if (!response.success) {
+    return { ok: false, error: t.feedback.cannotRespond };
+  }
   const limit = await enforceRateLimit("booking:respond-proposal", {
     identity: profile.id,
     limit: 30,
@@ -1479,7 +1595,10 @@ export async function respondToProposalAction(
     .single();
 
   if (error || !proposal) {
-    return { ok: false, error: error?.message ?? t.feedback.proposalNotFound };
+    if (error) {
+      await reportError("proposal-response", error, { phase: "load-proposal" });
+    }
+    return { ok: false, error: t.feedback.proposalNotFound };
   }
 
   if (proposal.status !== "sent") {
@@ -1516,34 +1635,24 @@ export async function respondToProposalAction(
       (new Date(proposal.ends_at).getTime() - new Date(proposal.starts_at).getTime()) / 60000,
     );
 
-    if (
-      proposalDuration <= 0 ||
-      !(await isSlotInsideConfiguredBusinessHours(supabase, {
-        barberId: proposal.barber_id,
-        date: proposalDate,
-        time: proposalTime,
-        durationMinutes: proposalDuration,
-      }))
-    ) {
+    if (proposalDuration <= 0) {
       return { ok: false, error: t.feedback.slotOutsideHours };
     }
-    if (
-      await hasBlockedTimeOverlap(supabase, {
-        barberId: proposal.barber_id,
-        start: proposal.starts_at,
-        end: proposal.ends_at,
-      })
-    ) {
-      return { ok: false, error: t.feedback.slotUnavailable };
-    }
-    if (
-      await hasConfirmedAppointmentOverlap(supabase, {
-        barberId: proposal.barber_id,
-        start: proposal.starts_at,
-        end: proposal.ends_at,
-      })
-    ) {
-      return { ok: false, error: t.feedback.timeJustTaken };
+    const guarded = await guardSlot(supabase, {
+      barberId: proposal.barber_id,
+      date: proposalDate,
+      time: proposalTime,
+      durationMinutes: proposalDuration,
+      start: proposal.starts_at,
+      end: proposal.ends_at,
+    });
+    if (!guarded.ok) {
+      const error = guarded.reason === "outside-hours"
+        ? t.feedback.slotOutsideHours
+        : guarded.reason === "blocked"
+          ? t.feedback.slotUnavailable
+          : t.feedback.timeJustTaken;
+      return { ok: false, error };
     }
 
   }
@@ -1555,6 +1664,7 @@ export async function respondToProposalAction(
   });
 
   if (responseError) {
+    await reportError("proposal-response", responseError, { proposalId, accepted });
     return { ok: false, error: accepted ? t.feedback.timeJustTaken : t.feedback.cannotRespond };
   }
 
@@ -1620,9 +1730,12 @@ export async function updateProfileAction(input: {
     .eq("id", profile.id);
 
   if (error) {
+    await reportError("profile-update", error, { userId: profile.id });
     return {
       ok: false,
-      error: isDuplicatePhoneError(error.message) ? t.feedback.phoneTaken : error.message,
+      error: isDuplicatePhoneError(error.message)
+        ? t.feedback.phoneTaken
+        : t.common.somethingWentWrong,
     };
   }
 
@@ -1656,9 +1769,12 @@ export async function completePhoneAction(input: { phone: string }): Promise<Act
     .eq("id", profile.id);
 
   if (error) {
+    await reportError("profile-complete-phone", error, { userId: profile.id });
     return {
       ok: false,
-      error: isDuplicatePhoneError(error.message) ? t.feedback.phoneTaken : error.message,
+      error: isDuplicatePhoneError(error.message)
+        ? t.feedback.phoneTaken
+        : t.common.somethingWentWrong,
     };
   }
 
@@ -1684,6 +1800,15 @@ export async function uploadAvatarAction(formData: FormData): Promise<ActionResu
   const profile = await requireProfile();
   const t = await getDict();
 
+  const limit = await enforceRateLimit("profile:upload-avatar", {
+    identity: profile.id,
+    limit: 20,
+    windowSeconds: 60 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
+
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: t.feedback.avatarUploadFailed };
@@ -1705,7 +1830,8 @@ export async function uploadAvatarAction(formData: FormData): Promise<ActionResu
     .upload(path, file, { upsert: true, contentType: file.type });
 
   if (uploadError) {
-    return { ok: false, error: uploadError.message };
+    await reportError("avatar-upload", uploadError, { userId: profile.id, phase: "storage" });
+    return { ok: false, error: t.feedback.avatarUploadFailed };
   }
 
   const { data: publicUrlData } = supabase.storage.from("avatars").getPublicUrl(path);
@@ -1717,7 +1843,8 @@ export async function uploadAvatarAction(formData: FormData): Promise<ActionResu
     .eq("id", profile.id);
 
   if (updateError) {
-    return { ok: false, error: updateError.message };
+    await reportError("avatar-upload", updateError, { userId: profile.id, phase: "profile" });
+    return { ok: false, error: t.feedback.avatarUploadFailed };
   }
 
   revalidatePath("/client", "layout");
@@ -1741,7 +1868,8 @@ export async function removeAvatarAction(): Promise<ActionResult> {
     .eq("id", profile.id);
 
   if (error) {
-    return { ok: false, error: error.message };
+    await reportError("avatar-remove", error, { userId: profile.id });
+    return { ok: false, error: t.feedback.avatarUploadFailed };
   }
 
   revalidatePath("/client", "layout");
@@ -1884,11 +2012,15 @@ export async function toggleServiceActiveAction(
 ): Promise<ActionResult> {
   await requireAdmin();
   const t = await getDict();
+  const parsed = toggleServiceSchema.safeParse({ serviceId, active });
+  if (!parsed.success) {
+    return { ok: false, error: t.feedback.checkServiceFields };
+  }
   const supabase = await createClient();
   const { error } = await supabase
     .from("services")
-    .update({ active })
-    .eq("id", serviceId);
+    .update({ active: parsed.data.active })
+    .eq("id", parsed.data.serviceId);
 
   if (error) {
     return { ok: false, error: error.message };
@@ -1920,8 +2052,21 @@ export async function uploadServiceImageAction(
   serviceId: string,
   formData: FormData,
 ): Promise<ActionResult & { url?: string }> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const t = await getDict();
+  const parsedServiceId = uuidSchema.safeParse(serviceId);
+  if (!parsedServiceId.success) {
+    return { ok: false, error: t.feedback.checkServiceFields };
+  }
+
+  const limit = await enforceRateLimit("service:upload-image", {
+    identity: admin.id,
+    limit: 60,
+    windowSeconds: 60 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -1937,7 +2082,7 @@ export async function uploadServiceImageAction(
   }
 
   const supabase = await createClient();
-  const path = `services/${serviceId}.${ext}`;
+  const path = `services/${parsedServiceId.data}.${ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from("service-images")
@@ -1955,7 +2100,7 @@ export async function uploadServiceImageAction(
   const { error: updateError } = await supabase
     .from("services")
     .update({ image_url: publicUrl })
-    .eq("id", serviceId);
+    .eq("id", parsedServiceId.data);
 
   if (updateError) {
     return { ok: false, error: updateError.message };
@@ -2000,9 +2145,10 @@ export async function blockDateAction(input: {
     starts = zonedDateTimeToUtcIso(parsed.data.start, parsed.data.startTime!);
     ends = zonedDateTimeToUtcIso(parsed.data.start, parsed.data.endTime!);
   } else {
-    // Block the whole day(s): start at 00:00, end at 23:59:59 of the end date.
-    starts = new Date(`${parsed.data.start}T00:00:00`).toISOString();
-    ends = new Date(`${parsed.data.end}T23:59:59`).toISOString();
+    // Whole-day blocks are half-open shop-local ranges. Using next-day midnight
+    // keeps DST days correct and avoids leaking the deployment server's zone.
+    starts = zonedDateTimeToUtcIso(parsed.data.start, "00:00");
+    ends = zonedDateTimeToUtcIso(addDaysToDate(parsed.data.end, 1), "00:00");
   }
 
   const { error } = await supabase.from("blocked_times").insert({
@@ -2029,8 +2175,15 @@ export async function blockDateAction(input: {
 export async function unblockDateAction(blockId: string): Promise<ActionResult> {
   await requireAdmin();
   const t = await getDict();
+  const parsedBlockId = uuidSchema.safeParse(blockId);
+  if (!parsedBlockId.success) {
+    return { ok: false, error: t.feedback.pickValidStartEnd };
+  }
   const supabase = await createClient();
-  const { error } = await supabase.from("blocked_times").delete().eq("id", blockId);
+  const { error } = await supabase
+    .from("blocked_times")
+    .delete()
+    .eq("id", parsedBlockId.data);
 
   if (error) {
     return { ok: false, error: error.message };
@@ -2056,12 +2209,30 @@ export async function markAppointmentOutcomeAction(
 ): Promise<ActionResult> {
   await requireAdmin();
   const t = await getDict();
+  const parsed = z.object({ appointmentId: z.uuid(), outcome: appointmentOutcomeSchema })
+    .safeParse({ appointmentId, outcome });
+  if (!parsed.success) {
+    return { ok: false, error: t.feedback.appointmentNotFound };
+  }
   const supabase = await createClient();
+
+  const { data: appointment, error: appointmentError } = await supabase
+    .from("appointments")
+    .select("ends_at, status")
+    .eq("id", parsed.data.appointmentId)
+    .maybeSingle();
+  if (appointmentError || !appointment || appointment.status !== "confirmed") {
+    return { ok: false, error: t.feedback.appointmentNotFound };
+  }
+  if (new Date(appointment.ends_at).getTime() > Date.now()) {
+    return { ok: false, error: t.feedback.appointmentNotEnded };
+  }
 
   const { error } = await supabase
     .from("appointments")
-    .update({ outcome })
-    .eq("id", appointmentId);
+    .update({ outcome: parsed.data.outcome })
+    .eq("id", parsed.data.appointmentId)
+    .eq("status", "confirmed");
 
   if (error) {
     return { ok: false, error: error.message };
@@ -2085,6 +2256,18 @@ export async function markAppointmentOutcomeAction(
 export async function cancelRequestAction(requestId: string): Promise<ActionResult> {
   const profile = await requireApprovedClient();
   const t = await getDict();
+  if (!uuidSchema.safeParse(requestId).success) {
+    return { ok: false, error: t.feedback.cannotCancelRequest };
+  }
+
+  const limit = await enforceRateLimit("booking:cancel-request", {
+    identity: profile.id,
+    limit: 30,
+    windowSeconds: 10 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
   const supabase = await createClient();
 
   const { data: request, error } = await supabase
@@ -2094,31 +2277,27 @@ export async function cancelRequestAction(requestId: string): Promise<ActionResu
     .single();
 
   if (error || !request) {
-    return { ok: false, error: error?.message ?? t.feedback.requestNotFound };
+    if (error) {
+      await reportError("request-cancel", error, { phase: "load-request" });
+    }
+    return { ok: false, error: t.feedback.requestNotFound };
   }
 
   if (request.client_id !== profile.id) {
     return { ok: false, error: t.feedback.cannotCancelRequest };
   }
 
-  if (request.status === "confirmed") {
+  if (request.status !== "pending" && request.status !== "proposed") {
     return { ok: false, error: t.feedback.cannotCancelConfirmed };
   }
 
-  // Expire any outstanding proposal, then cancel the request.
-  await supabase
-    .from("appointment_proposals")
-    .update({ status: "expired" })
-    .eq("request_id", requestId)
-    .eq("status", "sent");
-
-  const { error: cancelError } = await supabase
-    .from("booking_requests")
-    .update({ status: "cancelled" })
-    .eq("id", requestId);
+  const { error: cancelError } = await supabase.rpc("client_cancel_request", {
+    p_request_id: requestId,
+  });
 
   if (cancelError) {
-    return { ok: false, error: cancelError.message };
+    await reportError("request-cancel", cancelError, { requestId });
+    return { ok: false, error: t.feedback.cannotCancelRequest };
   }
 
   revalidatePath("/client", "layout");
@@ -2192,6 +2371,18 @@ export async function cancelConfirmedAppointmentAction(
 ): Promise<ActionResult> {
   const profile = await requireApprovedClient();
   const t = await getDict();
+  if (!uuidSchema.safeParse(appointmentId).success) {
+    return { ok: false, error: t.feedback.cannotCancelRequest };
+  }
+
+  const limit = await enforceRateLimit("booking:cancel-confirmed", {
+    identity: profile.id,
+    limit: 20,
+    windowSeconds: 10 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
   const supabase = await createClient();
 
   const { data: appointment, error } = await supabase
@@ -2201,6 +2392,9 @@ export async function cancelConfirmedAppointmentAction(
     .single();
 
   if (error || !appointment || appointment.client_id !== profile.id) {
+    if (error) {
+      await reportError("appointment-self-cancel", error, { phase: "load-appointment" });
+    }
     return { ok: false, error: t.feedback.cannotCancelRequest };
   }
   if (appointment.status !== "confirmed") {
@@ -2215,6 +2409,7 @@ export async function cancelConfirmedAppointmentAction(
     { p_appointment_id: appointmentId },
   );
   if (cancelError) {
+    await reportError("appointment-self-cancel", cancelError, { appointmentId });
     return { ok: false, error: t.feedback.appointmentTooLateToCancel };
   }
 
@@ -2258,6 +2453,10 @@ export async function requestRescheduleAction(
 ): Promise<ActionResult> {
   const profile = await requireApprovedClient();
   const t = await getDict();
+  const parsed = clientRescheduleSchema.safeParse({ appointmentId, date, time });
+  if (!parsed.success) {
+    return { ok: false, error: t.feedback.pickValidNewDateTime };
+  }
   const supabase = await createClient();
 
   const limit = await enforceRateLimit("booking:request-reschedule", {
@@ -2272,10 +2471,13 @@ export async function requestRescheduleAction(
   const { data: appointment, error } = await supabase
     .from("appointments")
     .select("id, client_id, barber_id, service_id, starts_at, ends_at, status")
-    .eq("id", appointmentId)
+    .eq("id", parsed.data.appointmentId)
     .single();
 
   if (error || !appointment || appointment.client_id !== profile.id) {
+    if (error) {
+      await reportError("appointment-self-reschedule", error, { phase: "load-appointment" });
+    }
     return { ok: false, error: t.feedback.cannotCancelRequest };
   }
   if (appointment.status !== "confirmed") {
@@ -2285,7 +2487,7 @@ export async function requestRescheduleAction(
     return { ok: false, error: t.feedback.rescheduleTooLate };
   }
 
-  const newStart = startsAt(date, time);
+  const newStart = startsAt(parsed.data.date, parsed.data.time);
   const durationMinutes = Math.round(
     (new Date(appointment.ends_at).getTime() - new Date(appointment.starts_at).getTime()) / 60000,
   );
@@ -2301,42 +2503,63 @@ export async function requestRescheduleAction(
   if (!isStartInClientBookingWindow(newStart)) {
     return { ok: false, error: t.feedback.chooseWithinTwoWeeks };
   }
-  if (
-    !(await isSlotInsideConfiguredBusinessHours(supabase, {
-      barberId: appointment.barber_id,
-      date,
-      time,
-      durationMinutes,
-    }))
-  ) {
-    return { ok: false, error: t.feedback.slotOutsideHours };
+  const guarded = await guardSlot(supabase, {
+    barberId: appointment.barber_id,
+    date: parsed.data.date,
+    time: parsed.data.time,
+    durationMinutes,
+    start: newStart,
+    end: newEnd,
+    excludeAppointmentId: appointment.id,
+  });
+  if (!guarded.ok) {
+    const error = guarded.reason === "outside-hours"
+      ? t.feedback.slotOutsideHours
+      : guarded.reason === "blocked"
+        ? t.feedback.slotUnavailable
+        : t.feedback.slotNoLongerFree;
+    return { ok: false, error };
   }
-  if (
-    await hasBlockedTimeOverlap(supabase, {
-      barberId: appointment.barber_id,
-      start: newStart,
-      end: newEnd,
-    })
-  ) {
-    return { ok: false, error: t.feedback.slotUnavailable };
+
+  const { data: rescheduleService, error: serviceError } = await supabase
+    .from("services")
+    .select("name, price_cents")
+    .eq("id", appointment.service_id)
+    .single();
+  if (serviceError || !rescheduleService) {
+    if (serviceError) {
+      await reportError("appointment-self-reschedule", serviceError, { phase: "load-service" });
+    }
+    return { ok: false, error: t.common.somethingWentWrong };
+  }
+
+  const quote = await quoteClientSlot(supabase, {
+    date: parsed.data.date,
+    time: parsed.data.time,
+    durationMinutes,
+    basePriceCents: rescheduleService.price_cents,
+    excludeStartsAt: appointment.starts_at,
+  });
+  if (!quote.ok) {
+    return { ok: false, error: t.feedback.pickGeneratedSlot };
   }
 
   const { error: rescheduleError } = await supabase.rpc("client_request_reschedule", {
-    p_appointment_id: appointmentId,
+    p_appointment_id: parsed.data.appointmentId,
     p_new_start: newStart,
+    p_price_cents: quote.priceCents,
+    p_surcharge: quote.surcharge,
   });
   if (rescheduleError) {
+    await reportError("appointment-self-reschedule", rescheduleError, {
+      appointmentId: parsed.data.appointmentId,
+    });
     return { ok: false, error: t.feedback.slotNoLongerFree };
   }
 
   // Notify the barber that a confirmed slot needs re-confirming at a new time.
   const barberEmail = getBarberEmail();
-  const { data: rescheduleService } = await supabase
-    .from("services")
-    .select("name")
-    .eq("id", appointment.service_id)
-    .single();
-  const rescheduleSubject = `${profile.full_name} žiada presun na ${date} o ${time}`;
+  const rescheduleSubject = `${profile.full_name} žiada presun na ${parsed.data.date} o ${parsed.data.time}`;
   await createAdminNotification({
     channel: "email",
     recipient: barberEmail,
@@ -2349,8 +2572,8 @@ export async function requestRescheduleAction(
     react: BookingRequestEmail({
       clientName: profile.full_name,
       service: rescheduleService?.name ?? "",
-      date,
-      time,
+      date: parsed.data.date,
+      time: parsed.data.time,
       note: undefined,
     }),
   });
@@ -2471,7 +2694,8 @@ export async function markNotificationsReadAction(): Promise<ActionResult> {
   const { error } = await query;
 
   if (error) {
-    return { ok: false, error: error.message };
+    await reportError("notifications-mark-read", error, { userId: profile.id, mode: "all" });
+    return { ok: false, error: t.feedback.couldNotMarkNotificationsRead };
   }
 
   revalidatePath("/client", "layout");
@@ -2501,7 +2725,11 @@ export async function markNotificationReadAction(notificationId: string): Promis
   const { error } = await query;
 
   if (error) {
-    return { ok: false, error: error.message };
+    await reportError("notifications-mark-read", error, {
+      userId: profile.id,
+      notificationId,
+    });
+    return { ok: false, error: t.feedback.couldNotMarkNotificationsRead };
   }
 
   revalidatePath("/client", "layout");

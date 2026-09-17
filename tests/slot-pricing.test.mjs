@@ -7,6 +7,7 @@ const schedule = readFileSync("src/domain/schedule.ts", "utf8");
 const actions = readFileSync("src/app/actions.ts", "utf8");
 const slotPicker = readFileSync("src/components/client/slot-picker.tsx", "utf8");
 const requestForm = readFileSync("src/components/client/request-form.tsx", "utf8");
+const bookingPricing = readFileSync("src/server/booking-pricing.ts", "utf8");
 
 test("VIP pricing starts at 17:00, defaults to 20 percent, and overrides gap pricing", () => {
   assert.match(schedule, /export const DEFAULT_VIP_SURCHARGE_PERCENT = 20/);
@@ -16,7 +17,8 @@ test("VIP pricing starts at 17:00, defaults to 20 percent, and overrides gap pri
   assert.match(schedule, /vipSurchargePercent/);
   assert.match(schedule, /gapSurchargePercent/);
   assert.match(schedule, /return Math\.round\(basePrice \* \(1 \+ surchargePercent \/ 100\)\)/);
-  assert.match(actions, /priceForSlot\(basePrice, preferred,[\s\S]*startsAt: parsed\.data\.time/);
+  assert.match(actions, /quoteClientSlot/);
+  assert.match(bookingPricing, /priceForSlot\(basePrice, preferred,[\s\S]*startsAt: input\.time/);
 });
 
 test("best-price starts stay base price even when they are after VIP start", () => {

@@ -1,7 +1,7 @@
 import { updatePasswordAction } from "@/app/actions";
 import { Card } from "@/components/shared/card";
 import { Feedback } from "@/components/shared/feedback";
-import { Field } from "@/components/shared/form";
+import { PasswordField } from "@/components/shared/form";
 import { LanguageToggle } from "@/components/shared/language-toggle";
 import { Logo } from "@/components/shared/logo";
 import { SubmitButton } from "@/components/shared/submit-button";
@@ -40,11 +40,13 @@ export default async function UpdatePasswordPage({
         ) : null}
 
         <form action={updatePasswordAction} className="mt-5 space-y-4">
-          <Field
+          <PasswordField
             required
             label={t.auth.newPasswordLabel}
             name="password"
-            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            hint={t.auth.passwordHint}
             placeholder={t.auth.passwordPlaceholder}
           />
           <SubmitButton className="w-full" pendingLabel={t.common.sending}>

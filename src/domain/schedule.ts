@@ -6,7 +6,11 @@ import type {
   PricingSettings,
   Service,
 } from "./types";
-import { addDaysToDate, dateInShopTimeZone } from "../lib/time-zone";
+import {
+  addDaysToDate,
+  dateInShopTimeZone,
+  nowMinutesInShopTimeZone,
+} from "../lib/time-zone";
 
 export const services: Service[] = [
   {
@@ -366,6 +370,10 @@ export function timeOfMinutes(total: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
+export function addMinutesToTime(time: string, minutes: number) {
+  return timeOfMinutes(minutesOf(time) + minutes);
+}
+
 // Candidate start times (stepped, default 15 min) whose end fits before close.
 export function slotsForService(durationMin: number, step = 15): string[] {
   const slots: string[] = [];
@@ -378,6 +386,51 @@ export function slotsForService(durationMin: number, step = 15): string[] {
 // Half-open interval overlap [startA, startA+durA) ∩ [startB, startB+durB).
 export function overlaps(startA: number, durA: number, startB: number, durB: number): boolean {
   return startA < startB + durB && startB < startA + durA;
+}
+
+export type AdminBookedSlot = {
+  id: string;
+  time: string;
+  durationMinutes: number;
+};
+
+export type AdminSlotOption = {
+  value: string;
+  label: string;
+  disabledReason: "past" | "conflict" | null;
+};
+
+/** Shared add/reschedule options, evaluated against the shop wall clock. */
+export function adminSlotOptions({
+  durationMinutes,
+  bookedToday,
+  date,
+  excludeId,
+  now = new Date(),
+}: {
+  durationMinutes: number;
+  bookedToday: AdminBookedSlot[];
+  date?: string;
+  excludeId?: string;
+  now?: Date;
+}): AdminSlotOption[] {
+  const today = dateInShopTimeZone(now.toISOString());
+  const nowMinutes = nowMinutesInShopTimeZone(now);
+
+  return slotsForService(durationMinutes).map((time) => {
+    const startMin = minutesOf(time);
+    const conflict = bookedToday.some(
+      (slot) =>
+        slot.id !== excludeId &&
+        overlaps(startMin, durationMinutes, minutesOf(slot.time), slot.durationMinutes),
+    );
+    const past = Boolean(date && (date < today || (date === today && startMin <= nowMinutes)));
+    return {
+      value: time,
+      label: time,
+      disabledReason: past ? "past" : conflict ? "conflict" : null,
+    };
+  });
 }
 
 export type SlotAppt = { date: string; time: string; durationMinutes: number };

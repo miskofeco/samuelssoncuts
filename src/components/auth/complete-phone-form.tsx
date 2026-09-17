@@ -38,6 +38,9 @@ export function CompletePhoneForm() {
         required
         label={t.common.phone}
         name="phone"
+        type="tel"
+        inputMode="tel"
+        autoComplete="tel"
         value={phone}
         onChange={(event) => setPhone(event.target.value)}
         placeholder={t.auth.phonePlaceholder}

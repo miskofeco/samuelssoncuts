@@ -14,7 +14,7 @@ create or replace function public.guard_profile_privileged_columns()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_privileged_change boolean;
@@ -42,6 +42,8 @@ begin
     using errcode = '42501';
 end;
 $$;
+
+revoke execute on function public.guard_profile_privileged_columns() from public, anon, authenticated;
 
 drop trigger if exists profiles_guard_privileged_columns on public.profiles;
 

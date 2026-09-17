@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
 import { Field } from "@/components/shared/form";
 import { MonthCalendar } from "@/components/shared/month-calendar";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
 import { addDays, formatFullDay } from "@/domain/schedule";
 import type { ActionResult } from "@/domain/types";
@@ -31,13 +32,17 @@ export function AvailabilityManager({
   const [start, setStart] = useState(addDays(1));
   const [end, setEnd] = useState(addDays(1));
   const [reason, setReason] = useState("");
-  const [sliceMode, setSliceMode] = useState(false);
+  const [mode, setMode] = useState<"days" | "slice">("days");
   const [startTime, setStartTime] = useState("12:00");
   const [endTime, setEndTime] = useState("13:00");
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
+  const sliceMode = mode === "slice";
+  const invalidRange = sliceMode ? endTime <= startTime : end < start;
 
-  function block() {
+  function block(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (invalidRange) return;
     setFeedback(null);
     startTransition(async () => {
       const result = await blockDateAction({
@@ -66,6 +71,18 @@ export function AvailabilityManager({
           {t.admin.blockDatesDescription}
         </p>
 
+        <form className="mt-4" onSubmit={block}>
+        <SegmentedControl
+          ariaLabel={t.admin.availabilityMode}
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "days", label: t.admin.availabilityDays },
+            { value: "slice", label: t.admin.availabilityTimeSlice },
+          ]}
+          size="sm"
+          className="max-w-sm"
+        />
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <Field
             type="date"
@@ -104,13 +121,11 @@ export function AvailabilityManager({
             />
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setSliceMode((v) => !v)}
-          className="mt-2 text-xs font-semibold text-stone-500 underline underline-offset-4 hover:text-black dark:text-stone-400 dark:hover:text-white"
-        >
-          {sliceMode ? t.admin.blockWholeDays : t.admin.blockTimeSlice}
-        </button>
+        {invalidRange ? (
+          <p className="mt-2 text-xs font-medium text-red-700 dark:text-red-300">
+            {t.admin.availabilityInvalidRange}
+          </p>
+        ) : null}
         <Field
           label={`${t.admin.reason} ${t.common.optional}`}
           value={reason}
@@ -121,12 +136,19 @@ export function AvailabilityManager({
 
         <Feedback result={feedback} className="mt-3" />
 
-        <Button type="button" onClick={block} disabled={pending} className="mt-3">
+        <Button type="submit" disabled={pending || invalidRange} className="mt-3">
           {pending ? t.common.saving : sliceMode ? t.admin.blockThisSlot : t.admin.blockTheseDates}
         </Button>
+        </form>
 
         <div className="mt-6">
           <MonthCalendar
+            isDisabled={(cell) => cell.date < today}
+            isSelected={(cell) => cell.date === start}
+            onDayClick={(cell) => {
+              setStart(cell.date);
+              setEnd(cell.date);
+            }}
             dayClassName={(cell) =>
               cell.date < today
                 ? "cursor-not-allowed border-dashed !border-stone-400 !bg-stone-200 dark:!border-stone-700 dark:!bg-stone-800"

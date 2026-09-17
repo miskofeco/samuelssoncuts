@@ -105,7 +105,8 @@ test("week calendar marks blocked days red on desktop and mobile", () => {
 
 test("blocked days do not allow adding bookings in week or month views", () => {
   assert.match(adminCalendar, /\{!isBlocked \? \(/);
-  assert.match(adminCalendar, /isBlocked \? null : \(/);
+  assert.match(adminCalendar, /\{!isBlocked \? \(/);
+  assert.doesNotMatch(adminCalendar, /!isBlocked \? \(\s*isBlocked \? null/);
   assert.match(adminCalendar, /onClick=\{\(\) => onAddSlot\(day, firstFreeSlot\(items, isToday\)\)\}/);
   assert.match(adminCalendar, /onDayClick=\{\(cell\) => \{/);
   assert.match(adminCalendar, /if \(items\.length === 0 && !blockedDates\.has\(cell\.date\) && cell\.date >= today\) \{/);
