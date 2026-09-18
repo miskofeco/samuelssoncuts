@@ -7,8 +7,35 @@ const availabilityManager = readFileSync(
   "src/components/admin/availability-manager.tsx",
   "utf8",
 );
-const monthCalendar = readFileSync("src/components/shared/month-calendar.tsx", "utf8");
+const scheduleCalendar = readFileSync("src/components/shared/schedule-calendar.tsx", "utf8");
 const slotPicker = readFileSync("src/components/client/slot-picker.tsx", "utf8");
+
+test("all month calendars are built on the shadcn Calendar (react-day-picker)", () => {
+  assert.match(scheduleCalendar, /from "@\/components\/ui\/calendar"/);
+  assert.match(scheduleCalendar, /weekStartsOn=\{1\}/);
+  assert.match(scheduleCalendar, /DayButton: \(props\) => \(/);
+  assert.match(adminCalendar, /<ScheduleCalendar/);
+  assert.match(slotPicker, /<ScheduleCalendar/);
+  assert.match(availabilityManager, /<ScheduleCalendar/);
+  assert.doesNotMatch(adminCalendar, /MonthCalendar/);
+  assert.doesNotMatch(slotPicker, /MonthCalendar/);
+  assert.doesNotMatch(availabilityManager, /MonthCalendar/);
+});
+
+test("admin month view uses the fluid calendar without its own navigation", () => {
+  assert.match(adminCalendar, /size="fluid"/);
+  assert.match(adminCalendar, /hideNavigation/);
+  assert.match(adminCalendar, /month=\{selectedMonth\}/);
+});
+
+test("admin toolbar navigates every view and offers a jump-to-date calendar popover", () => {
+  assert.match(adminCalendar, /navigateCalendar\("month", `\$\{shiftMonth\(selectedMonth, direction\)\}-01`\)/);
+  assert.match(adminCalendar, /function jumpToDate\(iso: string\)/);
+  assert.match(adminCalendar, /<Popover open=\{jumpOpen\} onOpenChange=\{setJumpOpen\}>/);
+  assert.match(adminCalendar, /<Calendar\s+mode="single"/);
+  assert.match(adminCalendar, /aria-label=\{t\.admin\.jumpToDate\}/);
+  assert.match(adminCalendar, /prev: t\.common\.previousMonth, next: t\.common\.nextMonth/);
+});
 
 test("admin month calendar renders event dots without visible event labels", () => {
   assert.match(adminCalendar, /flex flex-row flex-wrap gap-1/);
@@ -19,70 +46,51 @@ test("admin month calendar renders event dots without visible event labels", () 
   assert.doesNotMatch(adminCalendar, /items\.length > 2/);
 });
 
-test("availability month calendar shows compact blocked-day markers", () => {
-  assert.match(availabilityManager, /h-5 w-5/);
-  assert.match(availabilityManager, />x<\/span>/);
+test("availability manager uses a range calendar for whole days and a single calendar for time slices", () => {
+  assert.match(availabilityManager, /sliceMode \? \(\s*<ScheduleCalendar/);
+  assert.match(availabilityManager, /<Calendar\s+mode="range"/);
+  assert.match(availabilityManager, /numberOfMonths=\{isMobile \? 1 : 2\}/);
+  assert.match(availabilityManager, /setEnd\(range\.to \? localDateToIso\(range\.to\) : from\)/);
+  assert.match(availabilityManager, /disabled=\{\{ before: isoToLocalDate\(today\)! \}\}/);
 });
 
-test("month calendars can color the whole blocked day cell red", () => {
-  assert.match(monthCalendar, /dayClassName\?: \(cell: MonthCell\) => string/);
-  assert.match(adminCalendar, /dayClassName=\{\(cell\) =>/);
-  assert.match(availabilityManager, /dayClassName=\{\(cell\) =>/);
-  assert.match(adminCalendar, /bg-red-50[^"]*dark:bg-red-500\/15/);
-  assert.match(availabilityManager, /bg-red-50[^"]*dark:bg-red-500\/15/);
+test("blocked days are painted red and announced in every calendar", () => {
+  assert.match(adminCalendar, /blocked: \(day\) => blockedDates\.has\(localDateToIso\(day\)\)/);
+  assert.match(adminCalendar, /modifiers\.blocked &&\s*!modifiers\.past &&\s*"border-red-300 bg-red-50/);
+  assert.match(adminCalendar, /\{t\.admin\.off\}/);
+  assert.match(availabilityManager, /blocked: \(day\) => blockedDates\.has\(localDateToIso\(day\)\)/);
+  assert.match(availabilityManager, /border-red-300 bg-red-50/);
+  assert.match(availabilityManager, /<span className="sr-only">\{t\.admin\.off\}<\/span>/);
+  assert.match(slotPicker, /closed: \(day\) => isClosedInWindow\(localDateToIso\(day\)\)/);
+  assert.match(slotPicker, /disabled:border-red-300 disabled:bg-red-50/);
+  assert.match(slotPicker, /<span className="sr-only">\{t\.client\.unavailable\}<\/span>/);
 });
 
-test("blocked date cells use a wider red border", () => {
-  assert.match(slotPicker, /border-2 border-red-300[^"]*bg-red-50/);
-  assert.match(adminCalendar, /border-2 border-red-300[^"]*bg-red-50/);
-  assert.match(availabilityManager, /border-2 border-red-300[^"]*bg-red-50/);
+test("client booking only marks closed days inside the booking window", () => {
+  assert.match(slotPicker, /const isClosedInWindow = \(iso: string\) =>\s*isDateInClientBookingWindow\(iso\) &&/);
+  assert.match(slotPicker, /blockedDates\.has\(iso\) \|\| isDateClosedForBusinessHours\(iso, businessHours\)/);
 });
 
-test("blocked date cells show a small x marker", () => {
-  assert.match(slotPicker, /renderDay=\{\(cell\) => \{/);
-  assert.match(slotPicker, /blockedDates\.has\(cell\.date\) \|\| isDateClosedForBusinessHours\(cell\.date, businessHours\)/);
-  assert.match(slotPicker, />x<\/span>/);
-  assert.match(adminCalendar, />x<\/span>/);
-  assert.match(availabilityManager, />x<\/span>/);
+test("client booking picker follows the appointment-picker layout with an optional confirm column", () => {
+  assert.match(slotPicker, /aside\?: ReactNode/);
+  assert.match(slotPicker, /lg:grid-cols-\[minmax\(0,24rem\)_minmax\(0,1fr\)_minmax\(0,19rem\)\]/);
+  assert.match(slotPicker, /min-h-48 flex-1 flex-col items-center justify-center/);
+  assert.match(slotPicker, /lg:grid-cols-\[minmax\(0,1fr\)_minmax\(0,1\.1fr\)\]/);
+  assert.match(slotPicker, /lg:max-h-\[22rem\][^"]*lg:overflow-y-auto/);
+  assert.match(slotPicker, /\{aside \? \(\s*<section className="flex flex-col border-t bg-muted\/30/);
 });
 
-test("client booking hides blocked x marker on disabled dates", () => {
-  assert.match(slotPicker, /const disabledForBookingMarker =/);
-  assert.match(slotPicker, /!isDateInClientBookingWindow\(cell\.date\)/);
-  assert.match(slotPicker, /cell\.date < today/);
-  assert.match(slotPicker, /cell\.date > latestDate/);
-  assert.match(slotPicker, /return unavailable && !disabledForBookingMarker \? \(/);
-});
-
-test("client booking picker removes nested panel framing on mobile only", () => {
-  assert.match(slotPicker, /grid gap-6 sm:gap-4/);
-  assert.match(
-    slotPicker,
-    /px-4 sm:rounded-xl sm:border sm:border-black\/10 sm:p-3 sm:dark:border-white\/10/,
-  );
-  assert.doesNotMatch(slotPicker, /<div className="rounded-xl border border-black\/10 p-3/);
-});
-
-test("adjacent month calendar cells remain clickable and renderable", () => {
-  assert.doesNotMatch(monthCalendar, /cell\.inMonth && dayClassName/);
-  assert.doesNotMatch(monthCalendar, /onDayClick && cell\.inMonth/);
-  assert.doesNotMatch(monthCalendar, /cell\.inMonth && renderDay/);
-  assert.doesNotMatch(slotPicker, /!cell\.inMonth/);
-});
-
-test("past month cells use disabled grey cell styling without crossed numbers", () => {
-  assert.match(adminCalendar, /!bg-stone-200/);
-  assert.match(slotPicker, /!bg-stone-200/);
-  assert.doesNotMatch(adminCalendar, /shadow-inner/);
-  assert.doesNotMatch(slotPicker, /shadow-inner/);
+test("past admin month cells use muted dashed styling without crossed numbers", () => {
+  assert.match(adminCalendar, /past: \(day\) => localDateToIso\(day\) < today/);
+  assert.match(adminCalendar, /modifiers\.past && !modifiers\.selected && "border-dashed bg-muted\/60 text-muted-foreground"/);
   assert.doesNotMatch(adminCalendar, /line-through/);
-  assert.doesNotMatch(slotPicker, /line-through/);
+  assert.doesNotMatch(scheduleCalendar, /shadow-inner/);
 });
 
-test("past blocked dates use disabled stone styling before blocked red styling", () => {
-  assert.match(slotPicker, /if \(outOfWindow\)[\s\S]*if \(blockedDates\.has\(cell\.date\) \|\| closedForBusinessHours\)/);
-  assert.match(adminCalendar, /cell\.date < today[\s\S]*blockedDates\.has\(cell\.date\)/);
-  assert.match(availabilityManager, /cell\.date < today[\s\S]*blockedDates\.has\(cell\.date\)/);
+test("calendar day state rings stay inside their cells", () => {
+  assert.match(scheduleCalendar, /modifiers\.today && "ring-2 ring-inset ring-foreground"/);
+  assert.match(scheduleCalendar, /focus-visible:ring-inset/);
+  assert.doesNotMatch(scheduleCalendar, /ring-offset-2 ring-offset-background/);
 });
 
 test("availability management hides blocked periods that already ended", () => {
@@ -92,13 +100,6 @@ test("availability management hides blocked periods that already ended", () => {
   );
   assert.match(availabilityManager, /visibleRanges\.length/);
   assert.match(availabilityManager, /visibleRanges\.map\(\(range\) =>/);
-});
-
-test("month calendar state rings stay inside their day cells", () => {
-  assert.match(monthCalendar, /selected && "[^"]*ring-inset[^"]*"/);
-  assert.match(monthCalendar, /cell\.isToday && "[^"]*ring-inset[^"]*"/);
-  assert.match(monthCalendar, /focus-visible:ring-inset/);
-  assert.doesNotMatch(monthCalendar, /ring-offset-2 ring-offset-background/);
 });
 
 test("admin calendar distinguishes confirmed, barber-added, and proposed colors", () => {
@@ -124,10 +125,10 @@ test("blocked days do not allow adding bookings in week or month views", () => {
   assert.match(adminCalendar, /\{!isBlocked \? \(/);
   assert.doesNotMatch(adminCalendar, /!isBlocked \? \(\s*isBlocked \? null/);
   assert.match(adminCalendar, /onClick=\{\(\) => onAddSlot\(day, firstFreeSlot\(items, isToday\)\)\}/);
-  assert.match(adminCalendar, /onDayClick=\{\(cell\) => \{/);
-  assert.match(adminCalendar, /if \(items\.length === 0 && !blockedDates\.has\(cell\.date\) && cell\.date >= today\) \{/);
-  assert.match(adminCalendar, /setDraft\(\{ date: cell\.date \}\)/);
-  assert.match(adminCalendar, /if \(blocked\) \{/);
+  assert.match(adminCalendar, /onSelect=\{\(iso\) => \{/);
+  assert.match(adminCalendar, /if \(items\.length === 0 && !blockedDates\.has\(iso\) && iso >= today\) \{/);
+  assert.match(adminCalendar, /setDraft\(\{ date: iso \}\)/);
+  assert.match(adminCalendar, /if \(modifiers\.blocked\) \{/);
 });
 
 test("week calendar pointer snapping uses rendered grid height", () => {

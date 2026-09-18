@@ -35,13 +35,20 @@ test("server actions reject past starts on admin booking-producing paths", () =>
 });
 
 test("client calendar disables and visibly marks past and beyond-window dates", () => {
+  const scheduleCalendar = readFileSync("src/components/shared/schedule-calendar.tsx", "utf8");
+
   assert.match(slotPicker, /latestClientBookingDate\(\)/);
-  assert.match(slotPicker, /isDateInClientBookingWindow\(cell\.date\)/);
-  assert.match(slotPicker, /cell\.date > latestDate/);
-  assert.match(slotPicker, /not-allowed/);
-  assert.match(slotPicker, /!bg-stone-200/);
-  assert.match(slotPicker, /border-dashed/);
+  // Month navigation is bounded to the booking window; days outside it are
+  // real `disabled` buttons rendered by the shared shadcn-based calendar.
+  assert.match(slotPicker, /startMonth=\{monthKey\(today\)\}/);
+  assert.match(slotPicker, /endMonth=\{monthKey\(latestDate\)\}/);
+  assert.match(slotPicker, /disabled=\{\(day\) => !isBookable\(localDateToIso\(day\)\)\}/);
+  assert.match(slotPicker, /isDateInClientBookingWindow\(iso\)/);
+  assert.match(scheduleCalendar, /disabled:cursor-not-allowed/);
+  assert.match(scheduleCalendar, /disabled:border-dashed/);
+  assert.match(scheduleCalendar, /disabled:bg-muted\/60/);
   assert.doesNotMatch(slotPicker, /line-through/);
+  assert.doesNotMatch(scheduleCalendar, /line-through/);
 });
 
 test("client booking can select today's shop date and filters only past times", () => {
@@ -51,16 +58,14 @@ test("client booking can select today's shop date and filters only past times", 
   assert.match(slotPicker, /isStartInFuture\(start\)/);
 });
 
-test("client calendar selected date is green while today keeps shared black ring", () => {
-  const monthCalendar = readFileSync("src/components/shared/month-calendar.tsx", "utf8");
+test("client calendar selected date uses the primary token while today keeps an inset ring", () => {
+  const scheduleCalendar = readFileSync("src/components/shared/schedule-calendar.tsx", "utf8");
 
-  assert.match(
-    monthCalendar,
-    /cell\.isToday && "ring-2 ring-inset ring-black dark:ring-white"/,
-  );
-  assert.match(slotPicker, /cell\.date === date/);
-  assert.match(slotPicker, /!border-emerald-500/);
-  assert.match(slotPicker, /ring-emerald-500/);
+  assert.match(scheduleCalendar, /modifiers\.today && "ring-2 ring-inset ring-foreground"/);
+  assert.match(scheduleCalendar, /modifiers\.selected &&\s*"border-primary bg-primary text-primary-foreground/);
+  assert.match(slotPicker, /selected=\{date\}/);
+  assert.match(slotPicker, /onSelect=\{onDateChange\}/);
+  assert.doesNotMatch(slotPicker, /!border-emerald-500/);
 });
 
 test("client booking slots are hourly by default and adjusted around booked events", () => {
@@ -86,8 +91,8 @@ test("client booking slots respect configured closed weekdays and opening hours"
 
 test("client booking calendar disables configured closed weekdays", () => {
   assert.match(slotPicker, /businessHours/);
-  assert.match(slotPicker, /isDateClosedForBusinessHours\(cell\.date, businessHours\)/);
-  assert.match(slotPicker, /closedForBusinessHours/);
+  assert.match(slotPicker, /isDateClosedForBusinessHours\(iso, businessHours\)/);
+  assert.match(slotPicker, /isClosedInWindow/);
   assert.match(requestForm, /businessHours: BusinessHoursDay\[]/);
   assert.match(requestForm, /businessHours=\{businessHours\}/);
 });

@@ -272,6 +272,7 @@ const en = {
     notes: "Notes",
     notesPlaceholder: "Anything the barber should know?",
     sendRequest: "Send request",
+    summary: "Summary",
     noServices: "No services configured",
     bookingSuccessTitle: "Request sent",
     bookingSuccessDescription:
@@ -486,6 +487,7 @@ const en = {
     exportCopy: "Copy link",
     exportCopied: "Copied",
     calendarView: "Calendar view",
+    jumpToDate: "Jump to date",
     previousWeek: "Previous week",
     nextWeek: "Next week",
     addAt: (time: string) => `Add at ${time}`,
@@ -1242,6 +1244,7 @@ const sk: Dict = {
     notes: "Poznámky",
     notesPlaceholder: "Niečo, čo by mal Barber vedieť?",
     sendRequest: "Odoslať žiadosť",
+    summary: "Zhrnutie",
     noServices: "Žiadne nakonfigurované služby",
     bookingSuccessTitle: "Žiadosť bola odoslaná",
     bookingSuccessDescription:
@@ -1449,6 +1452,7 @@ const sk: Dict = {
     exportCopy: "Kopírovať odkaz",
     exportCopied: "Skopírované",
     calendarView: "Zobrazenie kalendára",
+    jumpToDate: "Prejsť na dátum",
     previousWeek: "Predchádzajúci týždeň",
     nextWeek: "Nasledujúci týždeň",
     addAt: (time: string) => `Pridať o ${time}`,

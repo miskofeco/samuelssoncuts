@@ -37,7 +37,9 @@ import type { AuthProfile } from "@/server/auth";
 import { cn } from "@/lib/classnames";
 
 import { ProfileBadges } from "./account-panel";
-import { badgeFor, formatBadge, isNavActive, type NavCounts, type NavSection } from "./nav-items";
+import { Tooltip } from "@/components/shared/tooltip";
+
+import { badgeFor, formatBadge, isNavActive, type NavCounts, type NavItem, type NavSection } from "./nav-items";
 
 /**
  * Desktop navigation (md and up). Collapses to an icon rail with tooltips;
@@ -59,6 +61,15 @@ export function AppSidebar({
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
 
+  // The role's main call to action leaves the menu list and becomes a
+  // dedicated button above it (see PrimaryAction); everything else stays a row.
+  const primary = sections.flatMap((section) => section.items).find((item) => item.primary);
+  const menuSections = primary
+    ? sections
+        .map((section) => ({ ...section, items: section.items.filter((item) => !item.primary) }))
+        .filter((section) => section.items.length > 0)
+    : sections;
+
   return (
     <UiSidebar collapsible="icon" className="border-r-0 [&_[data-slot=sidebar-inner]]:border-r">
       {/* Same height as the desktop utility header so the two borders line up. */}
@@ -73,7 +84,10 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent>
-        {sections.map((section, index) => (
+        {primary ? (
+          <PrimaryAction item={primary} active={isNavActive(pathname, primary.href)} collapsed={collapsed} />
+        ) : null}
+        {menuSections.map((section, index) => (
           <SidebarGroup key={section.headingKey ?? index}>
             {section.headingKey ? (
               <SidebarGroupLabel className="text-[0.7rem] font-semibold tracking-[0.12em] uppercase">
@@ -94,25 +108,33 @@ export function AppSidebar({
                         className={cn(
                           // Expanded: 40px rows. Collapsed (icon rail): shadcn's 32px
                           // square; the label is removed so nothing peeks past the rail.
-                          "relative h-10 rounded-lg px-3 font-medium text-sidebar-foreground/80",
+                          "relative h-10 gap-2.5 rounded-lg px-2 font-medium text-sidebar-foreground/80",
                           // Icon rail: 40px squares centred in the 4rem rail, label removed.
                           "group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:[&>span:last-child]:hidden",
-                          "data-active:bg-primary data-active:font-semibold data-active:text-primary-foreground data-active:hover:bg-primary data-active:hover:text-primary-foreground",
+                          // Active row: soft accent fill, bold label and the icon in a small
+                          // filled primary chip. The full primary fill stays reserved for the
+                          // PrimaryAction CTA so the two never read as the same thing.
+                          "data-active:bg-sidebar-accent data-active:font-semibold data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent",
+                          "group-data-[collapsible=icon]:data-active:bg-transparent",
                           "[&_svg]:size-[18px]",
                         )}
                       >
                         <Link href={item.href} aria-current={active ? "page" : undefined}>
-                          <Icon icon={item.icon} strokeWidth={active ? 2 : 1.8} />
+                          <span
+                            className={cn(
+                              "flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
+                              active && "bg-primary text-primary-foreground shadow-xs",
+                            )}
+                          >
+                            <Icon icon={item.icon} strokeWidth={active ? 2.2 : 1.8} />
+                          </span>
                           {count > 0 ? (
                             // Icon rail: the numeric badge is hidden by the primitive, so a
                             // dot on the icon's corner says "something is waiting here".
                             // Placed before the label so the label stays `span:last-child`.
                             <span
                               aria-hidden
-                              className={cn(
-                                "absolute top-1.5 right-1.5 hidden size-2 rounded-full bg-destructive ring-2 group-data-[collapsible=icon]:block",
-                                active ? "ring-primary" : "ring-sidebar",
-                              )}
+                              className="absolute top-1.5 right-1.5 hidden size-2 rounded-full bg-destructive ring-2 ring-sidebar group-data-[collapsible=icon]:block"
                             />
                           ) : null}
                           <span>{t.nav[item.key]}</span>
@@ -127,9 +149,7 @@ export function AppSidebar({
                             // The primitive recolours the badge text on button hover/active
                             // (`peer-hover…:text-sidebar-accent-foreground`); pin ours through
                             // the same variants so the number stays legible on the red pill.
-                            active
-                              ? "bg-primary-foreground text-primary peer-hover/menu-button:text-primary peer-data-active/menu-button:text-primary"
-                              : "text-white peer-hover/menu-button:text-white",
+                            "text-white peer-hover/menu-button:text-white peer-data-active/menu-button:text-white",
                           )}
                         >
                           {formatBadge(count)}
@@ -149,6 +169,51 @@ export function AppSidebar({
       </SidebarFooter>
       <SidebarRail />
     </UiSidebar>
+  );
+}
+
+/**
+ * Full-width call-to-action pinned above the navigation. Expanded: a tall
+ * filled button with icon and label. Collapsed rail: the same raised primary
+ * circle the phone tab bar uses, so the action reads the same on every device.
+ */
+function PrimaryAction({ item, active, collapsed }: { item: NavItem; active: boolean; collapsed: boolean }) {
+  const t = useT();
+  const label = t.nav[item.key];
+  const link = (
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      aria-label={collapsed ? label : undefined}
+      className={cn(
+        "group/cta relative flex items-center gap-3 rounded-xl bg-primary font-semibold text-primary-foreground shadow-md shadow-primary/25 transition outline-none select-none",
+        "hover:bg-primary/90 active:scale-[0.98] focus-visible:ring-3 focus-visible:ring-ring/50",
+        active && "ring-2 ring-primary/30 ring-offset-2 ring-offset-sidebar",
+        collapsed ? "mx-auto size-11 justify-center rounded-full" : "h-12 w-full px-3",
+      )}
+    >
+      <span
+        className={cn(
+          "flex shrink-0 items-center justify-center rounded-full",
+          collapsed ? "size-11" : "size-8 bg-primary-foreground/15",
+        )}
+      >
+        <Icon icon={item.icon} className={collapsed ? "size-[22px]" : "size-[18px]"} strokeWidth={2.2} />
+      </span>
+      {collapsed ? null : <span className="truncate text-sm">{label}</span>}
+    </Link>
+  );
+
+  return (
+    <div className={cn("px-2 pt-2", collapsed && "flex justify-center px-0")}>
+      {collapsed ? (
+        <Tooltip content={label} side="right">
+          {link}
+        </Tooltip>
+      ) : (
+        link
+      )}
+    </div>
   );
 }
 

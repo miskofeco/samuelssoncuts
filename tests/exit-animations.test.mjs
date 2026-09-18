@@ -92,3 +92,29 @@ test("legacy data-state animation classes stay defined for custom overlays", () 
   assert.match(css, /@import "tw-animate-css";/);
   assert.match(css, /@import "shadcn\/tailwind\.css";/);
 });
+
+test("phone tab bar centres and raises the client's primary booking action", async () => {
+  const navItems = readFileSync("src/components/layout/nav-items.tsx", "utf8");
+  assert.match(navItems, /key: "bookAppointment", icon: CalendarAdd01Icon, primary: true/);
+  assert.match(navItems, /export function centerPrimaryTab/);
+  assert.match(mobileNav, /centerPrimaryTab\(pinned, pinned\.length \+ \(needsMore \? 1 : 0\)\)/);
+  assert.match(mobileNav, /function PrimaryTabLink/);
+  assert.match(mobileNav, /rounded-full bg-primary text-primary-foreground shadow-lg/);
+  // The phone top bar has no separator line; the blur alone frames it.
+  assert.doesNotMatch(mobileNav, /<header className="[^"]*border-b/);
+});
+
+test("desktop sidebar renders the primary booking action as a dedicated button above the menu", () => {
+  const sidebar = readFileSync("src/components/layout/sidebar.tsx", "utf8");
+  assert.match(sidebar, /function PrimaryAction/);
+  assert.match(sidebar, /items: section\.items\.filter\(\(item\) => !item\.primary\)/);
+  assert.match(sidebar, /<PrimaryAction item=\{primary\}/);
+  assert.match(sidebar, /rounded-xl bg-primary font-semibold text-primary-foreground shadow-md/);
+  // Icon rail: same raised circle as the phone tab bar.
+  assert.match(sidebar, /collapsed \? "mx-auto size-11 justify-center rounded-full"/);
+});
+
+test("admin calendar is the admin's primary action, centred and raised like client booking", () => {
+  const navItems = readFileSync("src/components/layout/nav-items.tsx", "utf8");
+  assert.match(navItems, /key: "calendar", icon: Calendar03Icon, primary: true/);
+});

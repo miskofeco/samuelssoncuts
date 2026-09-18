@@ -9,6 +9,7 @@ import { createAdminBookingAction } from "@/app/actions";
 import type { BookedSlot } from "@/components/admin/admin-calendar";
 import { Button } from "@/components/shared/button";
 import { Combobox } from "@/components/shared/combobox";
+import { DateField } from "@/components/shared/date-field";
 import { Feedback } from "@/components/shared/feedback";
 import { Field, SelectField } from "@/components/shared/form";
 import { Icon } from "@/components/shared/icon";
@@ -209,13 +210,7 @@ function BookingForm({
       </SelectField>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label={t.admin.date}
-          type="date"
-          value={date}
-          min={today}
-          onChange={(event) => setDate(event.target.value)}
-        />
+        <DateField label={t.admin.date} value={date} min={today} onChange={setDate} />
         <Combobox
           label={t.admin.time}
           placeholder={t.admin.typeTime}

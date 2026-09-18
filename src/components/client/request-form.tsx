@@ -15,6 +15,7 @@ import Image from "next/image";
 import { createRequestFromClientAction } from "@/app/actions";
 import { Button, ButtonLink } from "@/components/shared/button";
 import { Card } from "@/components/shared/card";
+import { Badge } from "@/components/ui/badge";
 import { Feedback } from "@/components/shared/feedback";
 import { TextAreaField } from "@/components/shared/form";
 import { Icon } from "@/components/shared/icon";
@@ -187,20 +188,77 @@ export function RequestForm({
 
   const hasService = Boolean(serviceId);
 
-  return (
-    <Card className="-mx-4 !rounded-none !border-0 !bg-transparent !p-0 !shadow-none sm:mx-0 sm:!rounded-2xl sm:!border sm:!bg-card sm:!p-5 sm:!shadow-xs">
-      <form onSubmit={onSubmit}>
-        {/* Step 1: service */}
-        <div className="px-4 sm:px-0">
-          <StepHeader
-            step={1}
-            eyebrow={t.client.newAppointment}
-            title={t.client.chooseService}
-          />
-        </div>
+  // Summary + CTA block. Rendered once in the card's third column on desktop
+  // and once as a sticky bar above the phone tab bar; both submit the form.
+  const summary = (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        {slot ? (
+          <>
+            <p className="text-sm font-medium text-muted-foreground">
+              {t.client.youPayPrefix}:{" "}
+              <span className="ml-3 text-2xl font-bold tabular-nums text-foreground">
+                {slot.price} €
+              </span>
+              <span className="ml-2 text-sm font-medium text-muted-foreground">
+                {priceCalculation ? `(${priceCalculation})` : null}
+              </span>
+            </p>
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <Icon icon={Scissor01Icon} className="size-3.5" />
+                <span className="max-w-[10rem] truncate">{service.name}</span>
+              </span>
+              {date ? (
+                <span className="inline-flex items-center gap-1 tabular-nums">
+                  <Icon icon={Calendar03Icon} className="size-3.5" />
+                  {formatFullDay(date, locale)} · {slot.time}
+                </span>
+              ) : null}
+            </p>
+          </>
+        ) : (
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <Icon icon={hasService ? (date ? Clock01Icon : Calendar03Icon) : Note01Icon} className="size-4" />
+            <span className="truncate">
+              {!hasService ? t.client.chooseServiceFirst : date ? t.client.pickTime : t.client.pickDate}
+            </span>
+          </p>
+        )}
+      </div>
+    </div>
+  );
 
+  const submitButton = (
+    <Button
+      type="submit"
+      size="lg"
+      disabled={!serviceId || !date || !slot}
+      loading={pending}
+      className="shrink-0 lg:w-full"
+    >
+      {pending ? t.common.sending : serviceId ? t.client.sendRequest : t.client.noServices}
+    </Button>
+  );
+
+  const noteField = (
+    <TextAreaField
+      label={t.client.notes}
+      value={note}
+      onChange={(event) => setNote(event.target.value)}
+      placeholder={t.client.notesPlaceholder}
+      rows={4}
+      className="mt-3 [&_[data-slot=field-label]]:sr-only lg:flex-1 lg:[&_textarea]:min-h-44"
+    />
+  );
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-5">
+      {/* Step 1: service — outside the booking card, as a compact chooser. */}
+      <section>
+        <StepHeader step={1} eyebrow={t.client.newAppointment} title={t.client.chooseService} />
         {orderedServices.length > 0 ? (
-          <div className="mt-4 grid gap-3 px-4 sm:gap-2 sm:px-0 lg:grid-cols-3">
+          <div role="radiogroup" aria-label={t.client.chooseService} className="mt-3 grid gap-2 sm:grid-cols-3">
             {orderedServices.map((service) => {
               const selected = service.id === serviceId;
               const imageSrc = defaultServiceImage(service);
@@ -208,172 +266,113 @@ export function RequestForm({
                 <button
                   key={service.id}
                   type="button"
-                  aria-pressed={selected}
+                  role="radio"
+                  aria-checked={selected}
                   onClick={() => {
                     setServiceId(service.id);
                     setSlot(null);
                   }}
                   className={cn(
-                    "relative flex min-h-20 flex-row overflow-hidden rounded-xl border bg-card text-left transition outline-none active:scale-[0.99] hover:border-emerald-500 focus-visible:ring-3 focus-visible:ring-ring/50 sm:flex-col md:flex-row",
-                    selected
-                      ? "border-emerald-500 ring-2 ring-emerald-500 dark:border-emerald-400 dark:ring-emerald-400"
-                      : "border-border",
+                    "relative flex min-h-20 items-center gap-3.5 rounded-xl border bg-card p-3 text-left shadow-xs transition outline-none active:scale-[0.99] hover:border-foreground/40 focus-visible:ring-3 focus-visible:ring-ring/50",
+                    selected && "border-primary bg-primary/5 ring-2 ring-primary/25 hover:border-primary",
                   )}
                 >
-                  <span className="relative block h-20 w-20 shrink-0 sm:h-36 sm:w-full md:h-auto md:min-h-32 md:w-32 md:shrink-0 lg:w-28">
+                  <span className="relative block size-14 shrink-0 overflow-hidden rounded-lg">
                     <Image
                       src={imageSrc}
                       alt=""
                       fill
-                      sizes="(max-width: 639px) 80px, (max-width: 768px) 100vw, 128px"
+                      sizes="56px"
                       unoptimized={imageSrc.startsWith("http")}
                       className="object-cover"
                     />
                   </span>
-                  <span className="flex min-w-0 flex-1 flex-col justify-center p-3">
-                    <span className="block truncate text-sm font-semibold text-foreground">
-                      {service.name}
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate text-[0.95rem] font-semibold text-foreground">{service.name}</span>
+                      {selected ? (
+                        <Icon icon={Tick02Icon} className="size-4 shrink-0 text-primary" strokeWidth={2.5} />
+                      ) : null}
                     </span>
                     {service.description ? (
-                      <span className="mt-1 line-clamp-2 text-xs leading-snug text-muted-foreground">
-                        {service.description}
-                      </span>
+                      <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">{service.description}</span>
                     ) : null}
-                    <span className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
-                      <Icon icon={Clock01Icon} className="size-3.5" />
-                      {service.duration} min · {service.price} €
-                    </span>
                   </span>
-                  {selected ? (
-                    <span
-                      aria-hidden
-                      className="absolute top-2 right-2 flex size-6 items-center justify-center rounded-full bg-emerald-500 text-white shadow-xs"
-                    >
-                      <Icon icon={Tick02Icon} className="size-3.5" strokeWidth={2.5} />
-                    </span>
-                  ) : null}
+                  <Badge variant={selected ? "default" : "secondary"} className="shrink-0 tabular-nums">
+                    {service.duration} min · {service.price} €
+                  </Badge>
                 </button>
               );
             })}
           </div>
         ) : null}
+      </section>
 
-        {/* Steps 2 + 3: date and time */}
-        {hasService ? (
-          <div className="mt-6">
-            <SlotPicker
-              service={service}
-              services={services}
-              pricingSettings={pricingSettings}
-              date={date}
-              onDateChange={(next) => {
-                setDate(next);
-                setSlot(null);
-              }}
-              selectedTime={slot?.time ?? null}
-              onSelectTime={setSlot}
-              appointments={appointments}
-              pendingRequests={pendingRequests}
-              blockedDates={blockedDates}
-              businessHours={businessHours}
-              steps={{ date: 2, time: 3 }}
-            />
-
-            {slot?.priceKind === "gap" ? (
-              <p className="mx-4 mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 sm:mx-0 dark:bg-amber-500/10 dark:text-amber-300">
-                {t.client.surchargeWarning(pricingSettings.gapSurchargePercent)}
+      {/* Steps 2–4 live in one card: date → time → confirm. */}
+      {hasService ? (
+        <SlotPicker
+          service={service}
+          services={services}
+          pricingSettings={pricingSettings}
+          date={date}
+          onDateChange={(next) => {
+            setDate(next);
+            setSlot(null);
+          }}
+          selectedTime={slot?.time ?? null}
+          onSelectTime={setSlot}
+          appointments={appointments}
+          pendingRequests={pendingRequests}
+          blockedDates={blockedDates}
+          businessHours={businessHours}
+          steps={{ date: 2, time: 3 }}
+          aside={
+            <>
+              <p className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
+                <StepBadge step={4} />
+                <span className="flex items-center gap-1.5">
+                  {t.client.notes}
+                  <span className="font-normal text-muted-foreground">{t.common.optional}</span>
+                </span>
               </p>
-            ) : null}
-            {slot?.priceKind === "vip" ? (
-              <p className="mx-4 mt-3 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 sm:mx-0 dark:bg-sky-500/10 dark:text-sky-200">
-                {t.client.vipWarning}
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <p className="mt-4 px-4 text-sm text-muted-foreground sm:px-0">
-            {t.client.chooseServiceFirst}
-          </p>
-        )}
+              {noteField}
 
-        {/* Step 4: note */}
-        <div className="mt-6 px-4 sm:px-0">
-          <p className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
-            <StepBadge step={4} />
-            <span className="flex items-center gap-1.5">
-              {t.client.notes}
-              <span className="font-normal text-muted-foreground">{t.common.optional}</span>
-            </span>
-          </p>
-          <TextAreaField
-            label={t.client.notes}
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder={t.client.notesPlaceholder}
-            className="mt-3 [&_[data-slot=field-label]]:sr-only"
-          />
-        </div>
-
-        <Feedback result={feedback} className="mx-4 mt-4 sm:mx-0" />
-
-        {/* Sticky summary + CTA. Sits above the phone tab bar; static from md. */}
-        <div className="sticky bottom-[calc(var(--spacing-bottom-nav)+env(safe-area-inset-bottom))] z-20 mt-4 border-t bg-background/95 px-4 pt-3 pb-3 backdrop-blur-xl sm:-mx-5 sm:-mb-5 sm:rounded-b-2xl sm:px-5 sm:pb-5 md:static md:mx-0 md:mt-6 md:mb-0 md:rounded-none md:border-0 md:bg-transparent md:px-0 md:pt-0 md:pb-0 md:backdrop-blur-none">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              {slot ? (
-                <>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    {t.client.youPayPrefix}:{" "}
-                    <span className="ml-3 text-2xl font-bold tabular-nums text-foreground">
-                      {slot.price} €
-                    </span>
-                    <span className="ml-2 text-sm font-medium text-muted-foreground">
-                      {priceCalculation ? `(${priceCalculation})` : null}
-                    </span>
-                  </p>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <Icon icon={Scissor01Icon} className="size-3.5" />
-                      <span className="max-w-[10rem] truncate">{service.name}</span>
-                    </span>
-                    {date ? (
-                      <span className="inline-flex items-center gap-1 tabular-nums">
-                        <Icon icon={Calendar03Icon} className="size-3.5" />
-                        {formatFullDay(date, locale)} · {slot.time}
-                      </span>
-                    ) : null}
-                  </p>
-                </>
-              ) : (
-                <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Icon icon={hasService ? (date ? Clock01Icon : Calendar03Icon) : Note01Icon} className="size-4" />
-                  <span className="truncate">
-                    {!hasService
-                      ? t.client.chooseServiceFirst
-                      : date
-                        ? t.client.pickTime
-                        : t.client.pickDate}
-                  </span>
+              {slot?.priceKind === "gap" ? (
+                <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-300">
+                  {t.client.surchargeWarning(pricingSettings.gapSurchargePercent)}
                 </p>
-              )}
-            </div>
-            <Button
-              type="submit"
-              size="lg"
-              disabled={!serviceId || !date || !slot}
-              loading={pending}
-              className="shrink-0"
-            >
-              {pending
-                ? t.common.sending
-                : serviceId
-                  ? t.client.sendRequest
-                  : t.client.noServices}
-            </Button>
-          </div>
+              ) : null}
+              {slot?.priceKind === "vip" ? (
+                <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-500/10 dark:text-sky-200">
+                  {t.client.vipWarning}
+                </p>
+              ) : null}
+
+              <Feedback result={feedback} className="mt-3" />
+
+              {/* Desktop checkout: summary + CTA pinned to the column's bottom. */}
+              <div className="mt-auto hidden flex-col gap-3 border-t pt-4 lg:flex">
+                <p className="text-[0.7rem] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                  {t.client.summary}
+                </p>
+                {summary}
+                {submitButton}
+              </div>
+            </>
+          }
+        />
+      ) : (
+        <p className="text-sm text-muted-foreground">{t.client.chooseServiceFirst}</p>
+      )}
+
+      {/* Phone / tablet: sticky summary + CTA above the tab bar. */}
+      <div className="sticky bottom-[calc(var(--spacing-bottom-nav)+env(safe-area-inset-bottom))] z-20 -mx-4 border-t bg-background/95 px-4 pt-3 pb-3 backdrop-blur-xl sm:mx-0 sm:rounded-xl sm:border sm:px-4 md:bottom-4 lg:hidden">
+        <div className="flex items-center justify-between gap-3">
+          {summary}
+          {submitButton}
         </div>
-      </form>
-    </Card>
+      </div>
+    </form>
   );
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { UnfoldMoreIcon } from "@hugeicons/core-free-icons";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Icon } from "@/components/shared/icon";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,12 @@ export type ComboboxOption = {
  * button (no on-screen keyboard until the list opens), the list is portaled so
  * it is never clipped by modal scroll containers, and cmdk supplies type-ahead
  * filtering plus roving keyboard focus.
+ *
+ * The popover is `modal` so it owns the scroll lock while open: when the
+ * combobox lives inside a Dialog/Drawer, the dialog's own scroll lock would
+ * otherwise swallow wheel/touch scrolling in the portaled list. The list opens
+ * with the current value highlighted and scrolled into view (not the first
+ * option), so long lists such as time slots start where the user is.
  */
 export function Combobox({
   label,
@@ -54,14 +60,33 @@ export function Combobox({
   const t = useT();
   const id = useId();
   const [open, setOpen] = useState(false);
+  // cmdk's highlighted row. Seeded from the current value on every open so
+  // keyboard navigation starts at the selection instead of the first option.
+  const [highlighted, setHighlighted] = useState(value);
+  const listRef = useRef<HTMLDivElement>(null);
   const selected = options.find((option) => option.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    // Wait for the portal + list to mount, then centre the selected row.
+    const frame = requestAnimationFrame(() => {
+      const row = listRef.current?.querySelector<HTMLElement>('[data-checked="true"]');
+      row?.scrollIntoView({ block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
+
+  function handleOpenChange(next: boolean) {
+    if (next) setHighlighted(value);
+    setOpen(next);
+  }
 
   return (
     <Field className={cn("gap-1.5", className)}>
       <FieldLabel htmlFor={id} className="text-sm font-medium text-foreground">
         {label}
       </FieldLabel>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={handleOpenChange} modal>
         <PopoverTrigger asChild>
           <Button
             id={id}
@@ -86,9 +111,12 @@ export function Combobox({
             if (!searchable) event.preventDefault();
           }}
         >
-          <Command shouldFilter={searchable}>
+          <Command shouldFilter={searchable} value={highlighted} onValueChange={setHighlighted}>
             {searchable ? <CommandInput placeholder={placeholder ?? label} /> : null}
-            <CommandList className="max-h-64">
+            <CommandList
+              ref={listRef}
+              className="max-h-64 overscroll-contain"
+            >
               <CommandEmpty>{t.common.noMatches}</CommandEmpty>
               <CommandGroup>
                 {options.map((option) => (

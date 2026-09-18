@@ -1,6 +1,11 @@
 "use client";
 
-import { CalendarCheckIn01Icon, CalendarRemove01Icon, UnavailableIcon } from "@hugeicons/core-free-icons";
+import {
+  BlockedIcon,
+  CalendarCheckIn01Icon,
+  CalendarRemove01Icon,
+  UnavailableIcon,
+} from "@hugeicons/core-free-icons";
 import { useState, useTransition } from "react";
 
 import { blockDateAction, unblockDateAction } from "@/app/actions";
@@ -8,12 +13,15 @@ import { Button } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
+import { DateField, isoToLocalDate, localDateToIso } from "@/components/shared/date-field";
 import { Field } from "@/components/shared/form";
 import { Icon } from "@/components/shared/icon";
-import { MonthCalendar } from "@/components/shared/month-calendar";
+import { DAY_PICKER_LOCALES, ScheduleCalendar } from "@/components/shared/schedule-calendar";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
-import { addDays, formatFullDay } from "@/domain/schedule";
+import { Calendar } from "@/components/ui/calendar";
+import { addDays, formatFullDay, monthKey } from "@/domain/schedule";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { ActionResult } from "@/domain/types";
 import { localeFor } from "@/i18n/config";
 import { useLang, useT } from "@/i18n/provider";
@@ -28,7 +36,9 @@ export function AvailabilityManager({
   blockedDates: Set<string>;
 }) {
   const t = useT();
-  const locale = localeFor(useLang());
+  const lang = useLang();
+  const locale = localeFor(lang);
+  const isMobile = useIsMobile();
   const today = addDays(0);
   const [start, setStart] = useState(addDays(1));
   const [end, setEnd] = useState(addDays(1));
@@ -74,41 +84,83 @@ export function AvailabilityManager({
           description={t.admin.blockDatesDescription}
         />
 
-        {/* Pick a day on the calendar first, then fine-tune the range below. */}
+        {/* Whole days: drag a range on a two-month range calendar. Time slice:
+            pick the single day, then set the hours below. Already blocked days
+            are marked so the barber does not double-block them. */}
         <div className="mt-4">
-          <MonthCalendar
-            isDisabled={(cell) => cell.date < today}
-            isSelected={(cell) => cell.date === start}
-            onDayClick={(cell) => {
-              setStart(cell.date);
-              setEnd(cell.date);
-            }}
-            dayClassName={(cell) =>
-              cell.date < today
-                ? "cursor-not-allowed border-dashed !border-stone-400 !bg-stone-200 dark:!border-stone-700 dark:!bg-stone-800"
-                : blockedDates.has(cell.date)
-                  ? "border-2 border-red-300 bg-red-50 dark:border-red-500/60 dark:bg-red-500/15"
-                : ""
-            }
-            dayNumberClassName={(cell) =>
-              cell.date < today
-                ? "text-stone-400 dark:text-stone-500"
-                : blockedDates.has(cell.date)
-                  ? "text-red-900 dark:text-red-100"
-                : ""
-            }
-            renderDay={(cell) =>
-              blockedDates.has(cell.date) ? (
-                <span
-                  aria-label={t.admin.off}
-                  className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 dark:bg-red-500/20 dark:text-red-200"
-                >
-                  <span aria-hidden="true">x</span>
-                  <span className="sr-only">{t.admin.off}</span>
-                </span>
-              ) : null
-            }
-          />
+          {sliceMode ? (
+            <ScheduleCalendar
+              startMonth={monthKey(today)}
+              selected={start}
+              onSelect={(iso) => {
+                setStart(iso);
+                setEnd(iso);
+              }}
+              disabled={{ before: isoToLocalDate(today)! }}
+              modifiers={{ blocked: (day) => blockedDates.has(localDateToIso(day)) }}
+              dayClassName={({ modifiers }) =>
+                modifiers.blocked && !modifiers.selected
+                  ? "border-red-300 bg-red-50 text-red-900 dark:border-red-500/50 dark:bg-red-500/15 dark:text-red-100"
+                  : undefined
+              }
+              renderDay={({ modifiers }) =>
+                modifiers.blocked ? (
+                  <>
+                    <Icon icon={BlockedIcon} className="size-3" strokeWidth={2.5} />
+                    <span className="sr-only">{t.admin.off}</span>
+                  </>
+                ) : null
+              }
+            />
+          ) : (
+            <Calendar
+              mode="range"
+              numberOfMonths={isMobile ? 1 : 2}
+              locale={DAY_PICKER_LOCALES[lang]}
+              weekStartsOn={1}
+              defaultMonth={isoToLocalDate(start)}
+              selected={{ from: isoToLocalDate(start), to: isoToLocalDate(end) }}
+              onSelect={(range) => {
+                if (!range?.from) return;
+                const from = localDateToIso(range.from);
+                setStart(from);
+                setEnd(range.to ? localDateToIso(range.to) : from);
+              }}
+              disabled={{ before: isoToLocalDate(today)! }}
+              modifiers={{ blocked: (day) => blockedDates.has(localDateToIso(day)) }}
+              modifiersClassNames={{
+                blocked:
+                  "[&>button]:underline [&>button]:decoration-red-500 [&>button]:decoration-2 [&>button]:underline-offset-4 [&>button:not([data-selected-single=true]):not([data-range-start=true]):not([data-range-end=true])]:text-red-700 dark:[&>button:not([data-selected-single=true]):not([data-range-start=true]):not([data-range-end=true])]:text-red-300",
+              }}
+              className="w-full bg-transparent p-0 [--cell-size:--spacing(10)]"
+              classNames={{
+                root: "w-full",
+                months: "relative flex w-full flex-col gap-6 md:flex-row md:gap-8",
+                month: "flex w-full min-w-0 flex-1 flex-col gap-3",
+                month_caption: "flex h-9 w-full items-center justify-center px-9",
+                caption_label: "text-base font-semibold capitalize select-none",
+                nav: "absolute inset-x-0 top-0 flex h-9 items-center justify-between",
+                month_grid: "w-full border-collapse",
+                weekdays: "flex",
+                weekday:
+                  "flex-1 pb-1 text-center text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase select-none",
+                week: "mt-1 flex w-full",
+                day: "group/day relative aspect-square min-w-0 flex-1 p-0 text-center select-none [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md",
+              }}
+            />
+          )}
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span aria-hidden className="inline-block h-0.5 w-3 rounded bg-red-500" />
+            {t.admin.off}
+            <span aria-hidden>·</span>
+            <span className="tabular-nums">
+              {sliceMode
+                ? formatFullDay(start, locale)
+                : start === end
+                  ? formatFullDay(start, locale)
+                  : `${formatFullDay(start, locale)} – ${formatFullDay(end, locale)}`}
+            </span>
+          </p>
         </div>
 
         <form className="mt-5 space-y-4 border-t pt-5" onSubmit={block}>
@@ -123,14 +175,13 @@ export function AvailabilityManager({
             className="sm:max-w-sm"
           />
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field
-              type="date"
+            <DateField
               label={t.admin.from}
               value={start}
               min={addDays(0)}
-              onChange={(event) => {
-                setStart(event.target.value);
-                if (event.target.value > end) setEnd(event.target.value);
+              onChange={(next) => {
+                setStart(next);
+                if (next > end) setEnd(next);
               }}
             />
             {sliceMode ? (
@@ -152,12 +203,11 @@ export function AvailabilityManager({
                 />
               </div>
             ) : (
-              <Field
-                type="date"
+              <DateField
                 label={t.admin.to}
                 value={end}
                 min={start}
-                onChange={(event) => setEnd(event.target.value)}
+                onChange={setEnd}
                 error={invalidRange ? t.admin.availabilityInvalidRange : undefined}
               />
             )}

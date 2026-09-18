@@ -21,9 +21,10 @@ import {
 import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
 import { Combobox } from "@/components/shared/combobox";
+import { DateField } from "@/components/shared/date-field";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Feedback } from "@/components/shared/feedback";
-import { Field, TextAreaField } from "@/components/shared/form";
+import { TextAreaField } from "@/components/shared/form";
 import { Icon } from "@/components/shared/icon";
 import { Modal } from "@/components/shared/modal";
 import { StatusPill } from "@/components/shared/status-pill";
@@ -293,12 +294,11 @@ function DetailBody({
               : t.admin.rescheduleProposedDescription}
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field
+            <DateField
               label={t.admin.date}
-              type="date"
               value={date}
               min={today}
-              onChange={(event) => setDate(event.target.value)}
+              onChange={setDate}
               error={dateInvalid ? t.feedback.chooseFutureTime : undefined}
             />
             <Combobox

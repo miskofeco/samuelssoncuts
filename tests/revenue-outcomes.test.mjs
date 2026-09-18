@@ -5,6 +5,7 @@ import {
   appointmentsInAnalyticsPeriod,
   appointmentRevenueCents,
   adminOverviewMetricTrends,
+  bookingsTrend,
   outcomeSummary,
   percentageTrend,
   requestsInAnalyticsPeriod,
@@ -12,6 +13,7 @@ import {
   revenueLookups,
   revenueTrend,
   totalRevenueCents,
+  trendGranularity,
 } from "../src/domain/analytics.ts";
 
 const services = [
@@ -87,6 +89,38 @@ test("revenueTrend returns a bucket per month with euro totals", () => {
   const rows = revenueTrend([], requests, services, 6, "en-US");
   assert.equal(rows.length, 6);
   assert.ok(rows.every((r) => typeof r.revenue === "number" && typeof r.label === "string"));
+});
+
+test("the 3-month view is bucketed by week, longer views by month", () => {
+  assert.equal(trendGranularity(3), "week");
+  assert.equal(trendGranularity(6), "month");
+  assert.equal(trendGranularity(12), "month");
+});
+
+test("weekly trends cover every ISO week of the 3-month window, oldest first", () => {
+  // Window: the 3 trailing calendar months, 2026-07-01 → 2026-09-18. Monday of
+  // 2026-07-01 is 2026-06-29; Monday of 2026-09-18 is 2026-09-14 → 12 buckets.
+  const appointments = [
+    appt({ id: "w1", date: "2026-09-15", time: "10:00", outcome: "completed" }),
+    appt({ id: "w2", date: "2026-09-17", time: "11:00", outcome: "completed" }),
+    appt({ id: "w3", date: "2026-07-02", time: "09:00", outcome: "completed" }),
+    appt({ id: "old", date: "2026-06-20", time: "09:00", outcome: "completed" }),
+  ];
+  const rows = bookingsTrend(appointments, 3, "en-US", "2026-09-18");
+  assert.equal(rows.length, 12);
+  assert.equal(rows[0].bookings, 1, "first week holds the July 2 booking");
+  assert.equal(rows.at(-1).bookings, 2, "last week holds both September bookings");
+  assert.equal(rows.reduce((sum, r) => sum + r.bookings, 0), 3, "out-of-window booking is dropped");
+  assert.ok(rows.every((r) => typeof r.label === "string" && r.label.length > 0));
+
+  const value = revenueTrend(appointments, requests, services, 3, "en-US", "2026-09-18");
+  assert.equal(value.length, 12);
+  assert.equal(value.at(-1).revenue, 40, "two 20 € cuts in the last week");
+});
+
+test("monthly trends still return one bucket per month for 6 and 12 months", () => {
+  assert.equal(bookingsTrend([], 6, "en-US", "2026-09-18").length, 6);
+  assert.equal(bookingsTrend([], 12, "en-US", "2026-09-18").length, 12);
 });
 
 test("outcomeSummary tallies and computes no-show rate ignoring cancellations", () => {

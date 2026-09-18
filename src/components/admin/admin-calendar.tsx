@@ -15,9 +15,12 @@ import { Button } from "@/components/shared/button";
 import { CalendarExport } from "@/components/shared/calendar-export";
 import { Card } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { DAY_PICKER_LOCALES, ScheduleCalendar } from "@/components/shared/schedule-calendar";
+import { isoToLocalDate, localDateToIso } from "@/components/shared/date-field";
 import { Icon } from "@/components/shared/icon";
-import { MonthCalendar } from "@/components/shared/month-calendar";
 import { SegmentedControl } from "@/components/shared/segmented-control";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Tooltip } from "@/components/shared/tooltip";
 import {
@@ -26,8 +29,11 @@ import {
   formatDay,
   formatFullDay,
   minutesOf,
+  monthKey,
+  monthLabel,
   OPEN_MINUTES,
   serviceById,
+  shiftMonth,
   shiftWeek,
   timeOfMinutes,
   todayIso,
@@ -114,7 +120,8 @@ export function AdminCalendar({
   feedUrl?: string;
 }) {
   const t = useT();
-  const locale = localeFor(useLang());
+  const lang = useLang();
+  const locale = localeFor(lang);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -232,17 +239,41 @@ export function AdminCalendar({
     return map;
   }, [itemsByDate]);
 
-  // Toolbar navigation: the day and week views share one prev/today/next row;
-  // the month view keeps the MonthCalendar's built-in month navigation.
-  const isOnToday = view === "day" ? selectedDate === today : weekMonday === weekStart(today);
-  const navLabel = view === "day" ? formatFullDay(selectedDate, locale) : weekLabel(weekMonday, locale);
+  // Toolbar navigation is shared by all three views: prev / period label /
+  // next, plus a "today" shortcut. The label opens a shadcn Calendar popover
+  // so the barber can jump straight to any date instead of paging.
+  const selectedMonth = monthKey(selectedDate);
+  const isOnToday =
+    view === "day"
+      ? selectedDate === today
+      : view === "week"
+        ? weekMonday === weekStart(today)
+        : selectedMonth === monthKey(today);
+  const navLabel =
+    view === "day"
+      ? formatFullDay(selectedDate, locale)
+      : view === "week"
+        ? weekLabel(weekMonday, locale)
+        : monthLabel(selectedMonth, locale);
+  const [jumpOpen, setJumpOpen] = useState(false);
   function step(direction: -1 | 1) {
     if (view === "day") navigateCalendar("day", shiftDay(selectedDate, direction));
-    else navigateCalendar("week", shiftWeek(weekMonday, direction));
+    else if (view === "week") navigateCalendar("week", shiftWeek(weekMonday, direction));
+    else navigateCalendar("month", `${shiftMonth(selectedMonth, direction)}-01`);
   }
   function jumpToToday() {
-    navigateCalendar(view, view === "day" ? today : weekStart(today));
+    navigateCalendar(view, view === "week" ? weekStart(today) : today);
   }
+  function jumpToDate(iso: string) {
+    setJumpOpen(false);
+    navigateCalendar(view, view === "week" ? weekStart(iso) : iso);
+  }
+  const stepLabels =
+    view === "day"
+      ? { prev: t.admin.prevDay, next: t.admin.nextDay }
+      : view === "week"
+        ? { prev: t.admin.previousWeek, next: t.admin.nextWeek }
+        : { prev: t.common.previousMonth, next: t.common.nextMonth };
 
   return (
     <div className="space-y-4">
@@ -276,61 +307,85 @@ export function AdminCalendar({
             ]}
             className="md:max-w-xs"
           />
-          {view !== "month" ? (
-            <div className="flex items-center gap-1 md:ml-auto">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label={view === "day" ? t.admin.prevDay : t.admin.previousWeek}
-                onClick={() => step(-1)}
-              >
-                <Icon icon={ArrowLeft01Icon} strokeWidth={2} />
-              </Button>
-              <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-1 md:min-w-56">
-                <p className="truncate text-sm font-semibold text-foreground tabular-nums" aria-live="polite">
-                  {navLabel}
-                </p>
-                {!isOnToday ? (
-                  <button
+          <div className="flex items-center gap-1 md:ml-auto">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label={stepLabels.prev}
+              onClick={() => step(-1)}
+            >
+              <Icon icon={ArrowLeft01Icon} strokeWidth={2} />
+            </Button>
+            <Popover open={jumpOpen} onOpenChange={setJumpOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  aria-label={t.admin.jumpToDate}
+                  className="h-10 min-w-0 flex-1 px-2 md:min-w-56"
+                >
+                  <span className="truncate text-sm font-semibold text-foreground capitalize tabular-nums" aria-live="polite">
+                    {navLabel}
+                  </span>
+                  <Icon icon={Calendar03Icon} className="text-muted-foreground" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="center" className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  locale={DAY_PICKER_LOCALES[lang]}
+                  weekStartsOn={1}
+                  selected={isoToLocalDate(selectedDate)}
+                  defaultMonth={isoToLocalDate(selectedDate)}
+                  onSelect={(date) => {
+                    if (date) jumpToDate(localDateToIso(date));
+                  }}
+                  className="[--cell-size:--spacing(9)]"
+                />
+                <div className="border-t p-2">
+                  <Button
                     type="button"
-                    onClick={jumpToToday}
-                    className="text-xs font-semibold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => jumpToDate(today)}
                   >
                     {t.common.today}
-                  </button>
-                ) : null}
-              </div>
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label={stepLabels.next}
+              onClick={() => step(1)}
+            >
+              <Icon icon={ArrowRight01Icon} strokeWidth={2} />
+            </Button>
+            {!isOnToday ? (
               <Button
                 type="button"
                 variant="outline"
-                size="icon"
-                aria-label={view === "day" ? t.admin.nextDay : t.admin.nextWeek}
-                onClick={() => step(1)}
+                size="sm"
+                onClick={jumpToToday}
+                className="ml-1 hidden h-10 sm:inline-flex"
               >
-                <Icon icon={ArrowRight01Icon} strokeWidth={2} />
+                {t.common.today}
               </Button>
-              <Button
-                type="button"
-                size="icon"
-                aria-label={t.admin.addBooking}
-                onClick={() => setDraft({})}
-                className="ml-1 md:hidden"
-              >
-                <Icon icon={Add01Icon} strokeWidth={2.2} />
-              </Button>
-            </div>
-          ) : (
+            ) : null}
             <Button
               type="button"
               size="icon"
               aria-label={t.admin.addBooking}
               onClick={() => setDraft({})}
-              className="self-end md:hidden"
+              className="ml-1 md:hidden"
             >
               <Icon icon={Add01Icon} strokeWidth={2.2} />
             </Button>
-          )}
+          </div>
         </div>
       </div>
 
@@ -356,60 +411,51 @@ export function AdminCalendar({
           />
         ) : (
           <div className="p-3 sm:p-5">
-            <MonthCalendar
-              month={selectedDate.slice(0, 7)}
+            <ScheduleCalendar
+              size="fluid"
+              hideNavigation
+              month={selectedMonth}
               onMonthChange={(month) => navigateCalendar("month", `${month}-01`)}
-              isSelected={(cell) => cell.date === selectedDate}
-              onDayClick={(cell) => {
-                const items = itemsByDate.get(cell.date) ?? [];
-                if (items.length === 0 && !blockedDates.has(cell.date) && cell.date >= today) {
-                  setDraft({ date: cell.date });
+              selected={selectedDate}
+              onSelect={(iso) => {
+                const items = itemsByDate.get(iso) ?? [];
+                if (items.length === 0 && !blockedDates.has(iso) && iso >= today) {
+                  setDraft({ date: iso });
                   return;
                 }
                 // Drill into week view for that day — works for any date (past or future).
-                navigateCalendar("week", cell.date);
+                navigateCalendar("week", iso);
               }}
-              dayClassName={(cell) => {
-                if (cell.date < today) {
-                  return "cursor-not-allowed border-dashed !border-stone-400 !bg-stone-200 text-stone-500 dark:!border-stone-700 dark:!bg-stone-800 dark:text-stone-500";
-                }
-                if (blockedDates.has(cell.date)) {
-                  return "border-2 border-red-300 bg-red-50 dark:border-red-500/60 dark:bg-red-500/15";
-                }
-                return "";
+              modifiers={{
+                past: (day) => localDateToIso(day) < today,
+                blocked: (day) => blockedDates.has(localDateToIso(day)),
               }}
-              dayNumberClassName={(cell) =>
-                cell.date < today
-                  ? "text-stone-400 dark:text-stone-500"
-                  : blockedDates.has(cell.date)
-                    ? "text-red-900 dark:text-red-100"
-                  : ""
+              dayClassName={({ modifiers }) =>
+                cn(
+                  modifiers.past && !modifiers.selected && "border-dashed bg-muted/60 text-muted-foreground",
+                  modifiers.blocked &&
+                    !modifiers.past &&
+                    "border-red-300 bg-red-50 text-red-900 dark:border-red-500/50 dark:bg-red-500/15 dark:text-red-100",
+                )
               }
-              renderDay={(cell) => {
-                const items = itemsByDate.get(cell.date) ?? [];
-                const blocked = blockedDates.has(cell.date);
-                if (blocked) {
+              renderDay={({ iso, modifiers }) => {
+                const items = itemsByDate.get(iso) ?? [];
+                if (modifiers.blocked) {
                   return (
-                    <span
-                      aria-label={t.admin.off}
-                      className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 dark:bg-red-500/20 dark:text-red-200"
-                    >
-                      <span aria-hidden="true">x</span>
-                      <span className="sr-only">{t.admin.off}</span>
+                    <span className="inline-flex items-center gap-1 text-[0.65rem] font-semibold tracking-wide uppercase">
+                      <Icon icon={BlockedIcon} className="size-3" strokeWidth={2.5} />
+                      {t.admin.off}
                     </span>
                   );
                 }
                 if (items.length === 0) return null;
                 return (
-                  <span className="mt-1 flex flex-row flex-wrap gap-1">
+                  <span className="flex flex-row flex-wrap gap-1">
                     {items.map((item) => (
                       <span
                         key={item.id}
                         aria-label={`${item.time} ${item.title}`}
-                        className={cn(
-                          "block h-2 w-2 rounded-full",
-                          monthDotToneClasses(item.type),
-                        )}
+                        className={cn("block h-2 w-2 rounded-full", monthDotToneClasses(item.type))}
                       >
                         <span className="sr-only">
                           {item.time} {item.title}

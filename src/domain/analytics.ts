@@ -40,6 +40,56 @@ export function analyticsPeriodStart(anchorDate: string, months: number): string
   return start.toISOString().slice(0, 10);
 }
 
+export type TrendGranularity = "week" | "month";
+
+/**
+ * Short windows are charted per ISO week so a quarter shows movement instead
+ * of three bars; longer windows stay monthly.
+ */
+export function trendGranularity(months: number): TrendGranularity {
+  return months <= 3 ? "week" : "month";
+}
+
+function mondayOf(date: string): string {
+  const d = new Date(`${date}T12:00:00`);
+  const offset = (d.getDay() + 6) % 7; // Mon=0 … Sun=6
+  d.setDate(d.getDate() - offset);
+  return d.toISOString().slice(0, 10);
+}
+
+type TrendBucket = { key: string; label: string };
+
+/**
+ * Ordered, empty buckets for the trailing window ending on `anchorDate`.
+ * Month buckets are keyed "yyyy-mm"; week buckets by their Monday's ISO date.
+ */
+function trendBuckets(months: number, locale: string, anchorDate: string): TrendBucket[] {
+  const buckets: TrendBucket[] = [];
+  if (trendGranularity(months) === "week") {
+    const dayFormatter = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" });
+    let monday = mondayOf(analyticsPeriodStart(anchorDate, months));
+    const lastMonday = mondayOf(anchorDate);
+    while (monday <= lastMonday) {
+      buckets.push({ key: monday, label: dayFormatter.format(new Date(`${monday}T12:00:00`)) });
+      monday = shiftIsoDate(monday, 7);
+    }
+    return buckets;
+  }
+
+  const monthFormatter = new Intl.DateTimeFormat(locale, { month: "short" });
+  const now = new Date(`${anchorDate}T12:00:00`);
+  for (let i = months - 1; i >= 0; i -= 1) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    buckets.push({ key, label: monthFormatter.format(d) });
+  }
+  return buckets;
+}
+
+function trendKeyFor(date: string, granularity: TrendGranularity): string {
+  return granularity === "week" ? mondayOf(date.slice(0, 10)) : date.slice(0, 7);
+}
+
 /** Appointments scheduled within the selected historical window, through today. */
 export function appointmentsInAnalyticsPeriod(
   appointments: Appointment[],
@@ -193,30 +243,25 @@ export function adminOverviewMetricTrends({
   };
 }
 
-/** Revenue (in euros, rounded) per month for the last `months` months. */
+/**
+ * Revenue (in euros, rounded) for the last `months` months, bucketed per week
+ * for the 3-month view and per month otherwise (see `trendGranularity`).
+ */
 export function revenueTrend(
   appointments: Appointment[],
   requests: BookingRequest[],
   services: Service[],
   months = 6,
   locale = "en-US",
-  anchorDate?: string,
+  anchorDate: string = new Date().toISOString().slice(0, 10),
 ) {
   const { requestsById, servicesById } = revenueLookups(requests, services);
-  const monthFormatter = new Intl.DateTimeFormat(locale, { month: "short" });
-  const buckets: { key: string; label: string; revenue: number }[] = [];
-  const now = anchorDate ? new Date(`${anchorDate}T12:00:00`) : new Date();
-  now.setDate(1);
-
-  for (let i = months - 1; i >= 0; i -= 1) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    buckets.push({ key, label: monthFormatter.format(d), revenue: 0 });
-  }
+  const granularity = trendGranularity(months);
+  const buckets = trendBuckets(months, locale, anchorDate).map((bucket) => ({ ...bucket, revenue: 0 }));
 
   const index = new Map(buckets.map((bucket) => [bucket.key, bucket]));
   for (const appointment of appointments) {
-    const bucket = index.get(appointment.date.slice(0, 7));
+    const bucket = index.get(trendKeyFor(appointment.date, granularity));
     if (bucket) {
       bucket.revenue += appointmentRevenueCents(appointment, requestsById, servicesById);
     }
@@ -289,27 +334,22 @@ const DEFAULT_STATUS: StatusLabels = {
   closed: "Closed",
 };
 
-/** Bookings per month for the last `months` months (oldest → newest). */
+/**
+ * Bookings for the last `months` months (oldest → newest), bucketed per week
+ * for the 3-month view and per month otherwise (see `trendGranularity`).
+ */
 export function bookingsTrend(
   appointments: Appointment[],
   months = 6,
   locale = "en-US",
-  anchorDate?: string,
+  anchorDate: string = new Date().toISOString().slice(0, 10),
 ) {
-  const monthFormatter = new Intl.DateTimeFormat(locale, { month: "short" });
-  const buckets: { key: string; label: string; bookings: number }[] = [];
-  const now = anchorDate ? new Date(`${anchorDate}T12:00:00`) : new Date();
-  now.setDate(1);
-
-  for (let i = months - 1; i >= 0; i -= 1) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    buckets.push({ key, label: monthFormatter.format(d), bookings: 0 });
-  }
+  const granularity = trendGranularity(months);
+  const buckets = trendBuckets(months, locale, anchorDate).map((bucket) => ({ ...bucket, bookings: 0 }));
 
   const index = new Map(buckets.map((bucket) => [bucket.key, bucket]));
   for (const appointment of appointments) {
-    const bucket = index.get(appointment.date.slice(0, 7));
+    const bucket = index.get(trendKeyFor(appointment.date, granularity));
     if (bucket) bucket.bookings += 1;
   }
 

@@ -18,6 +18,7 @@ import { AccountPanel } from "./account-panel";
 import {
   MOBILE_TAB_LIMIT,
   badgeFor,
+  centerPrimaryTab,
   flattenNav,
   formatBadge,
   isNavActive,
@@ -56,7 +57,8 @@ export function MobileNav({
 
   const items = flattenNav(sections);
   const needsMore = items.length > MOBILE_TAB_LIMIT + 1;
-  const tabs = needsMore ? items.slice(0, MOBILE_TAB_LIMIT) : items;
+  const pinned = needsMore ? items.slice(0, MOBILE_TAB_LIMIT) : items;
+  const tabs = centerPrimaryTab(pinned, pinned.length + (needsMore ? 1 : 0));
   const overflow = needsMore ? items.slice(MOBILE_TAB_LIMIT) : [];
   const overflowActive = overflow.some((item) => isNavActive(pathname, item.href));
   const overflowBadge = overflow.reduce((sum, item) => sum + badgeFor(item, counts), 0);
@@ -64,7 +66,7 @@ export function MobileNav({
   return (
     <div className="md:hidden">
       {/* Top bar */}
-      <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b bg-background/85 px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 flex items-center justify-between gap-3 bg-background/85 px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 backdrop-blur-xl">
         <Link href="/dashboard" className="flex min-w-0 items-center" aria-label="Samuelsson Cuts">
           <Logo className="h-6 max-w-full shrink" priority />
         </Link>
@@ -97,7 +99,11 @@ export function MobileNav({
         >
           {tabs.map((item) => (
             <li key={item.href} className="min-w-0">
-              <TabLink item={item} active={isNavActive(pathname, item.href)} count={badgeFor(item, counts)} />
+              {item.primary ? (
+                <PrimaryTabLink item={item} active={isNavActive(pathname, item.href)} />
+              ) : (
+                <TabLink item={item} active={isNavActive(pathname, item.href)} count={badgeFor(item, counts)} />
+              )}
             </li>
           ))}
           {needsMore ? (
@@ -194,6 +200,33 @@ function TabLink({ item, active, count }: { item: NavItem; active: boolean; coun
       </span>
       <span className="line-clamp-2 max-w-full text-center text-[0.65rem] leading-[1.1] font-semibold">
         {t.nav[item.key]}
+      </span>
+    </Link>
+  );
+}
+
+/**
+ * The role's main action, raised out of the tab bar as a filled primary
+ * circle so it reads as the one thing to do (FAB-in-tab-bar pattern).
+ */
+function PrimaryTabLink({ item, active }: { item: NavItem; active: boolean }) {
+  const t = useT();
+  return (
+    // Icon only: the raised circle is self-explanatory and a label under it
+    // collides with the tab bar's row. The name stays for assistive tech.
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      aria-label={t.nav[item.key]}
+      className="flex h-full w-full items-center justify-center px-1 outline-none select-none focus-visible:[&>span]:ring-3 focus-visible:[&>span]:ring-ring/50"
+    >
+      <span
+        className={cn(
+          "-mt-5 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 ring-4 ring-background transition active:scale-95",
+          active && "ring-primary/25",
+        )}
+      >
+        <Icon icon={item.icon} className="size-7" strokeWidth={2.2} />
       </span>
     </Link>
   );

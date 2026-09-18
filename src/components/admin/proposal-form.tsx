@@ -23,7 +23,8 @@ import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Feedback } from "@/components/shared/feedback";
-import { Field, SelectField, TextAreaField } from "@/components/shared/form";
+import { DateField } from "@/components/shared/date-field";
+import { SelectField, TextAreaField } from "@/components/shared/form";
 import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -427,13 +428,11 @@ export function ProposalComposer({
 
                     <div className="space-y-4">
                       <div className="grid gap-3 sm:grid-cols-2">
-                        <Field
+                        <DateField
                           label={t.admin.date}
-                          type="date"
                           value={date}
                           min={addDays(0)}
-                          onChange={(event) => chooseDate(event.target.value)}
-                          className="dark:[color-scheme:dark]"
+                          onChange={chooseDate}
                         />
                         <SelectField
                           label={t.admin.timeOfDay}

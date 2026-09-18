@@ -26,6 +26,11 @@ export type NavItem = {
   icon: IconSvgElement;
   /** Which server-computed attention count badges this item (if any). */
   badge?: "requests" | "approvals" | "unread";
+  /**
+   * The role's main call to action. On phones it is pinned to the centre of
+   * the tab bar and rendered as a raised primary button.
+   */
+  primary?: boolean;
 };
 
 export type NavSection = {
@@ -37,7 +42,7 @@ export const clientNav: NavSection[] = [
   {
     items: [
       { href: "/client", key: "overview", icon: DashboardSquare01Icon },
-      { href: "/client/book", key: "bookAppointment", icon: CalendarAdd01Icon },
+      { href: "/client/book", key: "bookAppointment", icon: CalendarAdd01Icon, primary: true },
       { href: "/client/reservations", key: "myReservations", icon: TaskDone01Icon },
     ],
   },
@@ -54,7 +59,7 @@ export const adminNav: NavSection[] = [
   {
     items: [
       { href: "/admin", key: "dashboard", icon: DashboardSquare01Icon },
-      { href: "/admin/calendar", key: "calendar", icon: Calendar03Icon },
+      { href: "/admin/calendar", key: "calendar", icon: Calendar03Icon, primary: true },
       { href: "/admin/requests", key: "requests", icon: InboxIcon, badge: "requests" },
       { href: "/admin/approvals", key: "approvals", icon: UserCheck01Icon, badge: "approvals" },
     ],
@@ -75,6 +80,20 @@ export const MOBILE_TAB_LIMIT = 4;
 
 export function flattenNav(sections: NavSection[]): NavItem[] {
   return sections.flatMap((section) => section.items);
+}
+
+/**
+ * Order tabs so the `primary` item (if any) sits in the middle slot of the
+ * bar. `slotCount` includes a trailing "More" tab when one is rendered, so the
+ * primary lands in the visual centre rather than the centre of the pinned
+ * items alone. With an even slot count it lands just right of centre.
+ */
+export function centerPrimaryTab(tabs: NavItem[], slotCount = tabs.length): NavItem[] {
+  const index = tabs.findIndex((item) => item.primary);
+  if (index === -1) return tabs;
+  const rest = tabs.filter((_, i) => i !== index);
+  const middle = Math.min(Math.floor(slotCount / 2), rest.length);
+  return [...rest.slice(0, middle), tabs[index], ...rest.slice(middle)];
 }
 
 export function isNavActive(pathname: string, href: string) {
