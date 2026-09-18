@@ -1,8 +1,15 @@
-// Daily reminder cron — called by Vercel Cron at 08:00 every morning.
-// Finds every confirmed appointment on the NEXT shop-local day that hasn't been
-// reminded yet, sends a reminder email to each client, and stamps reminded_at.
-// (A narrow "23–25h from now" band would only catch appointments starting near
-// the cron minute, so most clients never got a reminder.)
+// Daily cron — called by Vercel Cron at 08:00 every morning. This is the ONLY
+// cron job: the Vercel Hobby plan allows one run per day per job, so the state
+// sweep and the email notifications are combined here in one pass.
+//
+// 1. Outcome sweep: confirmed appointments that ended at least two hours ago
+//    without a recorded outcome are marked `completed`; unanswered booking
+//    requests and unaccepted proposals whose start has passed are closed.
+// 2. Client reminders: every confirmed appointment on the NEXT shop-local day
+//    that hasn't been reminded yet gets a reminder email and a reminded_at stamp.
+//    (A narrow "23–25h from now" band would only catch appointments starting
+//    near the cron minute, so most clients never got a reminder.)
+// 3. Barber agenda: digest of today's confirmed appointments.
 //
 // Vercel Cron schedule: vercel.json → "0 8 * * *"
 
@@ -15,6 +22,10 @@ import { dateInShopTimeZone, timeInShopTimeZone } from "@/lib/time-zone";
 import { sendEmail } from "@/lib/email";
 import { AppointmentReminderEmail } from "@/emails/appointment-reminder";
 import { BarberAgendaEmail, type AgendaItem } from "@/emails/barber-agenda";
+import {
+  autoCompleteFinishedAppointments,
+  expireStaleBookingState,
+} from "@/server/appointment-outcomes";
 import { isAuthorizedCronRequest } from "@/server/cron-auth";
 import { enforceRateLimit } from "@/server/rate-limit";
 import { createNotification } from "@/server/notifications";
@@ -59,6 +70,21 @@ export async function GET(request: NextRequest) {
   // anon client. Use the service-role admin client to read across all clients.
   const supabase = getSupabaseAdminClient();
   const now = new Date();
+
+  // ---- Outcome / stale-state sweep --------------------------------------
+  // Run before the reminders so yesterday's appointments are settled first. A
+  // failure here must not block the reminder emails, so it is isolated.
+  let completed = 0;
+  let declinedRequests = 0;
+  let expiredProposals = 0;
+  try {
+    ({ completed } = await autoCompleteFinishedAppointments(supabase, now));
+    ({ declinedRequests, expiredProposals } = await expireStaleBookingState(supabase, now));
+  } catch (sweepError) {
+    await reportError("cron-complete-appointments", sweepError);
+  }
+
+  // ---- Client reminders -------------------------------------------------
   const { startIso: windowStart, endIso: windowEnd } = reminderWindowFor(now);
 
   // Fetch appointments in the reminder window. We use individual profile/service
@@ -177,6 +203,19 @@ export async function GET(request: NextRequest) {
     await reportError("cron-agenda", agendaError);
   }
 
-  logEvent("cron-reminders", { sent, agendaSent });
-  return NextResponse.json({ ok: true, sent, agendaSent });
+  logEvent("cron-reminders", {
+    sent,
+    agendaSent,
+    completed,
+    declinedRequests,
+    expiredProposals,
+  });
+  return NextResponse.json({
+    ok: true,
+    sent,
+    agendaSent,
+    completed,
+    declinedRequests,
+    expiredProposals,
+  });
 }

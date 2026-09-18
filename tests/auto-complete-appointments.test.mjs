@@ -121,21 +121,26 @@ test("stale pending requests and sent proposals are closed after their start", a
   ]);
 });
 
-test("auto-complete cron route is secret-protected and reports the completed count", () => {
-  const route = read("src/app/api/cron/complete-appointments/route.ts");
+test("daily reminders cron route also runs the outcome sweep and reports the counts", () => {
+  const route = read("src/app/api/cron/reminders/route.ts");
 
   assert.match(route, /getCronSecret/);
   assert.match(route, /Authorization|authorization/);
   assert.match(route, /autoCompleteFinishedAppointments/);
   assert.match(route, /expireStaleBookingState/);
-  assert.match(route, /NextResponse\.json\(\{ ok: true, completed/);
+  assert.match(route, /completed,\s*declinedRequests,\s*expiredProposals/);
+  assert.ok(
+    !existsSync("src/app/api/cron/complete-appointments/route.ts"),
+    "the separate complete-appointments cron route must be removed",
+  );
 });
 
-test("Vercel cron runs the auto-complete sweep regularly", () => {
-  const vercel = read("vercel.json");
+test("Vercel cron config has a single daily job (Hobby plan allows once per day only)", () => {
+  const vercel = JSON.parse(read("vercel.json"));
 
-  assert.match(vercel, /"path":\s*"\/api\/cron\/complete-appointments"/);
-  assert.match(vercel, /"schedule":\s*"\*\/30 \* \* \* \*"/);
+  assert.equal(vercel.crons.length, 1);
+  assert.equal(vercel.crons[0].path, "/api/cron/reminders");
+  assert.match(vercel.crons[0].schedule, /^\d+ \d+ \* \* \*$/);
 });
 
 test("database has a partial index for pending outcome completion sweeps", () => {
