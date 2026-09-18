@@ -110,6 +110,11 @@ export function ProposalComposer({
   const canPropose = request.status === "pending" || request.status === "declined";
   // The client picked an exact slot (new flow) and it's awaiting confirmation.
   const hasChosenSlot = Boolean(request.requestedDate && request.requestedTime);
+  const hasDetails =
+    Boolean(request.note) ||
+    request.preferences.length > 0 ||
+    canPropose ||
+    (!hasChosenSlot && request.status === "proposed");
   // Reliability signal at decision time: how many times this client no-showed.
   const clientNoShows = client
     ? appointments.filter((a) => a.clientId === client.id && a.outcome === "no_show").length
@@ -136,7 +141,7 @@ export function ProposalComposer({
     return workingHours.find((hour) => !takenAt(targetDate, hour)) ?? workingHours[0];
   }
 
-  const [open, setOpen] = useState(request.status !== "pending");
+  const [open, setOpen] = useState(hasDetails && request.status !== "pending");
   const [proposalControlsOpen, setProposalControlsOpen] = useState(false);
   const initialDate = request.preferences[0]?.date ?? addDays(1);
   const [date, setDate] = useState(initialDate);
@@ -211,47 +216,34 @@ export function ProposalComposer({
 
   const conflict = takenAt(date, time);
   const clientName = client?.name ?? t.admin.clientFallback;
-
-  return (
-    <article
-      className={cn(
-        "rounded-xl bg-card text-card-foreground shadow-xs ring-1 transition",
-        request.status === "pending" ? "ring-amber-500/40" : "ring-foreground/10",
-      )}
-    >
-      {/* Header: identity + status. Tapping toggles the body. */}
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-controls={bodyId}
-        className="flex w-full items-start justify-between gap-3 rounded-t-xl p-4 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
-      >
-        <div className="flex min-w-0 items-start gap-3">
-          <Avatar size="md" name={clientName} src={client?.avatarUrl} />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <p className="text-base font-semibold text-foreground">{clientName}</p>
-              <StatusPill tone={tone} dot>
-                {label}
+  const headerContent = (
+    <>
+      <div className="flex min-w-0 items-start gap-3">
+        <Avatar size="md" name={clientName} src={client?.avatarUrl} />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="text-base font-semibold text-foreground">{clientName}</p>
+            <StatusPill tone={tone} dot>
+              {label}
+            </StatusPill>
+            {clientNoShows > 0 ? (
+              <StatusPill tone="warning">
+                <Icon icon={Alert02Icon} className="size-3.5" strokeWidth={2} />
+                {clientNoShows}{" "}
+                {clientNoShows === 1 ? t.admin.reliabilityFlag : t.admin.reliabilityFlagPlural}
               </StatusPill>
-              {clientNoShows > 0 ? (
-                <StatusPill tone="warning">
-                  <Icon icon={Alert02Icon} className="size-3.5" strokeWidth={2} />
-                  {clientNoShows}{" "}
-                  {clientNoShows === 1 ? t.admin.reliabilityFlag : t.admin.reliabilityFlagPlural}
-                </StatusPill>
-              ) : null}
-            </div>
-            <p className="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
-              <Icon icon={Scissor01Icon} className="size-3.5" />
-              <span className="truncate">
-                {service.name} · {service.duration} {t.admin.minutesShort}
-                {client?.email ? ` · ${client.email}` : ""}
-              </span>
-            </p>
+            ) : null}
           </div>
+          <p className="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
+            <Icon icon={Scissor01Icon} className="size-3.5" />
+            <span className="truncate">
+              {service.name} · {service.duration} {t.admin.minutesShort}
+              {client?.email ? ` · ${client.email}` : ""}
+            </span>
+          </p>
         </div>
+      </div>
+      {hasDetails ? (
         <span
           className={cn(
             "mt-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-transform",
@@ -261,7 +253,31 @@ export function ProposalComposer({
         >
           <Icon icon={ArrowDown01Icon} />
         </span>
-      </button>
+      ) : null}
+    </>
+  );
+
+  return (
+    <article
+      className={cn(
+        "rounded-xl bg-card text-card-foreground shadow-xs ring-1 transition",
+        request.status === "pending" ? "ring-amber-500/40" : "ring-foreground/10",
+      )}
+    >
+      {/* Only rows with additional details behave like disclosure controls. */}
+      {hasDetails ? (
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          aria-controls={bodyId}
+          className="flex w-full items-start justify-between gap-3 rounded-t-xl p-4 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+        >
+          {headerContent}
+        </button>
+      ) : (
+        <div className="flex w-full items-start justify-between gap-3 p-4">{headerContent}</div>
+      )}
 
       {/* Confirmed summary */}
       {request.status === "confirmed" && activeProposal ? (
@@ -328,9 +344,10 @@ export function ProposalComposer({
         </div>
       ) : null}
 
-      <div id={bodyId} hidden={!open}>
-        {open ? (
-          <div className="space-y-4 border-t px-4 pt-4 pb-4">
+      {hasDetails ? (
+        <div id={bodyId} hidden={!open}>
+          {open ? (
+            <div className="space-y-4 border-t px-4 pt-4 pb-4">
             {/* Client note */}
             {request.note ? (
               <div className="flex items-start gap-2.5 rounded-lg bg-muted/60 px-3 py-2.5 text-sm text-foreground/90">
@@ -518,9 +535,10 @@ export function ProposalComposer({
                 {t.admin.declineRequest}
               </Button>
             ) : null}
-          </div>
-        ) : null}
-      </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={declineOpen}

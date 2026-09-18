@@ -84,6 +84,13 @@ Admin routes:
 - `/admin/audit`: admin action audit log.
 - `/admin/settings`: services, service images, pricing settings, push opt-in.
 
+Authenticated page segments colocate a `loading.tsx` boundary with each route. These boundaries render
+route-specific skeletons from `src/components/admin/admin-loading-skeletons.tsx` and
+`src/components/client/client-loading-skeletons.tsx`; the root admin/client boundaries cover only their
+dashboard pages. Shared loading surfaces and accessibility behavior live in
+`src/components/shared/skeleton.tsx`. Keep each skeleton aligned with the route's stable responsive
+structure (filters, cards, tables, calendars, and forms) rather than using a generic page placeholder.
+
 API routes:
 
 - `/api/auth/send-email`: Supabase Send Email Hook, verified with Standard Webhooks HMAC, sends branded auth emails through Resend.

@@ -1,6 +1,4 @@
 import { AdminCalendar } from "@/components/admin/admin-calendar";
-import { PageHeader } from "@/components/shared/page-header";
-import { getDict } from "@/i18n/server";
 import { getSiteUrl } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/server/auth";
@@ -11,7 +9,6 @@ export const dynamic = "force-dynamic";
 export default async function AdminCalendarPage() {
   const profile = await requireAdmin();
   const data = await loadAdminCalendar();
-  const t = await getDict();
 
   // The admin's secret feed token → live subscription URL.
   const supabase = await createClient();
@@ -26,11 +23,6 @@ export default async function AdminCalendarPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <PageHeader
-        eyebrow={t.admin.calendarEyebrow}
-        title={t.admin.calendarTitle}
-        description={t.admin.calendarDescription}
-      />
       <AdminCalendar
         appointments={data.appointments}
         proposals={data.proposals}

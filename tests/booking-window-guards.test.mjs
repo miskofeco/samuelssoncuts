@@ -54,7 +54,10 @@ test("client booking can select today's shop date and filters only past times", 
 test("client calendar selected date is green while today keeps shared black ring", () => {
   const monthCalendar = readFileSync("src/components/shared/month-calendar.tsx", "utf8");
 
-  assert.match(monthCalendar, /cell\.isToday && "ring-2 ring-black dark:ring-white"/);
+  assert.match(
+    monthCalendar,
+    /cell\.isToday && "ring-2 ring-inset ring-black dark:ring-white"/,
+  );
   assert.match(slotPicker, /cell\.date === date/);
   assert.match(slotPicker, /!border-emerald-500/);
   assert.match(slotPicker, /ring-emerald-500/);

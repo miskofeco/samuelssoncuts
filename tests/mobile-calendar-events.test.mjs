@@ -85,6 +85,22 @@ test("past blocked dates use disabled stone styling before blocked red styling",
   assert.match(availabilityManager, /cell\.date < today[\s\S]*blockedDates\.has\(cell\.date\)/);
 });
 
+test("availability management hides blocked periods that already ended", () => {
+  assert.match(
+    availabilityManager,
+    /const visibleRanges = ranges\.filter\(\(range\) => range\.end >= today\)/,
+  );
+  assert.match(availabilityManager, /visibleRanges\.length/);
+  assert.match(availabilityManager, /visibleRanges\.map\(\(range\) =>/);
+});
+
+test("month calendar state rings stay inside their day cells", () => {
+  assert.match(monthCalendar, /selected && "[^"]*ring-inset[^"]*"/);
+  assert.match(monthCalendar, /cell\.isToday && "[^"]*ring-inset[^"]*"/);
+  assert.match(monthCalendar, /focus-visible:ring-inset/);
+  assert.doesNotMatch(monthCalendar, /ring-offset-2 ring-offset-background/);
+});
+
 test("admin calendar distinguishes confirmed, barber-added, and proposed colors", () => {
   assert.match(adminCalendar, /type: appointment\.requestId \? "Confirmed" : "Barber"/);
   assert.match(adminCalendar, /type: "Confirmed" \| "Barber" \| "Proposed"/);

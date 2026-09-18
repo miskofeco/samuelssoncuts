@@ -2,7 +2,6 @@ import { ReservationsView } from "@/components/client/reservations-view";
 import { UpcomingAppointments } from "@/components/client/upcoming-appointments";
 import { ButtonLink } from "@/components/shared/button";
 import { CalendarExport } from "@/components/shared/calendar-export";
-import { PageHeader } from "@/components/shared/page-header";
 import { getDict } from "@/i18n/server";
 import { getSiteUrl } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
@@ -32,17 +31,10 @@ export default async function ReservationsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow={t.client.reservationsEyebrow}
-        title={t.client.reservationsTitle}
-        description={t.client.reservationsDescription}
-        actions={
-          <>
-            <CalendarExport feedUrl={feedUrl} />
-            <ButtonLink href="/client/book">{t.client.newRequest}</ButtonLink>
-          </>
-        }
-      />
+      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end [&>*]:w-full sm:[&>*]:w-auto">
+        <CalendarExport feedUrl={feedUrl} />
+        <ButtonLink href="/client/book">{t.client.newRequest}</ButtonLink>
+      </div>
       <UpcomingAppointments
         appointments={data.upcomingAppointments}
         services={data.services}

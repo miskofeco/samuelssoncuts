@@ -1,60 +1,98 @@
 "use client";
 
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Bar, BarChart, Cell, XAxis, YAxis } from "recharts";
 
-import { useT } from "@/i18n/provider";
-
-import { chartTooltipStyle } from "./chart-theme";
-import { DonutLegend } from "./donut-legend";
+import { EmptyState } from "@/components/shared/empty-state";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 
 // Semantic status colours: amber = new/pending, sky = proposed, emerald =
 // confirmed, stone = closed. Same accents as the StatusPill tones.
-const colors: Record<string, string> = {
-  pending: "#f59e0b",
-  proposed: "#0ea5e9",
-  confirmed: "#10b981",
-  declined: "#a8a29e",
+const colors = {
+  pending: "var(--chart-3)",
+  proposed: "var(--chart-2)",
+  confirmed: "var(--chart-1)",
+  declined: "var(--chart-4)",
 };
 
 export function RequestsByStatusChart({
   data,
+  requestsLabel,
+  emptyTitle,
+  emptyDescription,
 }: {
   data: { label: string; value: number; key: string }[];
+  requestsLabel: string;
+  emptyTitle: string;
+  emptyDescription: string;
 }) {
-  const t = useT();
   const total = data.reduce((sum, item) => sum + item.value, 0);
+  const chartData = data.map((item) => ({ ...item, fill: colors[item.key as keyof typeof colors] }));
+  const chartConfig = Object.fromEntries(
+    data.map((item) => [
+      item.key,
+      { label: item.label, color: colors[item.key as keyof typeof colors] },
+    ]),
+  ) satisfies ChartConfig;
 
   if (total === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        {t.charts.noRequestsYet}
-      </div>
+      <EmptyState
+        title={emptyTitle}
+        description={emptyDescription}
+        className="h-full border-0 bg-transparent py-6"
+      />
     );
   }
 
   return (
-    <div className="flex h-full items-center gap-4">
-      <div className="h-full min-w-0 flex-1">
-        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 300, height: 256 }}>
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="label"
-              innerRadius="58%"
-              outerRadius="85%"
-              paddingAngle={2}
-              stroke="none"
-            >
-              {data.map((entry) => (
-                <Cell key={entry.key} fill={colors[entry.key]} />
-              ))}
-            </Pie>
-            <Tooltip contentStyle={chartTooltipStyle} />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-      <DonutLegend data={data} colors={colors} />
-    </div>
+    <ChartContainer
+      config={chartConfig}
+      className="h-full w-full aspect-auto"
+      aria-label={chartData.map((item) => `${item.label}: ${item.value}`).join(", ")}
+      role="img"
+    >
+      <BarChart
+        data={chartData}
+        layout="vertical"
+        margin={{ top: 0, right: 20, left: 0, bottom: 0 }}
+      >
+        <XAxis type="number" hide domain={[0, "dataMax"]} />
+        <YAxis
+          type="category"
+          dataKey="label"
+          axisLine={false}
+          tickLine={false}
+          width={82}
+          tickMargin={8}
+        />
+        <ChartTooltip
+          cursor={{ fill: "var(--muted)", opacity: 0.45 }}
+          content={
+            <ChartTooltipContent
+              hideLabel
+              hideIndicator
+              formatter={(value, _name, item) => (
+                <div className="flex min-w-36 items-center justify-between gap-4">
+                  <span className="text-muted-foreground">{item.payload.label}</span>
+                  <span className="font-mono font-semibold text-foreground tabular-nums">
+                    {Number(value)} {requestsLabel}
+                  </span>
+                </div>
+              )}
+            />
+          }
+        />
+        <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={30}>
+          {chartData.map((entry) => (
+            <Cell key={entry.key} fill={entry.fill} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ChartContainer>
   );
 }

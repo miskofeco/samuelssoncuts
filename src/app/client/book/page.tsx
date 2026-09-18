@@ -1,6 +1,4 @@
 import { RequestForm } from "@/components/client/request-form";
-import { PageHeader } from "@/components/shared/page-header";
-import { getDict } from "@/i18n/server";
 import { requireApprovedClient } from "@/server/auth";
 import { loadBookingData } from "@/server/dashboard-data";
 
@@ -13,7 +11,6 @@ export default async function BookPage({
 }) {
   await requireApprovedClient();
   const data = await loadBookingData();
-  const t = await getDict();
   // One-tap rebooking: ?service=<id> preselects that service if it's bookable.
   const { service } = await searchParams;
   const initialServiceId =
@@ -21,11 +18,6 @@ export default async function BookPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow={t.client.bookEyebrow}
-        title={t.client.bookTitle}
-        description={t.client.bookDescription}
-      />
       <RequestForm
         services={data.services}
         pricingSettings={data.pricingSettings}

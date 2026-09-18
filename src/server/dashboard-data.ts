@@ -651,28 +651,22 @@ export async function loadAdminCalendar(): Promise<{
   };
 }
 
-/** Pending approvals (email-confirmed) + their requested preferences. */
+/** Client accounts awaiting an access decision, including unverified sign-ups. */
 export async function loadApprovals(): Promise<{
   clients: ClientProfile[];
-  requests: BookingRequest[];
-  services: Service[];
 }> {
   const supabase = await createClient();
-  const [profilesResult, requestsResult, servicesResult] = await Promise.all([
-    supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-    supabase.from("booking_requests").select(REQUEST_SELECT),
-    supabase.from("services").select("*"),
-  ]);
+  const profilesResult = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("role", "client")
+    .eq("approval_status", "pending")
+    .order("created_at", { ascending: false });
 
   fail("profiles", profilesResult.error);
-  fail("booking_requests", requestsResult.error);
-  fail("services", servicesResult.error);
 
-  const rows = asRequestRows(requestsResult.data);
   return {
     clients: (profilesResult.data ?? []).map(mapClientRow),
-    requests: rows.map(mapRequestRow),
-    services: (servicesResult.data ?? []).map(mapServiceRow),
   };
 }
 

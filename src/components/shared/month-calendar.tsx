@@ -153,9 +153,8 @@ export function MonthCalendar({
             dayClassName?.(cell),
             interactive && !disabled && "hover:border-foreground active:scale-[0.97]",
             interactive && disabled && "cursor-not-allowed",
-            selected && "border-foreground ring-2 ring-foreground",
-            cell.isToday && "ring-2 ring-black dark:ring-white",
-            cell.isToday && selected && "ring-offset-2 ring-offset-background",
+            selected && "border-foreground ring-2 ring-inset ring-foreground",
+            cell.isToday && "ring-2 ring-inset ring-black dark:ring-white",
           );
 
           if (!interactive) {
@@ -176,7 +175,10 @@ export function MonthCalendar({
               aria-current={cell.isToday ? "date" : undefined}
               aria-label={dayFormatter.format(new Date(`${cell.date}T12:00:00`))}
               onClick={() => onDayClick?.(cell)}
-              className={cn(cellClass, "outline-none focus-visible:ring-3 focus-visible:ring-ring/50")}
+              className={cn(
+                cellClass,
+                "outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50",
+              )}
             >
               {cellContent}
             </button>

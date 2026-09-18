@@ -5,11 +5,10 @@ import {
   Cancel01Icon,
   HourglassIcon,
   Mail01Icon,
-  Scissor01Icon,
   Tick02Icon,
   UserCheck01Icon,
 } from "@hugeicons/core-free-icons";
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { approveClientAction, rejectClientAction } from "@/app/actions";
@@ -21,47 +20,23 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
 import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
-import { formatFullDay, serviceById } from "@/domain/schedule";
-import type {
-  ActionResult,
-  BookingRequest,
-  ClientProfile,
-  Service,
-} from "@/domain/types";
-import { localeFor } from "@/i18n/config";
-import { useLang, useT } from "@/i18n/provider";
+import type { ActionResult, ClientProfile } from "@/domain/types";
+import { useT } from "@/i18n/provider";
 
 /**
  * Verified-but-unapproved clients as decision cards: who they are, how to
- * reach them, what they asked for, then approve / reject. Reject goes through
- * the shared ConfirmDialog.
+ * reach them, then approve / reject. Reject goes through the shared
+ * ConfirmDialog.
  */
-export function ApprovalQueue({
-  clients,
-  requests,
-  services,
-}: {
-  clients: ClientProfile[];
-  requests: BookingRequest[];
-  services: Service[];
-}) {
+export function ApprovalQueue({ clients }: { clients: ClientProfile[] }) {
   const t = useT();
-  const locale = localeFor(useLang());
   const [, startTransition] = useTransition();
   const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set());
   const [rejecting, setRejecting] = useState<ClientProfile | null>(null);
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
 
-  const people = useMemo(
-    () => clients.filter((client) => client.role !== "admin"),
-    [clients],
-  );
-  const pending = people.filter(
-    (client) => client.status === "pending" && client.emailConfirmed,
-  );
-  const awaitingVerification = people.filter(
-    (client) => client.status === "pending" && !client.emailConfirmed,
-  ).length;
+  const pending = clients.filter((client) => client.emailConfirmed);
+  const awaitingVerification = clients.length - pending.length;
 
   function run(action: (id: string) => Promise<ActionResult>, id: string) {
     if (busyIds.has(id)) return;
@@ -124,9 +99,6 @@ export function ApprovalQueue({
         ) : (
           pending.map((client) => {
             const busy = busyIds.has(client.id);
-            const clientRequests = requests.filter(
-              (request) => request.clientId === client.id,
-            );
             return (
               <article
                 key={client.id}
@@ -155,34 +127,6 @@ export function ApprovalQueue({
                     </ul>
                   </div>
                 </div>
-
-                {clientRequests.length > 0 ? (
-                  <div className="mt-3 rounded-lg bg-muted/60 p-3">
-                    <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                      {t.admin.requested}
-                    </p>
-                    <ul className="mt-2 space-y-1.5">
-                      {clientRequests.slice(0, 2).map((request) => (
-                        <li key={request.id} className="flex items-start gap-2 text-sm text-foreground/90">
-                          <Icon icon={Scissor01Icon} className="mt-0.5 shrink-0 text-muted-foreground" />
-                          <span className="min-w-0">
-                            <span className="font-medium">
-                              {serviceById(request.serviceId, services).name}
-                            </span>
-                            {request.preferences.length > 0 ? (
-                              <span className="text-muted-foreground">
-                                {" — "}
-                                {request.preferences
-                                  .map((preference) => formatFullDay(preference.date, locale))
-                                  .join(", ")}
-                              </span>
-                            ) : null}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
 
                 <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
                   <Button

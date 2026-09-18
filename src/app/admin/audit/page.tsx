@@ -3,7 +3,6 @@ import { ClipboardIcon, ShieldUserIcon } from "@hugeicons/core-free-icons";
 import { Card } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/shared/icon";
-import { PageHeader } from "@/components/shared/page-header";
 import { StatusPill, type PillTone } from "@/components/shared/status-pill";
 import { getDict } from "@/i18n/server";
 import { requireAdmin } from "@/server/auth";
@@ -26,12 +25,6 @@ export default async function AdminAuditPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow={t.admin.auditEyebrow}
-        title={t.admin.auditTitle}
-        description={t.admin.auditDescription}
-      />
-
       {entries.length === 0 ? (
         <EmptyState title={t.admin.auditEmpty} icon={<Icon icon={ClipboardIcon} />} />
       ) : (

@@ -32,6 +32,38 @@ function isInIsoRange(date: string | undefined, start: string, end: string): boo
   return iso >= start && iso <= end;
 }
 
+/** First day of the trailing calendar-month window that ends on `anchorDate`. */
+export function analyticsPeriodStart(anchorDate: string, months: number): string {
+  const [year, month] = anchorDate.slice(0, 7).split("-").map(Number);
+  const monthCount = Math.max(1, Math.floor(months));
+  const start = new Date(Date.UTC(year, month - monthCount, 1));
+  return start.toISOString().slice(0, 10);
+}
+
+/** Appointments scheduled within the selected historical window, through today. */
+export function appointmentsInAnalyticsPeriod(
+  appointments: Appointment[],
+  months: number,
+  anchorDate: string,
+): Appointment[] {
+  const start = analyticsPeriodStart(anchorDate, months);
+  return appointments.filter((appointment) =>
+    isInIsoRange(appointment.date, start, anchorDate),
+  );
+}
+
+/** Requests created within the same historical window used by appointment analytics. */
+export function requestsInAnalyticsPeriod(
+  requests: BookingRequest[],
+  months: number,
+  anchorDate: string,
+): BookingRequest[] {
+  const start = analyticsPeriodStart(anchorDate, months);
+  return requests.filter((request) =>
+    isInIsoRange(request.createdAt, start, anchorDate),
+  );
+}
+
 export function percentageTrend(current: number, previous: number): PercentageTrend {
   if (current === previous) return { direction: "flat", percent: 0 };
   const direction: TrendDirection = current > previous ? "up" : "down";
@@ -168,11 +200,12 @@ export function revenueTrend(
   services: Service[],
   months = 6,
   locale = "en-US",
+  anchorDate?: string,
 ) {
   const { requestsById, servicesById } = revenueLookups(requests, services);
   const monthFormatter = new Intl.DateTimeFormat(locale, { month: "short" });
   const buckets: { key: string; label: string; revenue: number }[] = [];
-  const now = new Date();
+  const now = anchorDate ? new Date(`${anchorDate}T12:00:00`) : new Date();
   now.setDate(1);
 
   for (let i = months - 1; i >= 0; i -= 1) {
@@ -261,10 +294,11 @@ export function bookingsTrend(
   appointments: Appointment[],
   months = 6,
   locale = "en-US",
+  anchorDate?: string,
 ) {
   const monthFormatter = new Intl.DateTimeFormat(locale, { month: "short" });
   const buckets: { key: string; label: string; bookings: number }[] = [];
-  const now = new Date();
+  const now = anchorDate ? new Date(`${anchorDate}T12:00:00`) : new Date();
   now.setDate(1);
 
   for (let i = months - 1; i >= 0; i -= 1) {

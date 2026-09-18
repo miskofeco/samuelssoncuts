@@ -82,7 +82,13 @@ export function BusinessHoursEditor({
         title={t.admin.businessHoursTitle}
         description={t.admin.businessHoursDescription}
         action={
-          <Button type="button" variant="outline" size="sm" onClick={applyToAllOpenDays} className="h-9">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={applyToAllOpenDays}
+            className="h-auto min-h-9 w-full max-w-full whitespace-normal py-2 text-center leading-snug sm:w-auto"
+          >
             {t.admin.businessHoursApplyAll}
           </Button>
         }

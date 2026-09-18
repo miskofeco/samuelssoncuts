@@ -9,24 +9,24 @@ import { cn } from "@/lib/classnames";
  * Line/bar charts inherit `currentColor` from `text-foreground`.
  */
 export function ChartCard({
-  eyebrow,
   title,
   description,
   action,
   className,
+  contentClassName,
   children,
 }: {
-  eyebrow?: string;
   title: string;
   description?: string;
   action?: ReactNode;
   className?: string;
+  contentClassName?: string;
   children: ReactNode;
 }) {
   return (
     <Card className={cn("flex h-full flex-col text-foreground", className)}>
-      <SectionHeader eyebrow={eyebrow} title={title} description={description} action={action} />
-      <div className="mt-5 h-64 w-full min-w-0">{children}</div>
+      <SectionHeader title={title} description={description} action={action} />
+      <div className={cn("mt-5 h-64 w-full min-w-0", contentClassName)}>{children}</div>
     </Card>
   );
 }

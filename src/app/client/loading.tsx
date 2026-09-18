@@ -1,5 +1,5 @@
-import { PageSkeleton } from "@/components/shared/skeleton";
+import { ClientOverviewSkeleton } from "@/components/client/client-loading-skeletons";
 
 export default function ClientLoading() {
-  return <PageSkeleton />;
+  return <ClientOverviewSkeleton />;
 }

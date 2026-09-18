@@ -19,7 +19,6 @@ import { ConfirmedAppointmentActions } from "@/components/client/confirmed-appoi
 import { ButtonLink } from "@/components/shared/button";
 import { Card } from "@/components/shared/card";
 import { Icon, type IconSource } from "@/components/shared/icon";
-import { PageHeader } from "@/components/shared/page-header";
 import { StatusPill } from "@/components/shared/status-pill";
 import { formatFullDay } from "@/domain/schedule";
 import { localeFor } from "@/i18n/config";
@@ -65,8 +64,6 @@ export default async function AppointmentDetailPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow={t.client.detailEyebrow} title={t.client.detailTitle} />
-
       <Link
         href="/client/reservations"
         className="inline-flex min-h-10 items-center gap-1.5 rounded-lg text-sm font-semibold text-muted-foreground outline-none transition hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"

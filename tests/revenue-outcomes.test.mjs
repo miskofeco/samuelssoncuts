@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  appointmentsInAnalyticsPeriod,
   appointmentRevenueCents,
   adminOverviewMetricTrends,
   outcomeSummary,
   percentageTrend,
+  requestsInAnalyticsPeriod,
   revenueByService,
   revenueLookups,
   revenueTrend,
@@ -114,6 +116,36 @@ test("percentageTrend returns direction and whole percent change", () => {
   assert.deepEqual(percentageTrend(10, 10), { direction: "flat", percent: 0 });
   assert.deepEqual(percentageTrend(3, 0), { direction: "up", percent: 100 });
   assert.deepEqual(percentageTrend(0, 0), { direction: "flat", percent: 0 });
+});
+
+test("appointmentsInAnalyticsPeriod uses whole calendar months and excludes future dates", () => {
+  const rows = appointmentsInAnalyticsPeriod(
+    [
+      appt({ id: "before-window", date: "2026-02-28" }),
+      appt({ id: "window-start", date: "2026-03-01" }),
+      appt({ id: "today", date: "2026-08-18" }),
+      appt({ id: "future", date: "2026-08-19" }),
+    ],
+    6,
+    "2026-08-18",
+  );
+
+  assert.deepEqual(rows.map((row) => row.id), ["window-start", "today"]);
+});
+
+test("requestsInAnalyticsPeriod compares request creation dates in the same window", () => {
+  const rows = requestsInAnalyticsPeriod(
+    [
+      { ...requests[0], id: "before-window", createdAt: "2026-02-28T23:59:59Z" },
+      { ...requests[0], id: "window-start", createdAt: "2026-03-01T00:00:00Z" },
+      { ...requests[0], id: "today", createdAt: "2026-08-18T16:00:00Z" },
+      { ...requests[0], id: "future", createdAt: "2026-08-19T00:00:00Z" },
+    ],
+    6,
+    "2026-08-18",
+  );
+
+  assert.deepEqual(rows.map((row) => row.id), ["window-start", "today"]);
 });
 
 test("adminOverviewMetricTrends compares current metrics with previous periods", () => {

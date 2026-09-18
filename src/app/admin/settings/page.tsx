@@ -1,7 +1,6 @@
 import { PricingSettingsForm } from "@/components/admin/pricing-settings-form";
 import { ServiceManager } from "@/components/admin/service-manager";
 import { OpenPreferencesCard } from "@/components/consent/open-preferences-button";
-import { PageHeader } from "@/components/shared/page-header";
 import { ProfileForm } from "@/components/shared/profile-form";
 import { PushNotificationCard } from "@/components/shared/push-notification-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,12 +22,6 @@ export default async function AdminSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow={t.admin.settingsEyebrow}
-        title={t.admin.settingsTitle}
-        description={t.admin.settingsDescription}
-      />
-
       {/* Tabs keep each area short on phones; Radix handles roving focus. */}
       <Tabs defaultValue="services" className="gap-4 sm:gap-6">
         <TabsList className="w-full sm:w-auto sm:min-w-96">

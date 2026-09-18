@@ -361,6 +361,8 @@ const en = {
     availabilityTitle: "Vacation & blocked days",
     availabilityDescription:
       "Close dates for holidays or time off. Clients can't request appointments on blocked days.",
+    availabilityTabHours: "Opening hours",
+    availabilityTabBlockedDays: "Blocked days",
     businessHoursTitle: "Opening hours",
     businessHoursDescription:
       "Set your weekly schedule. Clients can only book within your open hours.",
@@ -462,7 +464,6 @@ const en = {
       `${count} ${count === 1 ? "registration" : "registrations"} waiting on email verification — they appear here once confirmed.`,
     noVerifiedWaiting: "No verified registrations waiting",
     noVerifiedDescription: "New clients appear here once they confirm their email.",
-    requested: "Requested",
     approve: "Approve",
     reject: "Reject",
     confirmRejectTitle: "Reject this client?",
@@ -619,9 +620,6 @@ const en = {
     noClientsFound: "No clients found",
     openClient: (name: string) => `Open client ${name}`,
     nothingMatches: (query: string) => `Nothing matches “${query}”.`,
-    demandEyebrow: "Demand",
-    requestedDays: "Requested days",
-    requestedDaysDescription: "Preferred dates from clients awaiting approval.",
     reqCount: (count: number) => `${count} req`,
     // Redesign additions
     legend: "Legend",
@@ -637,13 +635,37 @@ const en = {
     settingsTabNotifications: "Notifications",
   },
   charts: {
+    analyticsTitle: "Business performance",
+    analyticsDescription:
+      "See how bookings, booking value, client demand and appointment reliability change over time.",
+    periodLabel: "Analytics period",
+    period3Months: "3 months",
+    period6Months: "6 months",
+    period12Months: "12 months",
+    performanceTitle: "Performance over time",
+    performanceDescription:
+      "Confirmed appointments scheduled through today. Booking value excludes cancellations and no-shows.",
+    performanceMetricLabel: "Performance metric",
+    bookingsMetric: "Bookings",
+    bookingValueMetric: "Booking value",
+    bookingValueByService: "Booking value by service",
+    bookingValueByServiceDescription:
+      "Which services contributed the most value in the selected period.",
     trendsEyebrow: "Trends",
     bookingsOverTime: "Bookings over time",
     patternsEyebrow: "Patterns",
     busiestWeekdays: "Busiest weekdays",
+    busiestWeekdaysDescription:
+      "When confirmed appointments are most often scheduled.",
     pipelineEyebrow: "Pipeline",
     requestsByStatus: "Requests by status",
+    requestsByStatusDescription:
+      "Current stage of requests created in the selected period.",
+    requestsShort: "requests",
     noRequestsYet: "No requests yet.",
+    noRequestsDescription: "Requests created in this period will appear here.",
+    noAnalyticsTitle: "No activity in this period",
+    noAnalyticsDescription: "Choose a longer period to see more booking history.",
     // status legend labels for the pie
     statusNew: "New",
     statusProposed: "Proposed",
@@ -654,6 +676,12 @@ const en = {
     revenueByService: "Revenue by service",
     outcomesEyebrow: "Reliability",
     outcomesTitle: "Appointment outcomes",
+    outcomesDescription:
+      "Recorded results for appointments in the selected period, including cancellations.",
+    recordedOutcomes: "recorded outcomes",
+    noShowRate: "No-show rate",
+    noOutcomesTitle: "No recorded outcomes",
+    noOutcomesDescription: "Completed, cancelled and missed appointments will appear here.",
     outcomeCompleted: "Completed",
     outcomeNoShow: "No-show",
     outcomeCancelled: "Cancelled",
@@ -1301,6 +1329,8 @@ const sk: Dict = {
     availabilityTitle: "Dovolenka a blokované dni",
     availabilityDescription:
       "Zatvorte dni na sviatky alebo voľno. Klienti nemôžu žiadať o termíny v blokovaných dňoch.",
+    availabilityTabHours: "Otváracie hodiny",
+    availabilityTabBlockedDays: "Blokované dni",
     businessHoursTitle: "Otváracie hodiny",
     businessHoursDescription:
       "Nastavte týždenný rozvrh. Klienti môžu rezervovať len počas otváracích hodín.",
@@ -1398,7 +1428,6 @@ const sk: Dict = {
       `${count} ${count === 1 ? "registrácia čaká" : count >= 2 && count <= 4 ? "registrácie čakajú" : "registrácií čaká"} na overenie e-mailu — zobrazia sa tu po potvrdení.`,
     noVerifiedWaiting: "Žiadne overené registrácie nečakajú",
     noVerifiedDescription: "Noví klienti sa zobrazia tu po potvrdení e-mailu.",
-    requested: "Požadované",
     approve: "Schváliť",
     reject: "Zamietnuť",
     confirmRejectTitle: "Zamietnuť tohto klienta?",
@@ -1550,9 +1579,6 @@ const sk: Dict = {
     noClientsFound: "Nenašli sa žiadni klienti",
     openClient: (name: string) => `Otvoriť klienta ${name}`,
     nothingMatches: (query: string) => `Nič nezodpovedá „${query}“.`,
-    demandEyebrow: "Dopyt",
-    requestedDays: "Požadované dni",
-    requestedDaysDescription: "Preferované dátumy klientov čakajúcich na schválenie.",
     reqCount: (count: number) => `${count} žiad.`,
     // Redesign additions
     legend: "Legenda",
@@ -1568,13 +1594,37 @@ const sk: Dict = {
     settingsTabNotifications: "Notifikácie",
   },
   charts: {
+    analyticsTitle: "Výkonnosť prevádzky",
+    analyticsDescription:
+      "Sledujte vývoj rezervácií, ich hodnoty, dopytu klientov a spoľahlivosti návštev.",
+    periodLabel: "Obdobie analytiky",
+    period3Months: "3 mesiace",
+    period6Months: "6 mesiacov",
+    period12Months: "12 mesiacov",
+    performanceTitle: "Vývoj výkonnosti",
+    performanceDescription:
+      "Potvrdené termíny naplánované do dnešného dňa. Hodnota nezahŕňa zrušené termíny ani nedostavenia.",
+    performanceMetricLabel: "Metrika výkonnosti",
+    bookingsMetric: "Rezervácie",
+    bookingValueMetric: "Hodnota rezervácií",
+    bookingValueByService: "Hodnota podľa služby",
+    bookingValueByServiceDescription:
+      "Ktoré služby priniesli najvyššiu hodnotu vo vybranom období.",
     trendsEyebrow: "Trendy",
     bookingsOverTime: "Rezervácie v čase",
     patternsEyebrow: "Vzory",
     busiestWeekdays: "Najrušnejšie dni",
+    busiestWeekdaysDescription:
+      "Dni, na ktoré sa najčastejšie plánujú potvrdené termíny.",
     pipelineEyebrow: "Tok",
     requestsByStatus: "Žiadosti podľa stavu",
+    requestsByStatusDescription:
+      "Aktuálny stav žiadostí vytvorených vo vybranom období.",
+    requestsShort: "žiadostí",
     noRequestsYet: "Zatiaľ žiadne žiadosti.",
+    noRequestsDescription: "Žiadosti vytvorené v tomto období sa zobrazia tu.",
+    noAnalyticsTitle: "V tomto období nie je aktivita",
+    noAnalyticsDescription: "Vyberte dlhšie obdobie a zobrazí sa viac histórie.",
     statusNew: "Nové",
     statusProposed: "Navrhnuté",
     statusConfirmed: "Potvrdené",
@@ -1584,6 +1634,12 @@ const sk: Dict = {
     revenueByService: "Tržby podľa služby",
     outcomesEyebrow: "Spoľahlivosť",
     outcomesTitle: "Výsledky rezervácií",
+    outcomesDescription:
+      "Zaznamenané výsledky termínov vo vybranom období vrátane zrušení.",
+    recordedOutcomes: "zaznamenaných výsledkov",
+    noShowRate: "Miera nedostavení",
+    noOutcomesTitle: "Žiadne zaznamenané výsledky",
+    noOutcomesDescription: "Dokončené, zrušené a zmeškané termíny sa zobrazia tu.",
     outcomeCompleted: "Dokončené",
     outcomeNoShow: "Nedostavil sa",
     outcomeCancelled: "Zrušené",

@@ -40,6 +40,7 @@ export function AvailabilityManager({
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
   const sliceMode = mode === "slice";
   const invalidRange = sliceMode ? endTime <= startTime : end < start;
+  const visibleRanges = ranges.filter((range) => range.end >= today);
 
   function block(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -194,13 +195,13 @@ export function AvailabilityManager({
         <SectionHeader
           title={t.admin.blockedPeriods}
           action={
-            <StatusPill tone={ranges.length > 0 ? "danger" : "success"} dot>
-              {ranges.length}
+            <StatusPill tone={visibleRanges.length > 0 ? "danger" : "success"} dot>
+              {visibleRanges.length}
             </StatusPill>
           }
         />
         <div className="mt-4 space-y-2">
-          {ranges.length === 0 ? (
+          {visibleRanges.length === 0 ? (
             <EmptyState
               title={t.admin.noBlockedDates}
               description={t.admin.noBlockedDescription}
@@ -208,7 +209,7 @@ export function AvailabilityManager({
             />
           ) : (
             <ul className="space-y-2">
-              {ranges.map((range) => (
+              {visibleRanges.map((range) => (
                 <li
                   key={range.id}
                   className="flex items-center gap-3 rounded-xl bg-card p-3 ring-1 ring-foreground/10"

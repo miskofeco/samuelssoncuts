@@ -1,5 +1,5 @@
-import { PageSkeleton } from "@/components/shared/skeleton";
+import { ClientReservationsSkeleton } from "@/components/client/client-loading-skeletons";
 
 export default function ReservationsLoading() {
-  return <PageSkeleton cards={2} />;
+  return <ClientReservationsSkeleton />;
 }
