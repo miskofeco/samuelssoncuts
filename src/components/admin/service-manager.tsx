@@ -1,7 +1,7 @@
 "use client";
 
 import { Add01Icon, Camera01Icon, PencilEdit01Icon, Scissor01Icon } from "@hugeicons/core-free-icons";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import Image from "next/image";
 
@@ -72,6 +72,12 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
   const [uploadFeedback, setUploadFeedback] = useState<ActionResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Release the previous object URL whenever the preview changes or unmounts.
+  useEffect(() => {
+    if (!localPreview) return;
+    return () => URL.revokeObjectURL(localPreview);
+  }, [localPreview]);
+
   function openCreate() {
     setFeedback(null);
     setUploadFeedback(null);
@@ -118,12 +124,16 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
       const data = new FormData();
       data.set("file", file);
       startUploadTransition(async () => {
-        const result = await uploadServiceImageAction(draft.id!, data);
-        setUploadFeedback(result);
-        if (result.ok && "url" in result && typeof result.url === "string") {
-          setDraft((prev) => prev ? { ...prev, imageUrl: result.url as string } : prev);
-          setLocalPreview(null);
-          setPendingFile(null);
+        try {
+          const result = await uploadServiceImageAction(draft.id!, data);
+          setUploadFeedback(result);
+          if (result.ok && "url" in result && typeof result.url === "string") {
+            setDraft((prev) => prev ? { ...prev, imageUrl: result.url as string } : prev);
+            setLocalPreview(null);
+            setPendingFile(null);
+          }
+        } catch {
+          setUploadFeedback({ ok: false, error: t.common.somethingWentWrong });
         }
       });
     }
@@ -140,44 +150,48 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
       imageUrl: draft.imageUrl || undefined,
     };
     startTransition(async () => {
-      let serviceId = draft.id;
+      try {
+        let serviceId = draft.id;
 
-      const result = serviceId
-        ? await updateServiceAction(serviceId, payload)
-        : await createServiceAction(payload);
+        const result = serviceId
+          ? await updateServiceAction(serviceId, payload)
+          : await createServiceAction(payload);
 
-      setFeedback(result);
+        setFeedback(result);
 
-      if (!result.ok) return;
+        if (!result.ok) return;
 
-      // For new services, get the assigned ID back so we can upload the image.
-      if (!serviceId && "id" in result && typeof result.id === "string") {
-        serviceId = result.id;
+        // For new services, get the assigned ID back so we can upload the image.
+        if (!serviceId && "id" in result && typeof result.id === "string") {
+          serviceId = result.id;
+        }
+
+        // Upload a pending file if one was picked before saving. If the image
+        // upload fails, keep the modal open and surface the error — the service
+        // itself saved fine, but silently closing would hide the failed image.
+        if (pendingFile && serviceId) {
+          const data = new FormData();
+          data.set("file", pendingFile);
+          const uploadResult = await uploadServiceImageAction(serviceId, data);
+          setUploadFeedback(uploadResult);
+          if (!uploadResult.ok) return;
+        }
+
+        onClose();
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
       }
-
-      // Upload a pending file if one was picked before saving. If the image
-      // upload fails, keep the modal open and surface the error — the service
-      // itself saved fine, but silently closing would hide the failed image.
-      if (pendingFile && serviceId) {
-        const data = new FormData();
-        data.set("file", pendingFile);
-        const uploadResult = await uploadServiceImageAction(serviceId, data);
-        setUploadFeedback(uploadResult);
-        if (!uploadResult.ok) return;
-      }
-
-      onClose();
     });
   }
 
   function toggle(service: ServiceItem) {
     startTransition(async () => {
-      setFeedback(await toggleServiceActiveAction(service.id, !service.active));
+      try {
+        setFeedback(await toggleServiceActiveAction(service.id, !service.active));
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
-  }
-
-  function imageIsExternal(src: string) {
-    return src.startsWith("http");
   }
 
   // The image to show in the modal: local preview > uploaded imageUrl > default.
@@ -234,7 +248,6 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
                     alt=""
                     fill
                     sizes="112px"
-                    unoptimized={imageIsExternal(imageSrc)}
                     className={cn("object-cover", !service.active && "grayscale")}
                   />
                 </span>
@@ -297,7 +310,7 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
                     alt=""
                     fill
                     sizes="128px"
-                    unoptimized={localPreview != null || imageIsExternal(modalImageSrc())}
+                    unoptimized={localPreview != null}
                     className="object-cover"
                   />
                   {uploadPending ? (

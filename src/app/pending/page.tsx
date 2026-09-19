@@ -1,42 +1,63 @@
 import { Call02Icon, CancelCircleIcon, HourglassIcon, Logout03Icon } from "@hugeicons/core-free-icons";
 
+import { redirect } from "next/navigation";
+
 import { signOutAction } from "@/app/actions";
 import { AuthFrame, AuthHeading, AuthIllustration } from "@/components/auth/auth-panel";
+import { PrivacyControls } from "@/components/client/privacy-controls";
 import { Button, buttonClass } from "@/components/shared/button";
 import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
 import { getDict } from "@/i18n/server";
 import { getShopPhone } from "@/lib/env";
-import { requireProfile } from "@/server/auth";
+import { dashboardPathFor, requireProfile } from "@/server/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function PendingPage() {
   const profile = await requireProfile();
   const t = await getDict();
+
+  // Approved accounts (and phone-less Google sign-ups) do not belong here.
+  const destination = dashboardPathFor(profile);
+  if (destination !== "/pending") {
+    redirect(destination);
+  }
+
   const rejected = profile.approval_status === "rejected";
+  const blocked = profile.approval_status === "blocked";
+  const closed = rejected || blocked;
   const phone = getShopPhone();
-  const statusLabel =
-    profile.approval_status === "approved"
-      ? t.statuses.approved
-      : profile.approval_status === "rejected"
-        ? t.statuses.rejected
-        : t.statuses.approvalPending;
+  const statusLabel = rejected
+    ? t.statuses.rejected
+    : blocked
+      ? t.statuses.blocked
+      : t.statuses.approvalPending;
+  const title = rejected
+    ? t.pending.notApprovedTitle
+    : blocked
+      ? t.pending.blockedTitle
+      : t.pending.waitingTitle;
+  const description = rejected
+    ? t.pending.rejected(profile.full_name)
+    : blocked
+      ? t.pending.blocked(profile.full_name)
+      : t.pending.waiting(profile.full_name);
 
   return (
     <AuthFrame width="lg">
       <AuthHeading
         eyebrow={t.pending.eyebrow}
-        title={rejected ? t.pending.notApprovedTitle : t.pending.waitingTitle}
-        description={rejected ? t.pending.rejected(profile.full_name) : t.pending.waiting(profile.full_name)}
+        title={title}
+        description={description}
         illustration={
           <AuthIllustration
-            icon={rejected ? CancelCircleIcon : HourglassIcon}
-            tone={rejected ? "danger" : "warning"}
+            icon={closed ? CancelCircleIcon : HourglassIcon}
+            tone={closed ? "danger" : "warning"}
           />
         }
         aside={
-          <StatusPill tone={rejected ? "danger" : "warning"} dot>
+          <StatusPill tone={closed ? "danger" : "warning"} dot>
             {statusLabel}
           </StatusPill>
         }
@@ -57,6 +78,12 @@ export default async function PendingPage() {
             {t.common.signOut}
           </Button>
         </form>
+      </div>
+
+      {/* A person who was never approved still owns their data: export and
+          erasure must not depend on approval. */}
+      <div className="mt-6">
+        <PrivacyControls />
       </div>
     </AuthFrame>
   );

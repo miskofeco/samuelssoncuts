@@ -255,7 +255,7 @@ export function SlotPicker({
           <PanelTitle
             step={steps?.time}
             icon={Clock01Icon}
-            trailing={`${service.duration} min · ${service.price} €`}
+            trailing={`${service.duration} ${t.admin.minutesShort} · ${service.price} €`}
           >
             {t.client.pickTime}
           </PanelTitle>

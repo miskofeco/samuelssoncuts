@@ -1,10 +1,10 @@
 import {
-  LoadingPage,
   Skeleton,
   SkeletonCard,
   SkeletonSectionHeader,
   SkeletonStatGrid,
 } from "@/components/shared/skeleton";
+import { LoadingPage } from "@/components/shared/loading-page";
 
 function ListRows({ count = 3, avatar = true }: { count?: number; avatar?: boolean }) {
   return (

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { reportError } from "@/lib/observability";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/server/auth";
 
@@ -29,7 +30,8 @@ function assertSameOrigin(request: NextRequest) {
 // service-worker opt-in flow must see a 401 rather than a 307 to /login.
 async function authenticatedProfile() {
   const { configured, profile } = await getCurrentProfile();
-  return configured ? profile : null;
+  // Blocked / rejected / pending accounts have nothing to be notified about.
+  return configured && profile?.approval_status === "approved" ? profile : null;
 }
 
 function unauthorized() {
@@ -56,24 +58,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid subscription" }, { status: 400 });
   }
 
+  // The RPC (0032) rebinds an endpoint previously registered by another user
+  // of this browser; a plain upsert failed the owner-only UPDATE policy and
+  // left the old owner receiving pushes on a device they no longer use.
   const supabase = await createClient();
-  const { error } = await supabase.from("push_subscriptions").upsert(
-    {
-      user_id: profile.id,
-      endpoint: parsed.data.endpoint,
-      p256dh: parsed.data.keys.p256dh,
-      auth: parsed.data.keys.auth,
-      expiration_time: expirationIso(parsed.data.expirationTime),
-      user_agent: request.headers.get("user-agent")?.slice(0, 500) ?? null,
-      enabled: true,
-      failure_count: 0,
-      last_failure_at: null,
-    },
-    { onConflict: "endpoint" },
-  );
+  const { error } = await supabase.rpc("upsert_push_subscription", {
+    p_endpoint: parsed.data.endpoint,
+    p_p256dh: parsed.data.keys.p256dh,
+    p_auth: parsed.data.keys.auth,
+    p_expiration: expirationIso(parsed.data.expirationTime),
+    p_user_agent: request.headers.get("user-agent")?.slice(0, 500) ?? null,
+  });
 
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    await reportError("push-subscribe", error, { userId: profile.id });
+    return NextResponse.json({ ok: false, error: "Could not save subscription" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });
@@ -101,7 +100,8 @@ export async function DELETE(request: NextRequest) {
   const { error } = await query;
 
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    await reportError("push-unsubscribe", error, { userId: profile.id });
+    return NextResponse.json({ ok: false, error: "Could not remove subscription" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

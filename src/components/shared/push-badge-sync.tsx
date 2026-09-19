@@ -33,12 +33,17 @@ export function PushBadgeSync({ badgeCount }: { badgeCount: number }) {
     if (!("serviceWorker" in navigator)) return;
 
     let cancelled = false;
-    navigator.serviceWorker.register("/sw.js").then((registration) => {
-      if (cancelled) return;
-      registration.active?.postMessage({ type: "SET_BADGE", count: badgeCount });
-    }).catch(() => {
-      // Service worker support can be disabled by browser/device policy.
-    });
+    // Post to the *ready* registration: `register()` may resolve while the
+    // worker is still installing, in which case `active` is null.
+    navigator.serviceWorker.register("/sw.js")
+      .then(() => navigator.serviceWorker.ready)
+      .then((registration) => {
+        if (cancelled) return;
+        registration.active?.postMessage({ type: "SET_BADGE", count: badgeCount });
+      })
+      .catch(() => {
+        // Service worker support can be disabled by browser/device policy.
+      });
 
     return () => {
       cancelled = true;

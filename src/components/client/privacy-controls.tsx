@@ -36,7 +36,8 @@ export function PrivacyControls() {
         link.href = url;
         link.download = "samuelsson-cuts-my-data.json";
         link.click();
-        URL.revokeObjectURL(url);
+        // Defer revocation so the browser has started the download first.
+        setTimeout(() => URL.revokeObjectURL(url), 0);
       } catch {
         setFeedback({ ok: false, error: t.common.somethingWentWrong });
       }
@@ -117,7 +118,9 @@ export function PrivacyControls() {
         cancelLabel={t.profile.keepAccount}
         loading={pending}
         onConfirm={deleteAccount}
-      />
+      >
+        <Feedback result={feedback && !feedback.ok ? feedback : null} />
+      </ConfirmDialog>
     </Card>
   );
 }

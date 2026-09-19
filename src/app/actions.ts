@@ -38,6 +38,10 @@ import {
   guardSlot,
 } from "@/server/booking-guards";
 import { dashboardPathFor, getCurrentProfile, requireAdmin, requireApprovedClient, requireProfile } from "@/server/auth";
+import { isReadyForApproval } from "@/domain/approval";
+import type { AuthFormState } from "@/domain/auth-form";
+import { parsePhone } from "@/domain/phone";
+import { authErrorPath, authNoticePath } from "@/i18n/auth-notices";
 import { recordAdminAction } from "@/server/audit";
 import { notificationOrFilter } from "@/server/dashboard-data";
 import { quoteClientSlot } from "@/server/booking-pricing";
@@ -46,10 +50,12 @@ import { createAdminNotification, createNotification, createNotifications } from
 import type { ActionResult } from "@/domain/types";
 import { getDict } from "@/i18n/server";
 
-const signInSchema = z.object({
-  email: z.email(),
-  password: z.string().min(8),
-});
+const emailSchema = z.email();
+// Supabase (bcrypt) silently truncates passwords beyond 72 bytes; cap there so
+// the password the user thinks they set is the one that is stored.
+const PASSWORD_MIN = 8;
+const PASSWORD_MAX = 72;
+const passwordSchema = z.string().min(PASSWORD_MIN).max(PASSWORD_MAX);
 
 const oauthProviderSchema = z.enum(["google", "apple"]);
 
@@ -59,11 +65,6 @@ const consentSchema = z.object({
   marketing: z.boolean(),
   version: z.number().int(),
   timestamp: z.string().max(40).optional(),
-});
-
-const registerSchema = signInSchema.extend({
-  fullName: z.string().min(2).max(120),
-  phone: z.string().min(4).max(40),
 });
 
 // New flow: the client picks an exact date + time for the chosen service.
@@ -121,9 +122,10 @@ const declineRequestSchema = z.object({
   reason: z.string().trim().max(1000).optional(),
 });
 
+const fullNameSchema = z.string().trim().min(2).max(120);
 const profileSchema = z.object({
-  fullName: z.string().min(2).max(120),
-  phone: z.string().min(4).max(40),
+  fullName: fullNameSchema,
+  phone: z.string().trim().min(1).max(40),
 });
 
 const serviceSchema = z.object({
@@ -170,18 +172,19 @@ function formString(formData: FormData, key: string) {
   return typeof value === "string" ? value : "";
 }
 
-type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
-
-// Whether a phone number is already used by some profile. Goes through the
-// `phone_taken` SECURITY DEFINER function because RLS forbids reading other
-// users' profile rows (so a plain select would always return empty for anon).
-// The unique index on profiles.phone is the real backstop; this just lets us
-// show a friendly message before attempting the write.
-async function isPhoneTaken(supabase: SupabaseClient, phone: string): Promise<boolean> {
-  const { data, error } = await supabase.rpc("phone_taken", {
+// Whether a phone number is already used by some profile. `phone_taken` is a
+// SECURITY DEFINER function executable by the service role only (migration
+// 0032): exposing it to anon made it a phone-number enumeration oracle. The
+// unique index on profiles.phone is the real backstop; this just lets us show a
+// friendly message before attempting the write.
+async function isPhoneTaken(phone: string): Promise<boolean> {
+  const { data, error } = await getSupabaseAdminClient().rpc("phone_taken", {
     p_phone: phone.trim(),
   });
-  if (error) return false; // fail open — the DB unique index still protects us
+  if (error) {
+    await reportError("phone-taken", error);
+    return false; // fail open — the DB unique index still protects us
+  }
   return data === true;
 }
 
@@ -191,9 +194,9 @@ function isDuplicatePhoneError(message: string | undefined): boolean {
 }
 
 function addMinutes(iso: string, minutes: number) {
-  const date = new Date(iso);
-  date.setMinutes(date.getMinutes() + minutes);
-  return date.toISOString();
+  // Epoch arithmetic: setMinutes() works in the process time zone and drifts
+  // by an hour across a DST change on non-UTC hosts.
+  return new Date(new Date(iso).getTime() + minutes * 60_000).toISOString();
 }
 
 function startsAt(date: string, time: string) {
@@ -205,94 +208,168 @@ function timeFromIso(iso: string) {
   return timeInShopTimeZone(iso);
 }
 
-export async function signInAction(formData: FormData) {
-  const t = await getDict();
-  const emailValue = formString(formData, "email");
-  const input = signInSchema.safeParse({
-    email: emailValue,
-    password: formString(formData, "password"),
-  });
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
 
-  if (!input.success) {
-    redirect(`/login?error=${encodeURIComponent(t.feedback.checkEmailPassword)}&email=${encodeURIComponent(emailValue)}`);
+// Supabase's signUp deliberately returns a success-shaped response for an email
+// that is already registered (to avoid account enumeration): the user object
+// comes back with an empty identities array and no email is sent. Left alone,
+// the person would wait for a confirmation that never arrives.
+function isExistingUserSignUp(user: { identities?: unknown[] | null } | null | undefined) {
+  return Boolean(user) && Array.isArray(user?.identities) && user.identities.length === 0;
+}
+
+export async function signInAction(
+  _previous: AuthFormState,
+  formData: FormData,
+): Promise<AuthFormState> {
+  const t = await getDict();
+  const email = normalizeEmail(formString(formData, "email"));
+  const password = formString(formData, "password");
+  const values = { email };
+
+  const fieldErrors: AuthFormState["fieldErrors"] = {};
+  if (!emailSchema.safeParse(email).success) {
+    fieldErrors.email = t.auth.errors.emailInvalid;
+  }
+  if (password.length < PASSWORD_MIN) {
+    fieldErrors.password = t.auth.errors.passwordTooShort;
+  }
+  if (Object.keys(fieldErrors).length > 0) {
+    return { fieldErrors, values };
   }
 
-  const limit = await enforceRateLimit("auth:sign-in", {
-    identity: input.data.email,
-    limit: 8,
-    windowSeconds: 15 * 60,
-  });
-  if (!limit.ok) {
-    redirect(`/login?error=${encodeURIComponent(limit.error)}&email=${encodeURIComponent(input.data.email)}`);
+  // Two budgets: the IP is the primary brake against password spraying, the
+  // per-email budget is deliberately generous so a stranger cannot lock a
+  // victim out of their own account by hammering their address.
+  const [ipLimit, emailLimit] = await Promise.all([
+    enforceRateLimit("auth:sign-in-ip", { limit: 30, windowSeconds: 15 * 60 }),
+    enforceRateLimit("auth:sign-in", { identity: email, limit: 40, windowSeconds: 15 * 60 }),
+  ]);
+  if (!ipLimit.ok || !emailLimit.ok) {
+    return { error: t.feedback.tooManyAttempts, values };
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(input.data);
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(t.feedback.checkEmailPassword)}&email=${encodeURIComponent(input.data.email)}`);
+    // The account exists but the confirmation link was never opened. Say so
+    // and let the form offer to resend it instead of blaming the password.
+    if (error.code === "email_not_confirmed") {
+      return { error: t.auth.errors.emailNotConfirmed, unconfirmedEmail: email, values };
+    }
+    if (error.code === "invalid_credentials" || error.status === 400) {
+      return { error: t.feedback.checkEmailPassword, values };
+    }
+    await reportError("auth-sign-in", error, { code: error.code });
+    return { error: t.common.somethingWentWrong, values };
   }
 
   redirect("/dashboard");
 }
 
-export async function requestPasswordResetAction(formData: FormData) {
-  const t = await getDict();
-  const emailValue = formString(formData, "email");
-  const email = signInSchema.shape.email.safeParse(emailValue);
+// Re-sends the sign-up confirmation email. Always ends on the same neutral
+// notice so the endpoint cannot be used to probe which emails are registered.
+export async function resendConfirmationAction(formData: FormData) {
+  const email = normalizeEmail(formString(formData, "email"));
+  const target = authNoticePath("/login", "confirm_resent", email);
 
-  // Always show the same neutral message (don't leak which emails are registered).
-  const sentUrl = `/reset-password?message=${encodeURIComponent(t.auth.resetSent)}`;
-  if (!email.success) {
+  if (!emailSchema.safeParse(email).success) {
+    redirect(target);
+  }
+
+  const [ipLimit, emailLimit] = await Promise.all([
+    enforceRateLimit("auth:resend-confirmation-ip", { limit: 10, windowSeconds: 15 * 60 }),
+    enforceRateLimit("auth:resend-confirmation", { identity: email, limit: 5, windowSeconds: 60 * 60 }),
+  ]);
+  if (!ipLimit.ok || !emailLimit.ok) {
+    redirect(`${authErrorPath("/login", "too_many_attempts")}&email=${encodeURIComponent(email)}`);
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: `${getSiteUrl()}/auth/callback` },
+  });
+  if (error) {
+    await reportError("auth-resend-confirmation", error, { code: error.code });
+  }
+
+  redirect(target);
+}
+
+export async function requestPasswordResetAction(formData: FormData) {
+  const email = normalizeEmail(formString(formData, "email"));
+
+  // Always end on the same neutral notice (don't leak which emails are registered).
+  const sentUrl = authNoticePath("/reset-password", "reset_sent");
+  if (!emailSchema.safeParse(email).success) {
     redirect(sentUrl);
   }
 
-  const limit = await enforceRateLimit("auth:reset-request", {
-    identity: email.data,
-    limit: 5,
-    windowSeconds: 15 * 60,
-  });
-  if (!limit.ok) {
-    redirect(`/reset-password?error=${encodeURIComponent(limit.error)}&email=${encodeURIComponent(email.data)}`);
+  const [ipLimit, emailLimit] = await Promise.all([
+    enforceRateLimit("auth:reset-request-ip", { limit: 10, windowSeconds: 15 * 60 }),
+    enforceRateLimit("auth:reset-request", { identity: email, limit: 5, windowSeconds: 60 * 60 }),
+  ]);
+  if (!ipLimit.ok || !emailLimit.ok) {
+    redirect(`${authErrorPath("/reset-password", "too_many_attempts")}&email=${encodeURIComponent(email)}`);
   }
 
   const supabase = await createClient();
   // The recovery link lands on /auth/callback, which exchanges the code and
   // forwards recovery sessions to /auth/update-password.
-  await supabase.auth.resetPasswordForEmail(email.data, {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${getSiteUrl()}/auth/callback?type=recovery`,
   });
+  if (error) {
+    await reportError("auth-reset-request", error, { code: error.code });
+  }
 
   redirect(sentUrl);
 }
 
 export async function updatePasswordAction(formData: FormData) {
-  const t = await getDict();
-  const password = signInSchema.shape.password.safeParse(formString(formData, "password"));
+  const password = passwordSchema.safeParse(formString(formData, "password"));
 
   if (!password.success) {
-    redirect(`/auth/update-password?error=${encodeURIComponent(t.feedback.checkEmailPassword)}`);
+    redirect(authErrorPath("/auth/update-password", "password_too_short"));
   }
 
-  // The recovery session was established by /auth/callback; updateUser applies to it.
+  // The recovery session was established by /auth/callback or /auth/confirm;
+  // updateUser applies to it. Without one the link expired or was reused.
   const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  if (!claims?.claims?.sub) {
+    redirect(authErrorPath("/reset-password", "reset_link_invalid"));
+  }
+
   const { error } = await supabase.auth.updateUser({ password: password.data });
 
   if (error) {
-    await reportError("auth-update-password", error);
-    redirect(`/auth/update-password?error=${encodeURIComponent(t.common.somethingWentWrong)}`);
+    if (error.code === "same_password") {
+      redirect(authErrorPath("/auth/update-password", "same_password"));
+    }
+    if (error.status === 401 || error.status === 403) {
+      redirect(authErrorPath("/reset-password", "reset_link_invalid"));
+    }
+    await reportError("auth-update-password", error, { code: error.code });
+    redirect(authErrorPath("/auth/update-password", "generic"));
   }
 
+  // The recovery session is single-purpose: end it and ask for a fresh sign-in
+  // with the new password so every device starts from a known state.
   await supabase.auth.signOut();
-  redirect(`/login?message=${encodeURIComponent(t.auth.updated)}`);
+  redirect(authNoticePath("/login", "password_updated"));
 }
 
 export async function signInWithOAuthAction(formData: FormData) {
-  const t = await getDict();
   const provider = oauthProviderSchema.safeParse(formString(formData, "provider"));
 
   if (!provider.success) {
-    redirect(`/login?error=${encodeURIComponent(t.feedback.unsupportedProvider)}`);
+    redirect(authErrorPath("/login", "oauth_failed"));
   }
 
   const supabase = await createClient();
@@ -307,68 +384,123 @@ export async function signInWithOAuthAction(formData: FormData) {
     if (error) {
       await reportError("auth-oauth", error, { provider: provider.data });
     }
-    redirect(`/login?error=${encodeURIComponent(t.feedback.couldNotStartSignIn)}`);
+    redirect(authErrorPath("/login", "oauth_failed"));
   }
 
   // Hand off to the provider's consent screen.
   redirect(data.url);
 }
 
-export async function registerAction(formData: FormData) {
+export async function registerAction(
+  _previous: AuthFormState,
+  formData: FormData,
+): Promise<AuthFormState> {
   const t = await getDict();
-  const emailValue = formString(formData, "email");
-  const input = registerSchema.safeParse({
-    email: emailValue,
-    password: formString(formData, "password"),
-    fullName: formString(formData, "fullName"),
-    phone: formString(formData, "phone"),
-  });
+  const fullName = formString(formData, "fullName").trim();
+  const email = normalizeEmail(formString(formData, "email"));
+  const phoneInput = formString(formData, "phone");
+  const password = formString(formData, "password");
+  const values = { fullName, email, phone: phoneInput };
 
-  if (!input.success) {
-    redirect(`/register?error=${encodeURIComponent(t.feedback.fillAllFields)}&email=${encodeURIComponent(emailValue)}`);
+  // Validate every field and report all problems at once — a redirect with a
+  // single generic message made people guess which input was wrong.
+  const fieldErrors: AuthFormState["fieldErrors"] = {};
+  if (!fullNameSchema.safeParse(fullName).success) {
+    fieldErrors.fullName = t.auth.errors.nameTooShort;
+  }
+  if (!emailSchema.safeParse(email).success) {
+    fieldErrors.email = t.auth.errors.emailInvalid;
+  }
+  const phone = parsePhone(phoneInput);
+  if (!phone) {
+    fieldErrors.phone = t.auth.errors.phoneInvalid;
+  }
+  if (!passwordSchema.safeParse(password).success) {
+    fieldErrors.password = t.auth.errors.passwordTooShort;
+  }
+  if (Object.keys(fieldErrors).length > 0 || !phone) {
+    return { fieldErrors, values };
   }
 
-  const registrationLimit = await enforceRateLimit("auth:register", {
-    identity: input.data.email,
-    limit: 5,
-    windowSeconds: 60 * 60,
-  });
-  if (!registrationLimit.ok) {
-    redirect(`/register?error=${encodeURIComponent(registrationLimit.error)}&email=${encodeURIComponent(input.data.email)}`);
+  const [ipLimit, emailLimit] = await Promise.all([
+    enforceRateLimit("auth:register-ip", { limit: 10, windowSeconds: 60 * 60 }),
+    enforceRateLimit("auth:register", { identity: email, limit: 5, windowSeconds: 60 * 60 }),
+  ]);
+  if (!ipLimit.ok || !emailLimit.ok) {
+    return { error: t.feedback.tooManyAttempts, values };
   }
 
-  const phone = input.data.phone.trim();
   const supabase = await createClient();
 
   // Reject a phone number that's already in use before creating the auth user.
-  if (await isPhoneTaken(supabase, phone)) {
-    redirect(`/register?error=${encodeURIComponent(t.feedback.phoneTaken)}&email=${encodeURIComponent(input.data.email)}`);
+  if (await isPhoneTaken(phone)) {
+    return { fieldErrors: { phone: t.feedback.phoneTaken }, values };
   }
 
-  const { error } = await supabase.auth.signUp({
-    email: input.data.email,
-    password: input.data.password,
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
     options: {
       emailRedirectTo: `${getSiteUrl()}/auth/callback`,
       data: {
-        full_name: input.data.fullName,
+        full_name: fullName,
         phone,
       },
     },
   });
 
   if (error) {
-    // Backstop for a race between the check above and the trigger insert.
-    const message = isDuplicatePhoneError(error.message)
-      ? t.feedback.phoneTaken
-      : t.common.somethingWentWrong;
-    if (!isDuplicatePhoneError(error.message)) {
-      await reportError("auth-register", error);
+    if (error.code === "user_already_exists" || error.code === "email_exists") {
+      return { fieldErrors: { email: t.auth.errors.emailTaken }, values };
     }
-    redirect(`/register?error=${encodeURIComponent(message)}&email=${encodeURIComponent(input.data.email)}`);
+    // Backstop for a race between the check above and the trigger insert.
+    if (isDuplicatePhoneError(error.message)) {
+      return { fieldErrors: { phone: t.feedback.phoneTaken }, values };
+    }
+    await reportError("auth-register", error, { code: error.code });
+    return { error: t.common.somethingWentWrong, values };
   }
 
-  redirect(`/login?message=${encodeURIComponent(t.feedback.registrationCreated)}`);
+  if (isExistingUserSignUp(data.user)) {
+    return { fieldErrors: { email: t.auth.errors.emailTaken }, values };
+  }
+
+  // Email confirmation disabled in Supabase: the user is signed in right away.
+  if (data.session) {
+    redirect("/dashboard");
+  }
+
+  redirect(authNoticePath("/login", "confirm_sent", email));
+}
+
+// Calendar feed links are bearer secrets embedded in calendar apps. Rotating
+// invalidates every previously shared URL for the caller (admin or client).
+export async function rotateCalendarTokenAction(): Promise<ActionResult> {
+  const profile = await requireProfile();
+  const t = await getDict();
+
+  const limit = await enforceRateLimit("calendar:rotate-token", {
+    identity: profile.id,
+    limit: 5,
+    windowSeconds: 60 * 60,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: limit.error };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("rotate_my_calendar_token");
+  if (error) {
+    await reportError("calendar-rotate-token", error, { userId: profile.id });
+    return { ok: false, error: t.common.somethingWentWrong };
+  }
+
+  if (profile.role === "admin") {
+    await recordAdminAction("calendar.rotate_token", { targetType: "profile", targetId: profile.id });
+  }
+  revalidatePath("/admin/calendar");
+  revalidatePath("/client/reservations");
+  return { ok: true, message: t.admin.feedLinkRotated };
 }
 
 export async function signOutAction() {
@@ -496,7 +628,9 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
     return { ok: false, error: t.feedback.pickGeneratedSlot };
   }
 
-  const { error: requestError } = await supabase.from("booking_requests").insert({
+  // Inserted with the service role: RLS no longer lets clients write this
+  // table directly, so the quoted price above is the only price that can land.
+  const { error: requestError } = await getSupabaseAdminClient().from("booking_requests").insert({
     client_id: profile.id,
     service_id: parsed.data.serviceId,
     note: parsed.data.note ?? null,
@@ -576,18 +710,22 @@ export async function approveClientAction(clientId: string): Promise<ActionResul
   }
   const supabase = await createClient();
 
-  // Don't approve anyone who hasn't verified their email yet.
+  // Don't approve an incomplete registration: the email must be verified and a
+  // phone number on file (Google sign-ups add theirs on /complete-profile).
   const { data: candidate } = await supabase
     .from("profiles")
-    .select("email_confirmed_at, role")
+    .select("email_confirmed_at, phone, role")
     .eq("id", clientId)
     .single();
 
   if (!candidate || candidate.role !== "client") {
     return { ok: false, error: t.feedback.chooseValidClient };
   }
-  if (!candidate?.email_confirmed_at) {
-    return { ok: false, error: t.feedback.emailNotConfirmed };
+  if (!isReadyForApproval({ emailConfirmed: Boolean(candidate.email_confirmed_at), phone: candidate.phone })) {
+    return {
+      ok: false,
+      error: candidate.email_confirmed_at ? t.feedback.phoneMissing : t.feedback.emailNotConfirmed,
+    };
   }
 
   const { data: profile, error } = await supabase
@@ -599,7 +737,10 @@ export async function approveClientAction(clientId: string): Promise<ActionResul
     .single();
 
   if (error || !profile) {
-    return { ok: false, error: error?.message ?? t.feedback.couldNotApprove };
+    if (error) {
+      await reportError("client-approve", error, { clientId });
+    }
+    return { ok: false, error: t.feedback.couldNotApprove };
   }
 
   await createNotification(supabase, {
@@ -631,19 +772,22 @@ export async function rejectClientAction(clientId: string): Promise<ActionResult
   }
   const supabase = await createClient();
 
+  // Only a pending registration can be rejected; an approved client with
+  // confirmed appointments must go through block (which cancels them).
   const { data: profile, error } = await supabase
     .from("profiles")
     .update({ approval_status: "rejected" })
     .eq("id", clientId)
     .eq("role", "client")
+    .eq("approval_status", "pending")
     .select("id, email, full_name")
-    .single();
+    .maybeSingle();
 
   if (error || !profile) {
-    return {
-      ok: false,
-      error: error?.message ?? t.feedback.chooseValidClient,
-    };
+    if (error) {
+      await reportError("client-reject", error, { clientId });
+    }
+    return { ok: false, error: t.feedback.chooseValidClient };
   }
 
   await createNotification(supabase, {
@@ -756,14 +900,22 @@ export async function unblockClientAction(clientId: string): Promise<ActionResul
   }
   const supabase = await createClient();
 
-  const { error } = await supabase
+  // Unblock restores a blocked account only; it must not approve a pending
+  // registration and bypass the readiness gate in approveClientAction.
+  const { data: restored, error } = await supabase
     .from("profiles")
     .update({ approval_status: "approved" })
     .eq("id", clientId)
-    .eq("role", "client");
+    .eq("role", "client")
+    .eq("approval_status", "blocked")
+    .select("id")
+    .maybeSingle();
 
-  if (error) {
-    return { ok: false, error: error.message };
+  if (error || !restored) {
+    if (error) {
+      await reportError("client-unblock", error, { clientId });
+    }
+    return { ok: false, error: t.feedback.chooseValidClient };
   }
 
   await recordAdminAction("client.unblock", { targetType: "profile", targetId: clientId });
@@ -1607,7 +1759,9 @@ export async function respondToProposalAction(
   if (!isStartInFuture(proposal.starts_at)) {
     return { ok: false, error: t.feedback.chooseFutureTime };
   }
-  if (!isStartInClientBookingWindow(proposal.starts_at)) {
+  // The barber chose this time, so the two-week client window only guards the
+  // accept path; a client must always be able to decline.
+  if (response.data.accepted && !isStartInClientBookingWindow(proposal.starts_at)) {
     return { ok: false, error: t.feedback.chooseWithinTwoWeeks };
   }
 
@@ -1722,8 +1876,19 @@ export async function updateProfileAction(input: {
     return { ok: false, error: t.feedback.enterValidNamePhone };
   }
 
-  const phone = parsed.data.phone.trim();
+  const phone = parsePhone(parsed.data.phone);
+  if (!phone) {
+    return { ok: false, error: t.auth.errors.phoneInvalid };
+  }
+
   const supabase = await createClient();
+
+  // phone_taken also matches the caller's own row, so only pre-check when the
+  // number actually changes; the unique index remains the backstop.
+  if (phone !== profile.phone && (await isPhoneTaken(phone))) {
+    return { ok: false, error: t.feedback.phoneTaken };
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({ full_name: parsed.data.fullName, phone })
@@ -1750,16 +1915,16 @@ export async function updateProfileAction(input: {
 export async function completePhoneAction(input: { phone: string }): Promise<ActionResult> {
   const profile = await requireProfile();
   const t = await getDict();
-  const parsed = z.object({ phone: z.string().trim().min(4).max(40) }).safeParse(input);
+  const parsed = z.object({ phone: z.string().trim().min(1).max(40) }).safeParse(input);
+  const phone = parsed.success ? parsePhone(parsed.data.phone) : null;
 
-  if (!parsed.success) {
-    return { ok: false, error: t.feedback.enterValidNamePhone };
+  if (!phone) {
+    return { ok: false, error: t.auth.errors.phoneInvalid };
   }
 
-  const phone = parsed.data.phone.trim();
   const supabase = await createClient();
 
-  if (await isPhoneTaken(supabase, phone)) {
+  if (await isPhoneTaken(phone)) {
     return { ok: false, error: t.feedback.phoneTaken };
   }
 
@@ -1937,7 +2102,7 @@ export async function updateServiceAction(
   const t = await getDict();
   const parsed = serviceSchema.safeParse(input);
 
-  if (!parsed.success) {
+  if (!parsed.success || !uuidSchema.safeParse(serviceId).success) {
     return { ok: false, error: t.feedback.checkServiceFields };
   }
 
@@ -2139,7 +2304,9 @@ export async function blockDateAction(input: {
   let starts: string;
   let ends: string;
   if (isSlice) {
-    if (parsed.data.endTime! <= parsed.data.startTime!) {
+    // A time slice applies to one day; silently ignoring `end` would block far
+    // less than the admin asked for.
+    if (parsed.data.endTime! <= parsed.data.startTime! || parsed.data.end !== parsed.data.start) {
       return { ok: false, error: t.feedback.endAfterStart };
     }
     starts = zonedDateTimeToUtcIso(parsed.data.start, parsed.data.startTime!);
@@ -2544,8 +2711,11 @@ export async function requestRescheduleAction(
     return { ok: false, error: t.feedback.pickGeneratedSlot };
   }
 
-  const { error: rescheduleError } = await supabase.rpc("client_request_reschedule", {
+  // Service-role RPC (0032): the caller can no longer hand the database a
+  // price of their choosing; the acting client is passed explicitly.
+  const { error: rescheduleError } = await getSupabaseAdminClient().rpc("client_request_reschedule", {
     p_appointment_id: parsed.data.appointmentId,
+    p_client_id: profile.id,
     p_new_start: newStart,
     p_price_cents: quote.priceCents,
     p_surcharge: quote.surcharge,
@@ -2591,7 +2761,12 @@ export async function requestRescheduleAction(
 export async function exportMyDataAction(): Promise<
   { ok: true; data: string } | { ok: false; error: string }
 > {
-  const profile = await requireApprovedClient();
+  // Deliberately requireProfile: a rejected or blocked person still has the
+  // right to a copy of their data.
+  const profile = await requireProfile();
+  if (profile.role === "admin") {
+    redirect("/admin");
+  }
   const t = await getDict();
   const supabase = await createClient();
 
@@ -2628,7 +2803,11 @@ export async function exportMyDataAction(): Promise<
  * service-role client to clear rows and remove the auth user.
  */
 export async function deleteMyAccountAction(): Promise<ActionResult> {
-  const profile = await requireApprovedClient();
+  // Erasure must work for pending, rejected and blocked accounts as well.
+  const profile = await requireProfile();
+  if (profile.role === "admin") {
+    redirect("/admin");
+  }
   const t = await getDict();
 
   const limit = await enforceRateLimit("account:self-delete", {
@@ -2644,21 +2823,35 @@ export async function deleteMyAccountAction(): Promise<ActionResult> {
   try {
     const adminSupabase = getSupabaseAdminClient();
 
-    const { data: requests } = await adminSupabase
+    const { data: requests, error: requestListError } = await adminSupabase
       .from("booking_requests")
       .select("id")
       .eq("client_id", clientId);
+    if (requestListError) throw requestListError;
     const requestIds = (requests ?? []).map((r) => r.id);
 
-    await adminSupabase.from("appointments").delete().eq("client_id", clientId);
-    if (requestIds.length > 0) {
-      await adminSupabase.from("appointments").delete().in("request_id", requestIds);
+    // Every step is checked: a half-finished erasure must surface as a
+    // failure, not silently rely on cascade behaviour.
+    const steps = [
+      adminSupabase.from("appointments").delete().eq("client_id", clientId),
+      ...(requestIds.length > 0
+        ? [adminSupabase.from("appointments").delete().in("request_id", requestIds)]
+        : []),
+    ];
+    for (const step of steps) {
+      const { error: stepError } = await step;
+      if (stepError) throw stepError;
     }
-    await adminSupabase
+    const { error: unlinkError } = await adminSupabase
       .from("booking_requests")
       .update({ selected_proposal_id: null })
       .eq("client_id", clientId);
-    await adminSupabase.from("booking_requests").delete().eq("client_id", clientId);
+    if (unlinkError) throw unlinkError;
+    const { error: requestDeleteError } = await adminSupabase
+      .from("booking_requests")
+      .delete()
+      .eq("client_id", clientId);
+    if (requestDeleteError) throw requestDeleteError;
 
     const { error } = await adminSupabase.auth.admin.deleteUser(clientId);
     if (error) {
@@ -2673,7 +2866,7 @@ export async function deleteMyAccountAction(): Promise<ActionResult> {
   // Sign out (their session is now orphaned) and send them to login.
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect(`/login?message=${encodeURIComponent(t.feedback.accountDeleted)}`);
+  redirect(authNoticePath("/login", "account_deleted"));
 }
 
 // ---------------------------------------------------------------------------

@@ -39,12 +39,8 @@ function verifySignature(
   if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return false;
 
   const base64Secret = secret.replace(/^v1,/, "").replace(/^whsec_/, "");
-  let key: Buffer;
-  try {
-    key = Buffer.from(base64Secret, "base64");
-  } catch {
-    return false;
-  }
+  const key = Buffer.from(base64Secret, "base64");
+  if (key.length === 0) return false;
 
   const signed = `${id}.${timestamp}.${body}`;
   const expected = createHmac("sha256", key).update(signed).digest("base64");
@@ -66,7 +62,6 @@ type HookPayload = {
   email_data?: {
     token_hash?: string;
     email_action_type?: string;
-    redirect_to?: string;
   };
 };
 
@@ -92,19 +87,19 @@ export async function POST(request: NextRequest) {
   const email = payload.user?.email;
   const tokenHash = payload.email_data?.token_hash;
   const actionType = payload.email_data?.email_action_type ?? "email";
-  const redirectTo = payload.email_data?.redirect_to;
 
   if (!email || !tokenHash) {
     return NextResponse.json({ error: "Missing email or token" }, { status: 400 });
   }
 
   // Build the verification link to our own /auth/confirm handler (token-hash
-  // flow → verifyOtp). Preserve Supabase's redirect_to when present.
+  // flow → verifyOtp). Supabase's redirect_to is intentionally not forwarded:
+  // /auth/confirm decides the destination itself, so it cannot become an open
+  // redirect.
   const site = getSiteUrl();
   const confirmUrl = new URL(`${site}/auth/confirm`);
   confirmUrl.searchParams.set("token_hash", tokenHash);
   confirmUrl.searchParams.set("type", actionType);
-  if (redirectTo) confirmUrl.searchParams.set("redirect_to", redirectTo);
 
   const subjectByType: Record<string, string> = {
     signup: "Potvrďte email - Samuelsson Cuts",

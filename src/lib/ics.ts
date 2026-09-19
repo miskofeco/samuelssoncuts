@@ -38,7 +38,10 @@ function escapeText(value: string): string {
     .replace(/\\/g, "\\\\")
     .replace(/;/g, "\\;")
     .replace(/,/g, "\\,")
-    .replace(/\r?\n/g, "\\n");
+    .replace(/\r\n|\r|\n/g, "\\n")
+    // Remaining C0 controls have no place in a content line and let lenient
+    // parsers split a value into an injected property.
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
 }
 
 // Fold lines to <=75 octets (UTF-8), continuation lines start with a space.

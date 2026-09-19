@@ -1,3 +1,5 @@
+import "server-only";
+
 import { timingSafeEqual } from "node:crypto";
 
 // Constant-time check of `Authorization: Bearer <CRON_SECRET>`. A plain string

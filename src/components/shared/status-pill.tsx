@@ -5,7 +5,7 @@ import { cn } from "@/lib/classnames";
 
 export type PillTone = "neutral" | "success" | "warning" | "info" | "danger";
 
-export const pillTones: Record<PillTone, string> = {
+const pillTones: Record<PillTone, string> = {
   neutral: "bg-muted text-muted-foreground",
   success: "bg-emerald-500/12 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300",
   warning: "bg-amber-500/15 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300",

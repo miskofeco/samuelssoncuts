@@ -58,19 +58,23 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = event.notification.data?.url || DEFAULT_URL;
+  // Only ever open same-origin targets; anything else falls back to the app root.
+  let targetUrl = new URL(url, self.location.origin);
+  if (targetUrl.origin !== self.location.origin) {
+    targetUrl = new URL(DEFAULT_URL, self.location.origin);
+  }
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
         const clientUrl = new URL(client.url);
-        const targetUrl = new URL(url, self.location.origin);
         if (clientUrl.origin === targetUrl.origin && "focus" in client) {
           client.navigate(targetUrl.href);
           return client.focus();
         }
       }
 
-      return self.clients.openWindow(url);
+      return self.clients.openWindow(targetUrl.href);
     }),
   );
 });

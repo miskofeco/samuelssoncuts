@@ -8,7 +8,6 @@ import type { PercentageTrend } from "@/domain/analytics";
 import { cn } from "@/lib/classnames";
 
 type Tone = "neutral" | "amber" | "emerald" | "sky";
-type Variant = "default" | "overview";
 
 const tones: Record<Tone, string> = {
   neutral: "bg-muted text-foreground",
@@ -39,8 +38,6 @@ export function StatCard({
   hint?: string;
   tone?: Tone;
   icon?: ReactNode | IconSvgElement;
-  /** Kept for call-site compatibility; both variants share one layout now. */
-  variant?: Variant;
   trend?: PercentageTrend;
   className?: string;
 }) {

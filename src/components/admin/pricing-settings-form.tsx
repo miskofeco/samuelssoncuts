@@ -37,13 +37,18 @@ export function PricingSettingsForm({
 
   function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setFeedback(null);
     startTransition(async () => {
-      setFeedback(
-        await savePricingSettingsAction({
-          gapSurchargePercent: Number(draft.gapSurchargePercent),
-          vipSurchargePercent: Number(draft.vipSurchargePercent),
-        }),
-      );
+      try {
+        setFeedback(
+          await savePricingSettingsAction({
+            gapSurchargePercent: Number(draft.gapSurchargePercent),
+            vipSurchargePercent: Number(draft.vipSurchargePercent),
+          }),
+        );
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
   }
 

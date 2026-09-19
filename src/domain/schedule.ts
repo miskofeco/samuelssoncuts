@@ -1,6 +1,4 @@
 import type {
-  AppState,
-  AvailabilityDay,
   BusinessHoursDay,
   DayWindow,
   PricingSettings,
@@ -39,13 +37,6 @@ export const services: Service[] = [
   },
 ];
 
-export const dayWindows: DayWindow[] = [
-  "Morning",
-  "Midday",
-  "Afternoon",
-  "Evening",
-];
-
 // The shop opens at 07:00; the last bookable start is 20:00 (so a visit can run
 // to ~21:00). Generated rather than listed so the range stays easy to change.
 function buildSlots(startMinutes: number, endMinutes: number, stepMinutes: number) {
@@ -72,15 +63,7 @@ export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
 };
 export const VIP_START_MINUTES = 17 * 60;
 
-// Kept for legacy callers/tests that still reason about the old decimal value.
-export const GAP_SURCHARGE = DEFAULT_GAP_SURCHARGE_PERCENT / 100;
-
 export const workingHours = buildSlots(OPEN_MINUTES, LAST_BOOK_MINUTES, 30);
-
-// Quarter-hour slots across the same working window. Used where the barber needs
-// finer control than the 30-minute `workingHours` grid, e.g. the admin "add
-// booking" time picker.
-export const workingHoursQuarterly = buildSlots(OPEN_MINUTES, LAST_BOOK_MINUTES, 15);
 
 // Start hour (inclusive) and end hour (exclusive) that each preference window maps to.
 export const windowRanges: Record<DayWindow, { start: number; end: number }> = {
@@ -123,10 +106,6 @@ function addDaysToIsoDate(date: string, days: number) {
 
 export function addDays(days: number) {
   return addDaysToIsoDate(todayIso(), days);
-}
-
-export function makeId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
 
 // The optional `locale` lets callers localize dates (e.g. "sk-SK"). It defaults
@@ -260,10 +239,6 @@ export function orderClientServices(serviceList: Service[]) {
     .map(({ service }) => service);
 }
 
-export function createCalendarDays(startOffset = 0, length = 21) {
-  return Array.from({ length }, (_, index) => addDays(startOffset + index));
-}
-
 // Every yyyy-mm-dd from start to end inclusive. Used to expand blocked_times
 // ranges (timestamptz) into a flat set of blocked calendar days.
 // Shop-local calendar dates covered by an instant range. `end` is treated as
@@ -307,49 +282,6 @@ export function isStartInFuture(iso: string) {
 
 export function isStartInClientBookingWindow(iso: string) {
   return isStartInFuture(iso) && isDateInClientBookingWindow(dateInShopTimeZone(iso));
-}
-
-export function getAvailability(
-  state: AppState,
-  date: string,
-  blockedDates?: ReadonlySet<string>,
-): AvailabilityDay {
-  const blocked = blockedDates?.has(date) ?? false;
-  const booked = state.appointments.filter(
-    (appointment) => appointment.date === date,
-  ).length;
-  const proposed = state.proposals.filter(
-    (proposal) => proposal.date === date && proposal.status === "sent",
-  ).length;
-
-  return {
-    date,
-    capacity: dayCapacity,
-    booked,
-    proposed,
-    blocked,
-    available: blocked ? 0 : Math.max(dayCapacity - booked - proposed, 0),
-  };
-}
-
-export function getAvailabilityTone(day: AvailabilityDay) {
-  if (day.blocked) {
-    return "blocked";
-  }
-
-  if (day.available === 0) {
-    return "full";
-  }
-
-  if (day.available <= 2) {
-    return "busy";
-  }
-
-  return "open";
-}
-
-export function isSameDate(a: string, b: string) {
-  return a === b;
 }
 
 // ---------------------------------------------------------------------------
@@ -489,7 +421,10 @@ export function clientSlotsForService(
   const starts = new Set<number>();
   starts.add(opens);
 
-  for (let start = OPEN_MINUTES; start <= LAST_BOOK_MINUTES; start += 60) {
+  // Hourly anchors across the day's CONFIGURED hours. Seeding from the
+  // hard-coded 07:00–20:00 grid meant extended opening hours set by the barber
+  // could never be booked by clients.
+  for (let start = opens; start + durationMin <= closes; start += 60) {
     starts.add(start);
   }
 
@@ -504,34 +439,12 @@ export function clientSlotsForService(
   return [...starts]
     .filter(
       (start) =>
-        start >= OPEN_MINUTES &&
         start >= opens &&
-        start <= LAST_BOOK_MINUTES &&
         start + durationMin <= closes &&
-        start + durationMin <= CLOSE_MINUTES &&
         isSlotFree(date, start, durationMin, confirmed),
     )
     .sort((a, b) => a - b)
     .map(timeOfMinutes);
-}
-
-// The base-price anchor for the day when there are no confirmed bookings yet.
-export function contiguousBlockEnd(
-  date: string,
-  confirmed: SlotAppt[],
-  openingMin = OPEN_MINUTES,
-): number {
-  const ends = confirmed
-    .filter((a) => a.date === date)
-    .map((a) => minutesOf(a.time) + a.durationMinutes);
-  return ends.length === 0 ? openingMin : Math.max(...ends);
-}
-
-// Base price iff the slot starts exactly at the day's anchor (opening on an
-// empty day, else flush after the last confirmed appointment). Any other start
-// leaves a gap and is surcharged.
-export function isPreferredStart(startMin: number, blockEndMin: number): boolean {
-  return startMin === blockEndMin;
 }
 
 // Client best-price starts minimize gaps: opening on an empty day, or any slot

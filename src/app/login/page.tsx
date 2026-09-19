@@ -1,48 +1,64 @@
-import { signInAction } from "@/app/actions";
-import { AuthLink, AuthPanel } from "@/components/auth/auth-panel";
+import { Logout03Icon } from "@hugeicons/core-free-icons";
+import { redirect } from "next/navigation";
+
+import { signOutAction } from "@/app/actions";
+import { AuthPanel } from "@/components/auth/auth-panel";
+import { LoginForm } from "@/components/auth/login-form";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
-import { Field, PasswordField } from "@/components/shared/form";
-import { SubmitButton } from "@/components/shared/submit-button";
+import { Button } from "@/components/shared/button";
+import { Icon } from "@/components/shared/icon";
+import { noticeOffersResend, resolveAuthError, resolveAuthNotice } from "@/i18n/auth-notices";
 import { getDict } from "@/i18n/server";
+import { dashboardPathFor, getCurrentProfile } from "@/server/auth";
+
+export const dynamic = "force-dynamic";
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; message?: string; email?: string }>;
+  searchParams: Promise<{ error?: string; notice?: string; email?: string }>;
 }) {
-  const params = await searchParams;
-  const t = await getDict();
+  const [params, t, { configured, authenticated, profile }] = await Promise.all([
+    searchParams,
+    getDict(),
+    getCurrentProfile(),
+  ]);
+
+  if (!configured) {
+    redirect("/setup");
+  }
+  // Already signed in: the app decides where this account belongs.
+  if (profile) {
+    redirect(dashboardPathFor(profile));
+  }
+
+  // Signed in but no profile row: signing in again would just loop, so offer
+  // the only action that helps (a clean sign-out) instead of the form.
+  if (authenticated) {
+    return (
+      <AuthPanel error={resolveAuthError(t, "profile_missing") ?? undefined} mode="login">
+        <form action={signOutAction}>
+          <Button type="submit" variant="outline" size="lg" className="w-full">
+            <Icon icon={Logout03Icon} />
+            {t.common.signOut}
+          </Button>
+        </form>
+      </AuthPanel>
+    );
+  }
+
+  const email = params.email?.slice(0, 254);
 
   return (
-    <AuthPanel error={params.error} message={params.message} mode="login">
-      <form action={signInAction} className="space-y-4">
-        <Field
-          required
-          label={t.common.email}
-          name="email"
-          type="email"
-          autoComplete="email"
-          defaultValue={params.email}
-          placeholder={t.auth.emailPlaceholder}
-        />
-        <PasswordField
-          required
-          label={t.auth.passwordLabel}
-          name="password"
-          autoComplete="current-password"
-          minLength={8}
-          hint={t.auth.passwordHint}
-          placeholder={t.auth.passwordPlaceholder}
-        />
-        <SubmitButton size="lg" className="w-full" pendingLabel={t.common.sending}>
-          {t.auth.signIn}
-        </SubmitButton>
-        <p className="flex justify-center text-sm">
-          <AuthLink href="/reset-password" muted>
-            {t.auth.forgotPassword}
-          </AuthLink>
-        </p>
-      </form>
+    <AuthPanel
+      error={resolveAuthError(t, params.error) ?? undefined}
+      message={resolveAuthNotice(t, params.notice, email) ?? undefined}
+      mode="login"
+    >
+      <LoginForm
+        initialEmail={email}
+        unconfirmedEmail={noticeOffersResend(params.notice) ? email : undefined}
+      />
       <OAuthButtons />
     </AuthPanel>
   );

@@ -2,7 +2,7 @@
 
 import { TaskDone01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { markNotificationReadAction, markNotificationsReadAction } from "@/app/actions";
 import { Button } from "@/components/shared/button";
@@ -14,7 +14,6 @@ import { useT } from "@/i18n/provider";
 // nav badge. Disabled when there's nothing unread.
 export function MarkReadButton({ hasUnread }: { hasUnread: boolean }) {
   const t = useT();
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   return (
@@ -25,8 +24,11 @@ export function MarkReadButton({ hasUnread }: { hasUnread: boolean }) {
       loading={pending}
       onClick={() =>
         startTransition(async () => {
-          await markNotificationsReadAction();
-          router.refresh();
+          try {
+            await markNotificationsReadAction();
+          } catch {
+            toast.error(t.common.somethingWentWrong);
+          }
         })
       }
     >
@@ -38,7 +40,6 @@ export function MarkReadButton({ hasUnread }: { hasUnread: boolean }) {
 
 export function MarkNotificationReadButton({ notificationId }: { notificationId: string }) {
   const t = useT();
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   return (
@@ -50,8 +51,11 @@ export function MarkNotificationReadButton({ notificationId }: { notificationId:
       loading={pending}
       onClick={() =>
         startTransition(async () => {
-          await markNotificationReadAction(notificationId);
-          router.refresh();
+          try {
+            await markNotificationReadAction(notificationId);
+          } catch {
+            toast.error(t.common.somethingWentWrong);
+          }
         })
       }
     >

@@ -1,7 +1,6 @@
 "use client";
 
 import { Camera01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
-import { useRouter } from "next/navigation";
 import type { ChangeEvent, FormEvent } from "react";
 import { useRef, useState, useTransition } from "react";
 
@@ -28,7 +27,6 @@ export function ProfileForm({
   avatarUrl?: string | null;
 }) {
   const t = useT();
-  const router = useRouter();
   const [name, setName] = useState(fullName);
   const [phoneValue, setPhoneValue] = useState(phone);
   const [pending, startTransition] = useTransition();
@@ -62,7 +60,6 @@ export function ProfileForm({
       try {
         const result = await uploadAvatarAction(data);
         setPhotoFeedback(result);
-        if (result.ok) router.refresh();
       } catch {
         setPhotoFeedback({ ok: false, error: t.common.somethingWentWrong });
       }
@@ -75,7 +72,6 @@ export function ProfileForm({
       try {
         const result = await removeAvatarAction();
         setPhotoFeedback(result);
-        if (result.ok) router.refresh();
       } catch {
         setPhotoFeedback({ ok: false, error: t.common.somethingWentWrong });
       }

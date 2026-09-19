@@ -13,7 +13,7 @@ export type TimeRangeRow = {
   ends_at: string;
 };
 
-export const DEFAULT_BUSINESS_HOURS: BusinessHoursWindow = {
+const DEFAULT_BUSINESS_HOURS: BusinessHoursWindow = {
   closed: false,
   opensAt: "07:00",
   closesAt: "21:00",
@@ -52,7 +52,7 @@ export function slotOverlapsRange(startIso: string, endIso: string, range: TimeR
   return startMs < rangeEndMs && rangeStartMs < endMs;
 }
 
-export async function loadBusinessHoursWindow(
+async function loadBusinessHoursWindow(
   supabase: SupabaseClient,
   date: string,
   barberId?: string,

@@ -1,10 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 import type { Database } from "@/lib/database.types";
 import { requireSupabaseEnv } from "@/lib/env";
 
-export async function createClient() {
+// One session-bound client per request: layouts, pages and nested loaders all
+// call this, and each call used to await cookies() and build a fresh client.
+export const createClient = cache(async () => {
   const env = requireSupabaseEnv();
   const cookieStore = await cookies();
 
@@ -24,4 +27,4 @@ export async function createClient() {
       },
     },
   });
-}
+});

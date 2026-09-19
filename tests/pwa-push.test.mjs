@@ -56,7 +56,9 @@ test("push API routes require auth and same-origin subscription changes", () => 
   assert.match(subscriptionsRoute, /status:\s*401/);
   assert.doesNotMatch(subscriptionsRoute, /redirect\(/);
   assert.match(subscriptionsRoute, /subscriptionSchema\.safeParse/);
-  assert.match(subscriptionsRoute, /\.upsert\(/);
+  // Ownership reassignment happens inside the SECURITY DEFINER RPC (0032).
+  assert.match(subscriptionsRoute, /rpc\("upsert_push_subscription"/);
+  assert.doesNotMatch(subscriptionsRoute, /error\.message/);
   assert.match(subscriptionsRoute, /export async function DELETE/);
 });
 
@@ -104,6 +106,6 @@ test("notification creation is centralized and sends push non-fatally", () => {
 
 test("CSP permits service workers and known web push endpoints", () => {
   assert.match(proxy, /worker-src 'self'/);
-  assert.match(proxy, /https:\/\/\*\.push\.apple\.com/);
-  assert.match(proxy, /https:\/\/fcm\.googleapis\.com/);
+  // pushManager.subscribe is browser-internal; push service hosts do not belong in connect-src.
+  assert.doesNotMatch(proxy, /push\.apple\.com|fcm\.googleapis\.com/);
 });

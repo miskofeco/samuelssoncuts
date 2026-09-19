@@ -1,3 +1,5 @@
+import "server-only";
+
 import webpush from "web-push";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -68,7 +70,8 @@ async function badgeCountForUser(userId: string): Promise<{ count: number; role:
         .from("profiles")
         .select("id", { count: "exact", head: true })
         .eq("approval_status", "pending")
-        .not("email_confirmed_at", "is", null),
+        .not("email_confirmed_at", "is", null)
+        .not("phone", "is", null),
     ]);
 
     return {
@@ -211,7 +214,7 @@ export async function createNotification(
     .from("notifications")
     .insert({ ...notification, action_url: pushUrl ?? notification.action_url ?? null });
   if (error) {
-    await reportError("notification-insert", error, { recipient: notification.recipient });
+    await reportError("notification-insert", error, { channel: notification.channel });
     return;
   }
 

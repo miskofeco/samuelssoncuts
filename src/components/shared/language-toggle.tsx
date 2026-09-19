@@ -11,7 +11,8 @@ import { cn } from "@/lib/classnames";
 // Module-scope helper keeps the document.cookie write out of the component body
 // (the React Compiler lint disallows external mutations inside components).
 function persistLang(next: Lang) {
-  document.cookie = `${LANG_COOKIE}=${next}; path=/; max-age=${LANG_COOKIE_MAX_AGE}; samesite=lax`;
+  const secure = window.location.protocol === "https:" ? "; secure" : "";
+  document.cookie = `${LANG_COOKIE}=${next}; path=/; max-age=${LANG_COOKIE_MAX_AGE}; samesite=lax${secure}`;
 }
 
 // SK / EN switch. Persists the choice in the `lang` cookie, then refreshes so the

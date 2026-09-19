@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { appointmentUid, buildIcs, type IcsEvent } from "@/lib/ics";
+import { addDaysToDate, dateInShopTimeZone, shopDayRangeUtc } from "@/lib/time-zone";
 import { getCurrentProfile } from "@/server/auth";
 import { loadExportAppointments } from "@/server/dashboard-data";
 
@@ -14,26 +15,20 @@ export async function GET(request: NextRequest) {
   if (!profile) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
+  if (profile.approval_status !== "approved") {
+    return new NextResponse("Forbidden", { status: 403 });
+  }
   // Clients are scoped to their own appointments; admins see everything.
   const clientId = profile.role === "admin" ? undefined : profile.id;
 
   const range = request.nextUrl.searchParams.get("range") === "month" ? "month" : "week";
 
-  // Today at local midnight → +7 days (week) or +1 month (month).
-  const from = new Date();
-  from.setHours(0, 0, 0, 0);
-  const to = new Date(from);
-  if (range === "month") {
-    to.setMonth(to.getMonth() + 1);
-  } else {
-    to.setDate(to.getDate() + 7);
-  }
+  // Today at SHOP-local midnight (the server runs in UTC) → +7 or +31 days.
+  const today = dateInShopTimeZone(new Date().toISOString());
+  const { startIso } = shopDayRangeUtc(today);
+  const { startIso: endIso } = shopDayRangeUtc(addDaysToDate(today, range === "month" ? 31 : 7));
 
-  const appointments = await loadExportAppointments(
-    from.toISOString(),
-    to.toISOString(),
-    clientId,
-  );
+  const appointments = await loadExportAppointments(startIso, endIso, clientId);
 
   const events: IcsEvent[] = appointments.map((a) => ({
     uid: appointmentUid(a.id),

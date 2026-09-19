@@ -1,4 +1,6 @@
-import { DEFAULT_PRICING_SETTINGS, eachDate } from "@/domain/schedule";
+import { analyticsPeriodStart } from "@/domain/analytics";
+import { adminCalendarWindowDates } from "@/domain/calendar-window";
+import { DEFAULT_PRICING_SETTINGS, addDays, eachDate, todayIso } from "@/domain/schedule";
 import type {
   Appointment,
   BookingRequest,
@@ -12,11 +14,16 @@ import type {
 } from "@/domain/types";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
-import { dateInShopTimeZone, formatInShopTimeZone, timeInShopTimeZone } from "@/lib/time-zone";
+import { dateInShopTimeZone, formatInShopTimeZone, shopDayRangeUtc, timeInShopTimeZone } from "@/lib/time-zone";
 import type { AuthProfile } from "@/server/auth";
 
 type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+// Only the columns the UI needs; never pull calendar_token into page payloads.
+type ClientRow = Pick<
+  ProfileRow,
+  "id" | "full_name" | "email" | "phone" | "role" | "approval_status" | "email_confirmed_at" | "created_at" | "avatar_url"
+>;
 type AppointmentRow = Pick<
   Database["public"]["Tables"]["appointments"]["Row"],
   | "id"
@@ -46,6 +53,15 @@ const REQUEST_SELECT =
   "*, booking_preferences(*), appointment_proposals!appointment_proposals_request_id_fkey(*)";
 const APPOINTMENT_SELECT =
   "id, request_id, client_id, customer_name, service_id, starts_at, ends_at, status, outcome";
+const PROFILE_SELECT =
+  "id, full_name, email, phone, role, approval_status, email_confirmed_at, created_at, avatar_url";
+
+// Analytics never looks back further than 12 trailing months (plus the month
+// before for period-over-period comparison), so admin loaders bound history
+// there instead of shipping every appointment ever booked.
+function analyticsFloorIso() {
+  return shopDayRangeUtc(analyticsPeriodStart(todayIso(), 13)).startIso;
+}
 
 // ---------------------------------------------------------------------------
 // Shared row -> domain mappers (single source of truth for conventions like
@@ -97,7 +113,7 @@ function mapPricingSettingsRow(row: PricingSettingsRow): PricingSettings {
   };
 }
 
-export function mapClientRow(row: ProfileRow): ClientProfile {
+export function mapClientRow(row: ClientRow): ClientProfile {
   return {
     id: row.id,
     name: row.full_name,
@@ -206,31 +222,20 @@ export async function loadAttentionCounts(): Promise<AttentionCounts> {
       .from("booking_requests")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending"),
-    // Pending sign-ups that have confirmed their email — the rows the approval
-    // queue treats as actionable.
+    // Pending sign-ups with a confirmed email and a phone on file — the rows
+    // the approval queue treats as actionable (see domain/approval.ts).
     supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
       .eq("approval_status", "pending")
-      .not("email_confirmed_at", "is", null),
+      .not("email_confirmed_at", "is", null)
+      .not("phone", "is", null),
   ]);
 
   return {
     requests: requestsResult.count ?? 0,
     approvals: approvalsResult.count ?? 0,
   };
-}
-
-export async function loadServices(): Promise<Service[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("services")
-    .select("*")
-    .eq("active", true)
-    .order("duration_minutes");
-
-  fail("services", error);
-  return (data ?? []).map(mapServiceRow);
 }
 
 /** All services including inactive — for the admin settings manager. */
@@ -345,16 +350,15 @@ export async function loadUnreadNotificationCount(profile: AuthProfile): Promise
   return count ?? 0;
 }
 
-export async function loadAdminNotifications(limit = 40): Promise<Notification[]> {
+/** The caller's own calendar feed token (never included in page payloads). */
+export async function loadCalendarToken(profileId: string): Promise<string | null> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("notifications")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  fail("notifications", error);
-  return (data ?? []).map(mapNotificationRow);
+  const { data } = await supabase
+    .from("profiles")
+    .select("calendar_token")
+    .eq("id", profileId)
+    .maybeSingle();
+  return data?.calendar_token ?? null;
 }
 
 /** A client's own requests + derived proposals + actionable upcoming appts. */
@@ -472,46 +476,35 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
   proposals: Proposal[];
   appointments: Appointment[];
   services: Service[];
-  notifications: Notification[];
   blockedRanges: Array<{ id: string; start: string; end: string; reason: string | null }>;
 }> {
   const supabase = await createClient();
-  const [requestsResult, appointmentsResult, servicesResult, notificationsResult] =
-    await Promise.all([
-      supabase
-        .from("booking_requests")
-        .select(REQUEST_SELECT)
-        .eq("client_id", profile.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("appointments")
-        .select(APPOINTMENT_SELECT)
-        .eq("client_id", profile.id)
-        .eq("status", "confirmed")
-        .order("starts_at"),
-      supabase.from("services").select("*"),
-      (() => {
-        const orFilter = notificationOrFilter(profile);
-        const base = supabase.from("notifications").select("*");
-        return (orFilter ? base.or(orFilter) : base.eq("user_id", profile.id))
-          .order("created_at", { ascending: false })
-          .limit(8);
-      })(),
-    ]);
+  const [requestsResult, appointmentsResult, servicesResult, blocked] = await Promise.all([
+    supabase
+      .from("booking_requests")
+      .select(REQUEST_SELECT)
+      .eq("client_id", profile.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("appointments")
+      .select(APPOINTMENT_SELECT)
+      .eq("client_id", profile.id)
+      .eq("status", "confirmed")
+      .order("starts_at"),
+    supabase.from("services").select("*"),
+    loadBlockedDays(),
+  ]);
 
   fail("booking_requests", requestsResult.error);
   fail("appointments", appointmentsResult.error);
   fail("services", servicesResult.error);
-  fail("notifications", notificationsResult.error);
 
-  const blocked = await loadBlockedDays();
   const rows = asRequestRows(requestsResult.data);
   return {
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
     appointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
     services: (servicesResult.data ?? []).map(mapServiceRow),
-    notifications: (notificationsResult.data ?? []).map(mapNotificationRow),
     blockedRanges: blocked.ranges,
   };
 }
@@ -523,12 +516,12 @@ export async function loadBookingData(): Promise<{
   businessHours: BusinessHoursDay[];
   blockedDates: Set<string>;
   appointments: Appointment[];
-  proposals: Proposal[];
-  // Other clients' pending (unconfirmed) exact-slot requests — shown as a soft
+  // Pending exact-slot requests visible to the caller — shown as a soft
   // "Requested" badge in the picker (still selectable, don't block).
   pendingRequests: BookingRequest[];
 }> {
   const supabase = await createClient();
+  const nowIso = new Date().toISOString();
   const [servicesResult, appointmentsResult, requestsResult, blocked, pricingSettings, businessHours] =
     await Promise.all([
       supabase.from("services").select("*").eq("active", true).order("duration_minutes"),
@@ -536,6 +529,8 @@ export async function loadBookingData(): Promise<{
       supabase
         .from("booking_requests")
         .select(REQUEST_SELECT)
+        .eq("status", "pending")
+        .gte("requested_start", nowIso)
         .order("created_at", { ascending: false }),
       loadBlockedDays(),
       loadPricingSettings(),
@@ -554,9 +549,8 @@ export async function loadBookingData(): Promise<{
     businessHours,
     blockedDates: blocked.dates,
     appointments: (appointmentsResult.data ?? []).map(mapBusySlotRow),
-    proposals: proposalsFromRequests(rows),
     pendingRequests: requests.filter(
-      (r) => r.status === "pending" && Boolean(r.requestedDate),
+      (r) => Boolean(r.requestedDate),
     ),
   };
 }
@@ -567,40 +561,33 @@ export async function loadBookingData(): Promise<{
  * cancelled rows so outcome charts can count cancellations.
  */
 export async function loadAdminOverview(): Promise<{
+  services: Service[];
   clients: ClientProfile[];
   requests: BookingRequest[];
   proposals: Proposal[];
   appointments: Appointment[];
   analyticsAppointments: Appointment[];
-  notifications: Notification[];
-  services: Service[];
+  pricingSettings: PricingSettings;
 }> {
   const supabase = await createClient();
-  const [
-    servicesResult,
-    profilesResult,
-    requestsResult,
-    appointmentsResult,
-    notificationsResult,
-  ] = await Promise.all([
-    supabase.from("services").select("*"),
-    supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-    supabase.from("booking_requests").select(REQUEST_SELECT).order("created_at", {
-      ascending: false,
-    }),
-    supabase.from("appointments").select(APPOINTMENT_SELECT).order("starts_at"),
-    supabase
-      .from("notifications")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(8),
-  ]);
+  const floor = analyticsFloorIso();
+  const [servicesResult, profilesResult, requestsResult, appointmentsResult, pricingSettings] =
+    await Promise.all([
+      supabase.from("services").select("*"),
+      supabase.from("profiles").select(PROFILE_SELECT).order("created_at", { ascending: false }),
+      supabase
+        .from("booking_requests")
+        .select(REQUEST_SELECT)
+        .gte("created_at", floor)
+        .order("created_at", { ascending: false }),
+      supabase.from("appointments").select(APPOINTMENT_SELECT).gte("starts_at", floor).order("starts_at"),
+      loadPricingSettings(),
+    ]);
 
   fail("services", servicesResult.error);
   fail("profiles", profilesResult.error);
   fail("booking_requests", requestsResult.error);
   fail("appointments", appointmentsResult.error);
-  fail("notifications", notificationsResult.error);
 
   const rows = asRequestRows(requestsResult.data);
   return {
@@ -610,12 +597,18 @@ export async function loadAdminOverview(): Promise<{
     proposals: proposalsFromRequests(rows),
     appointments: confirmedOnly(appointmentsResult.data).map(mapAppointmentRow),
     analyticsAppointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
-    notifications: (notificationsResult.data ?? []).map(mapNotificationRow),
+    pricingSettings,
   };
 }
 
+/** UTC bounds for the admin calendar query around the requested date. */
+export function adminCalendarWindow(date: string) {
+  const { fromDate, toDate } = adminCalendarWindowDates(date, todayIso());
+  return { fromIso: shopDayRangeUtc(fromDate).startIso, toIso: shopDayRangeUtc(toDate).startIso };
+}
+
 /** Admin calendar: confirmed appointments + open proposals + clients/services. */
-export async function loadAdminCalendar(): Promise<{
+export async function loadAdminCalendar(window: { fromIso: string; toIso: string }): Promise<{
   appointments: Appointment[];
   proposals: Proposal[];
   requests: BookingRequest[];
@@ -627,11 +620,19 @@ export async function loadAdminCalendar(): Promise<{
   const [servicesResult, profilesResult, requestsResult, appointmentsResult, blocked] =
     await Promise.all([
       supabase.from("services").select("*"),
-      supabase.from("profiles").select("*"),
-      supabase.from("booking_requests").select(REQUEST_SELECT).order("created_at", {
-        ascending: false,
-      }),
-      supabase.from("appointments").select(APPOINTMENT_SELECT).order("starts_at"),
+      supabase.from("profiles").select(PROFILE_SELECT),
+      // Only open requests can still render as proposals on the calendar.
+      supabase
+        .from("booking_requests")
+        .select(REQUEST_SELECT)
+        .in("status", ["pending", "proposed"])
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("appointments")
+        .select(APPOINTMENT_SELECT)
+        .gte("starts_at", window.fromIso)
+        .lt("starts_at", window.toIso)
+        .order("starts_at"),
       loadBlockedDays(),
     ]);
 
@@ -658,7 +659,7 @@ export async function loadApprovals(): Promise<{
   const supabase = await createClient();
   const profilesResult = await supabase
     .from("profiles")
-    .select("*")
+    .select(PROFILE_SELECT)
     .eq("role", "client")
     .eq("approval_status", "pending")
     .order("created_at", { ascending: false });
@@ -680,14 +681,21 @@ export async function loadRequestQueue(): Promise<{
   blockedDates: Set<string>;
 }> {
   const supabase = await createClient();
+  const floor = analyticsFloorIso();
+  const recentIso = shopDayRangeUtc(addDays(-90)).startIso;
   const [servicesResult, profilesResult, requestsResult, appointmentsResult, blocked] =
     await Promise.all([
       supabase.from("services").select("*"),
-      supabase.from("profiles").select("*"),
-      supabase.from("booking_requests").select(REQUEST_SELECT).order("created_at", {
-        ascending: false,
-      }),
-      supabase.from("appointments").select(APPOINTMENT_SELECT).order("starts_at"),
+      supabase.from("profiles").select(PROFILE_SELECT),
+      // Every open request, plus the last 90 days of closed ones for the
+      // history tabs; older declined/cancelled rows are not worth the payload.
+      supabase
+        .from("booking_requests")
+        .select(REQUEST_SELECT)
+        .or(`status.in.(pending,proposed),created_at.gte.${recentIso}`)
+        .order("created_at", { ascending: false }),
+      // Trailing year: enough for same-day conflict checks and no-show counts.
+      supabase.from("appointments").select(APPOINTMENT_SELECT).gte("starts_at", floor).order("starts_at"),
       loadBlockedDays(),
     ]);
 
@@ -712,7 +720,7 @@ export async function loadClients(): Promise<ClientProfile[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("*")
+    .select(PROFILE_SELECT)
     .order("created_at", { ascending: false });
 
   fail("profiles", error);
@@ -730,7 +738,7 @@ export async function loadClientHistory(clientId: string): Promise<{
   const supabase = await createClient();
   const [profileResult, requestsResult, appointmentsResult, servicesResult] =
     await Promise.all([
-      supabase.from("profiles").select("*").eq("id", clientId).maybeSingle(),
+      supabase.from("profiles").select(PROFILE_SELECT).eq("id", clientId).maybeSingle(),
       supabase
         .from("booking_requests")
         .select(REQUEST_SELECT)

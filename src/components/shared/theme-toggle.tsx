@@ -25,7 +25,7 @@ function getSnapshot(): Theme {
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
-export function useTheme() {
+function useTheme() {
   // Server renders "light"; the class is reconciled on the client after mount.
   const theme = useSyncExternalStore(subscribe, getSnapshot, () => "light" as Theme);
 

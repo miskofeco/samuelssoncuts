@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { appointmentUid, buildIcs, type IcsEvent } from "@/lib/ics";
 import { reportError } from "@/lib/observability";
@@ -26,12 +28,19 @@ export async function GET(
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params;
-  const limit = await enforceRateLimit("calendar:feed", {
-    identity: token,
-    limit: 120,
-    windowSeconds: 60 * 60,
-  });
-  if (!limit.ok) {
+  if (!z.uuid().safeParse(token).success) {
+    return new NextResponse("Not found", { status: 404 });
+  }
+
+  // Per-IP budget stops anonymous floods regardless of the token guessed, and
+  // a per-token budget keeps one runaway calendar client in check. The token
+  // is hashed so the bearer secret is never written into rate_limits.
+  const tokenKey = createHash("sha256").update(token).digest("hex").slice(0, 32);
+  const [ipLimit, tokenLimit] = await Promise.all([
+    enforceRateLimit("calendar:feed-ip", { limit: 240, windowSeconds: 60 * 60 }),
+    enforceRateLimit("calendar:feed", { identity: tokenKey, limit: 120, windowSeconds: 60 * 60 }),
+  ]);
+  if (!ipLimit.ok || !tokenLimit.ok) {
     return new NextResponse("Too many requests", { status: 429 });
   }
 

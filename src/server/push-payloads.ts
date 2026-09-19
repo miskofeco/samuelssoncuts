@@ -1,9 +1,3 @@
-export type BadgeCountInput = {
-  role: "admin" | "client";
-  attention?: { requests: number; approvals: number };
-  unreadNotifications?: number;
-};
-
 export type PushPayload = {
   title: string;
   body?: string;
@@ -12,18 +6,8 @@ export type PushPayload = {
   tag?: string;
 };
 
-export function badgeCountForRole({
-  role,
-  attention,
-  unreadNotifications,
-}: BadgeCountInput): number {
-  if (role === "admin") {
-    return (attention?.requests ?? 0) + (attention?.approvals ?? 0);
-  }
-
-  return unreadNotifications ?? 0;
-}
-
+// The free-text body (client notes, names in context) deliberately never
+// reaches the push service: only the short subject travels off-platform.
 export function derivePushNotification(
   notification: { subject: string; body?: string | null },
   options: { badgeCount: number; url: string; tag?: string },

@@ -148,12 +148,13 @@ export function PushNotificationCard() {
         const subscription = await registration?.pushManager.getSubscription();
         const endpoint = subscription?.endpoint;
 
-        await fetch("/api/push/subscriptions", {
+        const response = await fetch("/api/push/subscriptions", {
           method: "DELETE",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ endpoint }),
         });
+        if (!response.ok) throw new Error("unsubscribe failed");
         await subscription?.unsubscribe();
 
         setState("ready");

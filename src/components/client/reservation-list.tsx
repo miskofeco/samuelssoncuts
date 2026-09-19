@@ -128,7 +128,7 @@ function ReservationCard({
             <h3 className="truncate text-base font-semibold text-foreground">{service.name}</h3>
             <p className="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground tabular-nums">
               <Icon icon={Clock01Icon} className="size-3.5" />
-              {service.duration} min · {service.price} €
+              {service.duration} {t.admin.minutesShort} · {service.price} €
             </p>
           </div>
           <StatusPill tone={meta.tone} dot className="shrink-0">
@@ -255,7 +255,9 @@ function ReservationCard({
           confirmLabel={pending ? t.common.working : t.client.cancelRequest}
           loading={pending}
           onConfirm={cancel}
-        />
+        >
+          <Feedback result={feedback && !feedback.ok ? feedback : null} />
+        </ConfirmDialog>
       </article>
     </Card>
   );

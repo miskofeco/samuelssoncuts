@@ -46,7 +46,8 @@ const ConsentContext = createContext<ConsentContextValue | null>(null);
 // (React-Compiler lint disallows external mutations inside components) — mirrors
 // persistLang in language-toggle.tsx.
 function persistConsent(state: ConsentState) {
-  document.cookie = `${CONSENT_COOKIE}=${encodeConsent(state)}; path=/; max-age=${CONSENT_COOKIE_MAX_AGE}; samesite=lax`;
+  const secure = window.location.protocol === "https:" ? "; secure" : "";
+  document.cookie = `${CONSENT_COOKIE}=${encodeConsent(state)}; path=/; max-age=${CONSENT_COOKIE_MAX_AGE}; samesite=lax${secure}`;
 }
 
 // Mirror the decision to the DB audit log for signed-in users. Fire-and-forget:

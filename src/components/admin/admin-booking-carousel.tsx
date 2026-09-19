@@ -109,6 +109,7 @@ export function AdminBookingCarousel({
             item={item}
             onSelect={setSelected}
             aria-hidden={index !== activeIndex}
+            tabIndex={index !== activeIndex ? -1 : undefined}
           />
         ))}
       </div>

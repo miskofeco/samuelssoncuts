@@ -283,7 +283,6 @@ export function RequestForm({
                       alt=""
                       fill
                       sizes="56px"
-                      unoptimized={imageSrc.startsWith("http")}
                       className="object-cover"
                     />
                   </span>
@@ -299,7 +298,7 @@ export function RequestForm({
                     ) : null}
                   </span>
                   <Badge variant={selected ? "default" : "secondary"} className="shrink-0 tabular-nums">
-                    {service.duration} min · {service.price} €
+                    {service.duration} {t.admin.minutesShort} · {service.price} €
                   </Badge>
                 </button>
               );

@@ -1,32 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  badgeCountForRole,
-  derivePushNotification,
-} from "../src/server/push-payloads.ts";
-
-test("admin badge count includes only actionable attention counts", () => {
-  assert.equal(
-    badgeCountForRole({
-      role: "admin",
-      attention: { requests: 4, approvals: 2 },
-      unreadNotifications: 99,
-    }),
-    6,
-  );
-});
-
-test("client badge count uses unread notification count", () => {
-  assert.equal(
-    badgeCountForRole({
-      role: "client",
-      attention: { requests: 4, approvals: 2 },
-      unreadNotifications: 7,
-    }),
-    7,
-  );
-});
+import { derivePushNotification } from "../src/server/push-payloads.ts";
 
 test("push payload keeps useful subject details but excludes free-text note body", () => {
   const payload = derivePushNotification(

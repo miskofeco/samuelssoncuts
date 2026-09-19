@@ -91,9 +91,13 @@ export function ClientDetail({
     setFeedback(null);
     setConfirmAction(null);
     startTransition(async () => {
-      const result = await action();
-      setFeedback(result);
-      if (result.ok && redirectAfter) router.push("/admin/clients");
+      try {
+        const result = await action();
+        setFeedback(result);
+        if (result.ok && redirectAfter) router.push("/admin/clients");
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
   }
 

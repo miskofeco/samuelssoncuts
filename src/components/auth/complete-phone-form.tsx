@@ -22,13 +22,17 @@ export function CompletePhoneForm() {
     event.preventDefault();
     setFeedback(null);
     startTransition(async () => {
-      const result = await completePhoneAction({ phone });
-      if (result.ok) {
-        // Phone saved — the gate now lets them through.
-        router.replace("/dashboard");
-        return;
+      try {
+        const result = await completePhoneAction({ phone });
+        if (result.ok) {
+          // Phone saved — the gate now lets them through.
+          router.replace("/dashboard");
+          return;
+        }
+        setFeedback(result);
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
       }
-      setFeedback(result);
     });
   }
 

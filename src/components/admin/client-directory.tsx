@@ -1,8 +1,8 @@
 "use client";
 
 import { Call02Icon, Search01Icon, UserMultiple02Icon } from "@hugeicons/core-free-icons";
-import { useMemo } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { Avatar } from "@/components/shared/avatar";
 import { SectionHeader } from "@/components/shared/card";
@@ -23,16 +23,18 @@ import { clientStatusLabel, clientStatusTone } from "./client-status";
 export function ClientDirectory({ clients }: { clients: ClientProfile[] }) {
   const t = useT();
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const query = searchParams.get("q") ?? "";
+  // Local state drives filtering; the URL is mirrored via history.replaceState
+  // so a keystroke never triggers an RSC round-trip (Next keeps
+  // useSearchParams in sync with replaceState).
+  const [query, setQueryState] = useState(() => searchParams.get("q") ?? "");
 
   function setQuery(next: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (next.trim()) params.set("q", next);
-    else params.delete("q");
-    const suffix = params.toString();
-    router.replace(suffix ? `${pathname}?${suffix}` : pathname, { scroll: false });
+    setQueryState(next);
+    const url = new URL(window.location.href);
+    if (next.trim()) url.searchParams.set("q", next);
+    else url.searchParams.delete("q");
+    window.history.replaceState(null, "", url);
   }
 
   const people = useMemo(

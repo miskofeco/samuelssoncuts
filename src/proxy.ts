@@ -28,7 +28,7 @@ function buildCsp(nonce: string) {
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' blob: data: ${supabaseHost}`.trim(),
     `font-src 'self'`,
-    `connect-src 'self' ${supabaseHost} ${supabaseWs} https://*.push.apple.com https://fcm.googleapis.com https://updates.push.services.mozilla.com`.trim(),
+    `connect-src 'self' ${supabaseHost} ${supabaseWs}`.trim(),
     `worker-src 'self'`,
     `frame-ancestors 'none'`,
     `object-src 'none'`,

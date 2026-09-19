@@ -70,7 +70,7 @@ test("client calendar selected date uses the primary token while today keeps an 
 
 test("client booking slots are hourly by default and adjusted around booked events", () => {
   assert.match(schedule, /export function clientSlotsForService/);
-  assert.match(schedule, /for \(let start = OPEN_MINUTES; start <= LAST_BOOK_MINUTES; start \+= 60\)/);
+  assert.match(schedule, /for \(let start = opens; start \+ durationMin <= closes; start \+= 60\)/);
   assert.match(schedule, /starts\.add\(bookingStart - durationMin\)/);
   assert.match(schedule, /starts\.add\(bookingEnd\)/);
   assert.match(schedule, /isSlotFree\(date, start, durationMin, confirmed\)/);

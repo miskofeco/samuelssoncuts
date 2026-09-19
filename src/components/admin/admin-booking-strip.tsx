@@ -1,6 +1,7 @@
 import { Card, SectionHeader } from "@/components/shared/card";
 import { formatFullDay, isVipStart, serviceById } from "@/domain/schedule";
 import type {
+  PricingSettings,
   Appointment,
   BookingRequest,
   ClientProfile,
@@ -9,7 +10,6 @@ import type {
 import { localeFor } from "@/i18n/config";
 import { getDict, getLang } from "@/i18n/server";
 import { shopDateTimeToEpochMs } from "@/lib/time-zone";
-import { loadPricingSettings } from "@/server/dashboard-data";
 
 import {
   AdminBookingCarousel,
@@ -133,14 +133,16 @@ export async function AdminBookingStrip({
   requests,
   appointments,
   services,
+  pricingSettings,
 }: {
   clients: ClientProfile[];
   requests: BookingRequest[];
   appointments: Appointment[];
   services: Service[];
+  pricingSettings: PricingSettings;
 }) {
-  const [t, pricingSettings] = await Promise.all([getDict(), loadPricingSettings()]);
-  const locale = localeFor(await getLang());
+  const [t, lang] = await Promise.all([getDict(), getLang()]);
+  const locale = localeFor(lang);
   const { currentBooking, lastBooking, nextBooking } = selectBookingCards(
     buildBookingCards({
       appointments,

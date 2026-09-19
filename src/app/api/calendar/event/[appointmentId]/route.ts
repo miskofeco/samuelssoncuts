@@ -20,6 +20,9 @@ export async function GET(
   if (!configured || !profile) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
+  if (profile.approval_status !== "approved") {
+    return new NextResponse("Forbidden", { status: 403 });
+  }
 
   const supabase = getSupabaseAdminClient();
 

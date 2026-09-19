@@ -16,6 +16,7 @@ import { StatCard } from "@/components/shared/stat-card";
 import { StatusPill } from "@/components/shared/status-pill";
 import { localeFor } from "@/i18n/config";
 import { getDict, getLang } from "@/i18n/server";
+import { isReadyForApproval } from "@/domain/approval";
 import { formatFullDay, serviceById, todayIso } from "@/domain/schedule";
 import {
   adminOverviewMetricTrends,
@@ -48,7 +49,7 @@ export async function AdminOverview({
   const locale = localeFor(await getLang());
   const today = todayIso();
   const pendingApprovals = clients.filter(
-    (c) => c.role !== "admin" && c.status === "pending" && c.emailConfirmed,
+    (c) => c.role !== "admin" && c.status === "pending" && isReadyForApproval(c),
   ).length;
   const openRequests = requests.filter((r) => r.status === "pending").length;
   const awaitingClient = requests.filter((r) => r.status === "proposed").length;
@@ -127,7 +128,6 @@ export async function AdminOverview({
           tone={todays.length > 0 ? "emerald" : "neutral"}
           icon={Calendar03Icon}
           trend={trends.todayAppointments}
-          variant="overview"
         />
         <StatCard
           label={t.admin.revenueThisMonth}
@@ -135,7 +135,6 @@ export async function AdminOverview({
           hint={t.admin.revenueThisMonthHint}
           icon={ChartLineData01Icon}
           trend={trends.revenueThisMonth}
-          variant="overview"
         />
         <StatCard
           label={t.admin.openRequests}
@@ -144,7 +143,6 @@ export async function AdminOverview({
           tone={openRequests > 0 ? "sky" : "neutral"}
           icon={InboxIcon}
           trend={trends.openRequests}
-          variant="overview"
         />
         <StatCard
           label={t.admin.awaitingClient}
@@ -153,7 +151,6 @@ export async function AdminOverview({
           tone={awaitingClient > 0 ? "amber" : "neutral"}
           icon={HourglassIcon}
           trend={trends.awaitingClient}
-          variant="overview"
         />
       </div>
 

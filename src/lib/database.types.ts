@@ -382,6 +382,7 @@ export type Database = {
       confirmed_appointment_slots: {
         Args: Record<string, never>;
         Returns: Array<{
+          id: string;
           starts_at: string;
           ends_at: string;
           service_id: string;
@@ -389,10 +390,10 @@ export type Database = {
       };
       has_confirmed_appointment_overlap: {
         Args: {
-          p_barber_id: string | null;
+          p_barber_id?: string | null;
           p_start: string;
           p_end: string;
-          p_exclude_appointment_id: string | null;
+          p_exclude_appointment_id?: string | null;
         };
         Returns: boolean;
       };
@@ -428,10 +429,33 @@ export type Database = {
       client_request_reschedule: {
         Args: {
           p_appointment_id: string;
+          p_client_id: string;
           p_new_start: string;
-          p_price_cents?: number | null;
-          p_surcharge?: boolean | null;
+          p_price_cents: number;
+          p_surcharge: boolean;
         };
+        Returns: string;
+      };
+      upsert_push_subscription: {
+        Args: {
+          p_endpoint: string;
+          p_p256dh: string;
+          p_auth: string;
+          p_expiration: string | null;
+          p_user_agent: string | null;
+        };
+        Returns: undefined;
+      };
+      rotate_my_calendar_token: {
+        Args: Record<string, never>;
+        Returns: string;
+      };
+      is_approved_client: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      normalize_phone: {
+        Args: { p_phone: string };
         Returns: string;
       };
       client_cancel_request: {

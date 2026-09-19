@@ -12,7 +12,7 @@ import {
   Note01Icon,
   Scissor01Icon,
 } from "@hugeicons/core-free-icons";
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 
 import {
   confirmRequestAction,
@@ -123,20 +123,23 @@ export function ProposalComposer({
 
   // Declared before the state initialisers that call them (React Compiler
   // requires declaration-before-use for values read during render).
-  function takenAt(targetDate: string, targetTime: string) {
-    if (blockedDates.has(targetDate)) return true;
-    const start = minutesOf(targetTime);
-    return appointments.some((appointment) => {
-      if (appointment.date !== targetDate) return false;
-      const appointmentService = serviceById(appointment.serviceId, services);
-      return overlaps(
-        start,
-        service.duration,
-        minutesOf(appointment.time),
-        appointmentService.duration,
-      );
-    });
-  }
+  const takenAt = useCallback(
+    (targetDate: string, targetTime: string) => {
+      if (blockedDates.has(targetDate)) return true;
+      const start = minutesOf(targetTime);
+      return appointments.some((appointment) => {
+        if (appointment.date !== targetDate) return false;
+        const appointmentService = serviceById(appointment.serviceId, services);
+        return overlaps(
+          start,
+          service.duration,
+          minutesOf(appointment.time),
+          appointmentService.duration,
+        );
+      });
+    },
+    [appointments, blockedDates, services, service.duration],
+  );
 
   function firstFreeTime(targetDate: string) {
     return workingHours.find((hour) => !takenAt(targetDate, hour)) ?? workingHours[0];
@@ -163,8 +166,7 @@ export function ProposalComposer({
       hour,
       taken: takenAt(date, hour),
     }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, windowFilter, appointments]);
+  }, [date, windowFilter, takenAt]);
 
   function chooseDate(targetDate: string) {
     setDate(targetDate);
@@ -185,32 +187,44 @@ export function ProposalComposer({
   function submit() {
     setFeedback(null);
     startTransition(async () => {
-      const result = await proposeTimeFromAdminAction(request.id, date, time, note);
-      setFeedback(result);
-      if (result.ok) setOpen(false);
+      try {
+        const result = await proposeTimeFromAdminAction(request.id, date, time, note);
+        setFeedback(result);
+        if (result.ok) setOpen(false);
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
   }
 
   function confirm() {
     setFeedback(null);
     startTransition(async () => {
-      const result = await confirmRequestAction(request.id);
-      setFeedback(result);
-      if (result.ok) setOpen(false);
+      try {
+        const result = await confirmRequestAction(request.id);
+        setFeedback(result);
+        if (result.ok) setOpen(false);
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
   }
 
   function decline() {
     setFeedback(null);
     startTransition(async () => {
-      const result = await declineRequestAdminAction({
-        requestId: request.id,
-        reason: declineReason.trim() || undefined,
-      });
-      setFeedback(result);
-      if (result.ok) {
-        setDeclineOpen(false);
-        setOpen(false);
+      try {
+        const result = await declineRequestAdminAction({
+          requestId: request.id,
+          reason: declineReason.trim() || undefined,
+        });
+        setFeedback(result);
+        if (result.ok) {
+          setDeclineOpen(false);
+          setOpen(false);
+        }
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
       }
     });
   }

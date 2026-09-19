@@ -7,27 +7,6 @@ export function Skeleton({ className, ...props }: ComponentProps<typeof UiSkelet
   return <UiSkeleton {...props} aria-hidden className={cn("ss-skeleton animate-none", className)} />;
 }
 
-/** Accessible page-level loading region shared by route-specific skeletons. */
-export function LoadingPage({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn("space-y-6", className)}
-      role="status"
-      aria-label="Loading"
-      aria-live="polite"
-      aria-busy="true"
-    >
-      {children}
-    </div>
-  );
-}
-
 /** Matches the app's padded Card surface without importing interactive card UI. */
 export function SkeletonCard({
   children,

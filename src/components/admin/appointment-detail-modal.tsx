@@ -117,9 +117,13 @@ function DetailBody({
   function run(action: () => Promise<ActionResult>) {
     setFeedback(null);
     startTransition(async () => {
-      const result = await action();
-      setFeedback(result);
-      if (result.ok) onClose();
+      try {
+        const result = await action();
+        setFeedback(result);
+        if (result.ok) onClose();
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
   }
 

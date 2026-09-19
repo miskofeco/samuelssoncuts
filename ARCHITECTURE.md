@@ -111,7 +111,15 @@ Auth state is centralized in `src/server/auth.ts`.
 - `requireProfile()` redirects to `/setup` when Supabase env is absent, `/login` when unauthenticated.
 - `requireAdmin()` allows only approved admins, otherwise redirects to the client or pending flow.
 - `requireApprovedClient()` keeps admins out of client routes, forces missing-phone profiles through `/complete-profile`, and blocks pending/rejected/blocked users at `/pending`.
-- `dashboardPathFor()` is the central post-auth routing decision.
+- `dashboardPathFor()` is the central post-auth routing decision. `/login`, `/register` and `/pending` redirect through it when the visitor is already signed in or does not belong on that page, so no auth page is reachable in the wrong state. A session whose `profiles` row is missing is reported as `authenticated: true, profile: null`; `/login` then offers only a sign-out (code `profile_missing`) instead of looping.
+
+Sign-in and registration flow:
+
+- `signInAction` and `registerAction` are `useActionState` actions (`src/components/auth/login-form.tsx`, `register-form.tsx`) returning `AuthFormState` from `src/domain/auth-form.ts`: field-level errors, echoed values (never the password), and `unconfirmedEmail` when Supabase answers `email_not_confirmed`. The login form then exposes `resendConfirmationAction` (rate limited, neutral outcome).
+- Registration validates every field at once, normalises the phone with `src/domain/phone.ts` (`parsePhone`: separators stripped, `00` → `+`, 7–15 digits), pre-checks `phone_taken`, and treats Supabase's obfuscated "existing user" sign-up (empty `identities`) or `user_already_exists` as an email-taken field error instead of pretending a confirmation email was sent. Success lands on `/login?notice=confirm_sent&email=…` (or `/dashboard` when confirmations are disabled and a session is returned).
+- Google OAuth accounts have a verified email but no phone; `requireApprovedClient` sends them to `/complete-profile` first. A registration only becomes actionable for the barber once `isReadyForApproval()` (`src/domain/approval.ts`: confirmed email **and** phone) holds. The approval queue, admin overview, attention counts, badge counts and `approveClientAction` all apply that rule.
+- Auth pages never render free text from the URL. Route handlers and redirecting actions pass short codes (`?error=oauth_failed`, `?notice=confirm_sent`) that `src/i18n/auth-notices.ts` resolves to localised copy; unknown codes render nothing. `/auth/callback` maps a Google `access_denied` to `oauth_cancelled`, and failed recovery links (callback, confirm or a missing session on `/auth/update-password`) go to `/reset-password?error=reset_link_invalid`.
+- Every phone write path (`registerAction`, `completePhoneAction`, `updateProfileAction`) stores the canonical form; migration `0031` makes `phone_taken` compare both sides through `normalize_phone()` so pre-existing rows with spaces still collide correctly.
 
 Supabase RLS is the primary data boundary. Admin-only bypasses use `getSupabaseAdminClient()` and must remain server-only.
 
@@ -137,11 +145,16 @@ Primary tables and concepts:
 Important RPCs and constraints live in migrations:
 
 - `is_admin()` gates admin RLS.
-- `phone_taken()` gives friendly duplicate-phone checks despite RLS.
-- `confirmed_appointment_slots()` returns sanitized busy slots.
+- `phone_taken()` gives friendly duplicate-phone checks; executable by the service role only (it was an anonymous phone-enumeration oracle), so `isPhoneTaken` in `actions.ts` always uses the admin client.
+- `confirmed_appointment_slots()` returns sanitized busy slots from yesterday onwards (the picker never needs history).
+- `is_approved_client()` is checked inside every client-facing RPC (`respond_to_appointment_proposal`, `client_cancel_request`, `client_cancel_confirmed_appointment`), so blocked or rejected accounts cannot drive booking state through PostgREST.
+- `upsert_push_subscription()` binds a browser push endpoint to the caller even when another user registered it earlier on the same device.
+- `rotate_my_calendar_token()` lets the owner invalidate a leaked feed URL; `calendar_feed()` only serves approved accounts.
+- `appointment_proposals_one_sent_per_request` guarantees a single open proposal per request.
+- Profile deletion scrubs the person's `notifications` rows (trigger `profiles_scrub_notifications`).
 - `has_confirmed_appointment_overlap()` detects booking conflicts.
 - `confirm_booking_request()` and `respond_to_appointment_proposal()` make request/proposal transitions transactional.
-- `client_cancel_confirmed_appointment()` and `client_request_reschedule()` handle client self-service safely.
+- `client_cancel_confirmed_appointment()` and `client_request_reschedule()` handle client self-service safely. `client_request_reschedule` is service-role only and takes the acting client id plus the server-computed quote; clients cannot call it (or insert into `booking_requests`) directly, so a booking price can only ever come from `quoteClientSlot`.
 - `record_admin_action()` writes audit rows after re-checking admin privileges.
 - `calendar_feed()` powers token-based ICS feeds.
 - A Postgres exclusion constraint prevents overlapping confirmed appointments per barber.
@@ -186,7 +199,8 @@ Admin booking and calendar changes:
 - Transactional emails are React components in `src/emails` and go through `sendEmail()` in `src/lib/email.ts`.
 - Missing `RESEND_API_KEY` is non-fatal in local dev; emails are logged and notification rows still exist.
 - In-app notifications should be created through `createNotification`, `createNotifications`, or `createAdminNotification` in `src/server/notifications.ts`.
-- Push delivery is best-effort and non-fatal. Invalid subscriptions are deleted or marked failed.
+- Push delivery is best-effort and non-fatal. Invalid subscriptions are deleted or marked failed. Push payloads carry the subject only, never the free-text body.
+- The daily cron claims `reminded_at` atomically before sending (and releases it when the send fails), batches profile/service lookups, sends with bounded concurrency, sets `maxDuration = 60`, and prunes expired `rate_limits` rows.
 - `PushBadgeSync` registers `public/sw.js` and keeps foreground app badge counts aligned.
 - Admin navigation attention counts are server-computed and refreshed by `revalidatePath`; Supabase Realtime is only a background refresh nudge.
 
@@ -220,7 +234,11 @@ Admin booking and calendar changes:
 - `next.config.ts` applies baseline security headers and Supabase avatar image patterns.
 - `SUPABASE_SERVICE_ROLE_KEY` is required only on the server for admin-only operations and cron.
 - `CRON_SECRET` protects the reminder route.
-- Calendar feed tokens are shareable secrets. Rotate `profiles.calendar_token` if exposed.
+- Calendar feed tokens are shareable secrets. Both the admin calendar and the client reservations page expose "Generate a new link" (`rotateCalendarTokenAction`). The feed route validates the token shape, rate-limits per IP and per hashed token, and never persists the raw token.
+- Logs and the error webhook must not contain personal data: `reportError`/`logEvent` redact email addresses and phone-like numbers, and callers pass ids or kinds rather than recipients or subjects.
+- Secret-bearing server modules (`lib/supabase/admin.ts`, `lib/email.ts`, `server/notifications.ts`, `server/rate-limit.ts`, `server/cron-auth.ts`) import `server-only`.
+- Auth rate limits are keyed per IP and, more generously, per email so a stranger cannot lock a victim out of sign-in, reset or resend by hammering their address.
+- Calendar/push API routes require `approval_status = 'approved'`; GDPR export and erasure (`exportMyDataAction`, `deleteMyAccountAction`) deliberately do not, and are offered on `/pending` as well as the account page.
 - `NEXT_PUBLIC_SHOP_TIME_ZONE` controls booking and display conversion. Default is `Europe/Bratislava`, but production should set it explicitly.
 - Keep `src/lib/database.types.ts` in sync with migrations after schema changes.
 
@@ -235,7 +253,7 @@ Use risk-based verification. Do not create or run tests blindly for every cosmet
 
 ## Where To Change Things
 
-- New route or page: add under `src/app`, load data with `src/server/dashboard-data.ts`, reuse shared/admin/client components.
+- New route or page: add under `src/app`, load data with `src/server/dashboard-data.ts`, reuse shared/admin/client components. `createClient()`, `getCurrentProfile()` and `getLang()` are wrapped in React `cache()`, so layouts, pages and nested loaders share one Supabase client and one profile read per request. Admin loaders are bounded: overview/analytics to 13 trailing months, the calendar to the months around the requested `?date=` (`adminCalendarWindow`), the request queue to open requests plus 90 days of history. Never `select("*")` on `profiles` in page loaders; use `PROFILE_SELECT` so `calendar_token` stays out of page payloads.
 - New mutation: add or extend a server action in `src/app/actions.ts`; validate with Zod; call auth and rate-limit helpers; revalidate affected layouts/pages.
 - New shared UI primitive: compose from `src/components/ui` (add missing shadcn components with `pnpm dlx shadcn@latest add <name>`; `components.json` already targets hugeicons) and expose an app-level wrapper in `src/components/shared`. Never import `lucide-react` or hand-write SVG icons; use `Icon` from `src/components/shared/icon.tsx`.
 - Admin-only UI: use `src/components/admin`; client-only UI: use `src/components/client`.

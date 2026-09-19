@@ -32,7 +32,7 @@ test("admin upcoming appointments give client names readable space on mobile", (
   assert.match(upcoming, /sm:grid-cols-\[minmax\(0,1fr\)_minmax\(8rem,0\.45fr\)_10rem\]/);
   assert.match(upcoming, /break-words text-sm font-semibold/);
   assert.match(upcoming, /sm:truncate/);
-  assert.match(upcoming, /truncate text-xs text-stone-500 sm:hidden/);
+  assert.match(upcoming, /truncate text-xs text-muted-foreground sm:hidden/);
   assert.match(upcoming, /text-right text-sm font-medium tabular-nums/);
 });
 

@@ -1,10 +1,10 @@
 import {
-  LoadingPage,
   Skeleton,
   SkeletonCard,
   SkeletonSectionHeader,
   SkeletonStatGrid,
 } from "@/components/shared/skeleton";
+import { LoadingPage } from "@/components/shared/loading-page";
 
 function ActivityRows({ count = 4 }: { count?: number }) {
   return (

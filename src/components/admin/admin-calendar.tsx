@@ -40,7 +40,7 @@ import {
   weekLabel,
   weekStart,
 } from "@/domain/schedule";
-import { nowMinutesInShopTimeZone } from "@/lib/time-zone";
+import { addDaysToDate, nowMinutesInShopTimeZone } from "@/lib/time-zone";
 
 import { AddBookingModal } from "./add-booking-modal";
 import { AppointmentDetailModal } from "./appointment-detail-modal";
@@ -151,13 +151,17 @@ export function AdminCalendar({
     else router.push(href, { scroll: false });
   }
 
+  // Canonicalize only when a URL param is present but invalid. Absent params
+  // are left alone: the default view depends on `isMobile`, whose server
+  // snapshot is desktop, so rewriting on absence would navigate twice on phones.
+  const viewInvalid = requestedView !== null && requestedView !== view;
+  const dateInvalid = requestedDate !== null && requestedDate !== selectedDate;
   useEffect(() => {
-    if (requestedView !== view || requestedDate !== selectedDate) {
+    if (viewInvalid || dateInvalid) {
       navigateCalendar(view, selectedDate, true);
     }
-    // Canonicalize only when URL state is absent or invalid.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestedView, requestedDate, selectedDate, view]);
+  }, [viewInvalid, dateInvalid, selectedDate, view]);
 
   const itemsByDate = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
@@ -513,11 +517,9 @@ function minutesFromStart(time: string) {
   return (hours - START_HOUR) * 60 + minutes;
 }
 
-// "yyyy-mm-dd" shifted by whole days (noon anchor avoids DST edge cases).
+// "yyyy-mm-dd" shifted by whole days (pure calendar arithmetic, no local TZ).
 function shiftDay(date: string, days: number) {
-  const d = new Date(`${date}T12:00:00`);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return addDaysToDate(date, days);
 }
 
 // Single-day agenda: a chronological timeline of the day's items. Navigation
@@ -684,11 +686,7 @@ function WeekGrid({
   onSelect: (item: CalendarItem) => void;
 }) {
   const today = todayIso();
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const d = new Date(`${weekMonday}T12:00:00`);
-    d.setDate(d.getDate() + index);
-    return d.toISOString().slice(0, 10);
-  });
+  const days = Array.from({ length: 7 }, (_, index) => addDaysToDate(weekMonday, index));
   const hours = Array.from({ length: GRID_HOURS }, (_, index) => START_HOUR + index);
 
   const scrollRef = useRef<HTMLDivElement>(null);

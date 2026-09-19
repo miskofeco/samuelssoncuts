@@ -36,7 +36,6 @@ export function IconBadge({
       <span
         role="img"
         aria-label={label}
-        tabIndex={0}
         className={cn(
           "inline-flex size-7 items-center justify-center rounded-lg outline-none transition focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-4",
           tones[tone],

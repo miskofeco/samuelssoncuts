@@ -8,6 +8,8 @@
 // has already committed, so a Resend outage or network error must never turn a
 // persisted action into a failure. Errors are reported and `false` is returned.
 
+import "server-only";
+
 import { Resend } from "resend";
 import { getBarberEmail, getEmailFrom, getResendApiKey } from "@/lib/env";
 import { reportError } from "@/lib/observability";
@@ -31,8 +33,11 @@ function getResend(): Resend | null {
 export async function sendEmail(payload: EmailPayload): Promise<boolean> {
   const resend = getResend();
   if (!resend) {
-    // Dev fallback: log subject so you can see what would have been sent.
-    console.info("[email] (no API key) →", payload.subject, "→", payload.to);
+    // Dev fallback: note that a send was skipped without logging the recipient
+    // or the (name-bearing) subject — logs must stay free of personal data.
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[email] (no API key) skipped", { recipients: Array.isArray(payload.to) ? payload.to.length : 1 });
+    }
     return false;
   }
 
@@ -45,12 +50,12 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
       react: payload.react,
     });
     if (error) {
-      await reportError("email-send", error, { subject: payload.subject });
+      await reportError("email-send", error);
       return false;
     }
     return true;
   } catch (error) {
-    await reportError("email-send", error, { subject: payload.subject });
+    await reportError("email-send", error);
     return false;
   }
 }

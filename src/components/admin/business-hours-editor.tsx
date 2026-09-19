@@ -69,7 +69,11 @@ export function BusinessHoursEditor({
     if (invalidWeekdays.size > 0) return;
     setFeedback(null);
     startTransition(async () => {
-      setFeedback(await saveBusinessHoursAction(days));
+      try {
+        setFeedback(await saveBusinessHoursAction(days));
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
   }
 

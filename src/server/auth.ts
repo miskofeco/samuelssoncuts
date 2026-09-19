@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { getSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
@@ -13,16 +14,18 @@ export type AuthProfile = {
   avatar_url: string | null;
 };
 
-export async function getCurrentProfile() {
+// Memoised per request: the layout and the page both gate on the profile, so
+// without cache() every navigation paid for two getClaims + two profile reads.
+export const getCurrentProfile = cache(async () => {
   if (!getSupabaseEnv()) {
-    return { configured: false as const, profile: null };
+    return { configured: false as const, authenticated: false as const, profile: null };
   }
 
   const supabase = await createClient();
   const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
 
   if (claimsError || !claimsData?.claims?.sub) {
-    return { configured: true as const, profile: null };
+    return { configured: true as const, authenticated: false as const, profile: null };
   }
 
   const { data: profile, error } = await supabase
@@ -31,12 +34,15 @@ export async function getCurrentProfile() {
     .eq("id", claimsData.claims.sub)
     .single();
 
+  // A session whose profile row is missing (the sign-up trigger failed or the
+  // row was deleted) must not loop between /login and /dashboard; callers can
+  // tell this apart from "signed out" and offer a sign-out instead.
   if (error || !profile) {
-    return { configured: true as const, profile: null };
+    return { configured: true as const, authenticated: true as const, profile: null };
   }
 
-  return { configured: true as const, profile };
-}
+  return { configured: true as const, authenticated: true as const, profile };
+});
 
 export async function requireProfile() {
   const result = await getCurrentProfile();
@@ -46,7 +52,7 @@ export async function requireProfile() {
   }
 
   if (!result.profile) {
-    redirect("/login");
+    redirect(result.authenticated ? "/login?error=profile_missing" : "/login");
   }
 
   return result.profile;

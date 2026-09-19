@@ -81,7 +81,7 @@ export function AdminUpcomingAppointments({
                         <p className="break-words text-sm font-semibold text-foreground sm:truncate">
                           {item.clientName}
                         </p>
-                        <p className="truncate text-xs text-stone-500 sm:hidden dark:text-stone-400">
+                        <p className="truncate text-xs text-muted-foreground sm:hidden">
                           {item.serviceName}
                         </p>
                       </div>

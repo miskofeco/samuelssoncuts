@@ -1,28 +1,26 @@
 import type { NextConfig } from "next";
 
-// Allow next/image to load avatars from the public Supabase Storage bucket.
-// Hostname is derived from NEXT_PUBLIC_SUPABASE_URL so it follows the project.
+// Allow next/image to optimise images from the public Supabase Storage
+// buckets (avatars, service photos). Hostname is derived from
+// NEXT_PUBLIC_SUPABASE_URL so it follows the project.
 function supabaseImagePattern() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!url) return [];
   try {
     const { hostname } = new URL(url);
-    return [
-      {
-        protocol: "https" as const,
-        hostname,
-        pathname: "/storage/v1/object/public/avatars/**",
-      },
-    ];
+    return ["avatars", "service-images"].map((bucket) => ({
+      protocol: "https" as const,
+      hostname,
+      pathname: `/storage/v1/object/public/${bucket}/**`,
+    }));
   } catch {
     return [];
   }
 }
 
-// Baseline security headers applied to every response. Kept framework-level
-// (not a nonce-based CSP) so it can't break Next's inline bootstrap/theme
-// scripts; frame-ancestors + nosniff + HSTS cover the highest-impact risks
-// (clickjacking, MIME sniffing, protocol downgrade).
+// Baseline security headers applied to every response. The nonce-based CSP is
+// emitted per request by src/proxy.ts; these static headers cover clickjacking,
+// MIME sniffing, referrer leakage, feature policy and protocol downgrade.
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },

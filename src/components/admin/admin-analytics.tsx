@@ -157,7 +157,10 @@ export function AdminAnalytics({
   );
   const periodValue = Math.round(totalRevenueCents(periodAppointments, requests, services) / 100);
   const startDate = analyticsPeriodStart(today, months);
-  const rangeFormatter = new Intl.DateTimeFormat(locale, { month: "short", year: "numeric" });
+  const rangeFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { month: "short", year: "numeric" }),
+    [locale],
+  );
   const rangeLabel = `${rangeFormatter.format(new Date(`${startDate}T12:00:00`))} – ${rangeFormatter.format(new Date(`${today}T12:00:00`))}`;
   const hasPerformanceData = periodAppointments.length > 0;
 

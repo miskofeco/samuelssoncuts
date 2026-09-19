@@ -18,6 +18,7 @@ export default async function AdminHomePage() {
         requests={data.requests}
         appointments={data.appointments}
         services={data.services}
+        pricingSettings={data.pricingSettings}
       />
       <AdminOverview
         clients={data.clients}

@@ -7,9 +7,11 @@
 //    requests and unaccepted proposals whose start has passed are closed.
 // 2. Client reminders: every confirmed appointment on the NEXT shop-local day
 //    that hasn't been reminded yet gets a reminder email and a reminded_at stamp.
-//    (A narrow "23–25h from now" band would only catch appointments starting
-//    near the cron minute, so most clients never got a reminder.)
+//    The stamp is CLAIMED first (atomic update … where reminded_at is null), so
+//    a retry or an overlapping run can never double-send; a failed send releases
+//    the claim so the next run retries it.
 // 3. Barber agenda: digest of today's confirmed appointments.
+// 4. Housekeeping: expired rate-limit rows are pruned.
 //
 // Vercel Cron schedule: vercel.json → "0 8 * * *"
 
@@ -28,16 +30,53 @@ import {
 } from "@/server/appointment-outcomes";
 import { isAuthorizedCronRequest } from "@/server/cron-auth";
 import { enforceRateLimit } from "@/server/rate-limit";
-import { createNotification } from "@/server/notifications";
+import { createNotifications, type NotificationInput } from "@/server/notifications";
 import { reminderWindowFor } from "@/server/reminder-window";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// The default function budget is too short for a day's worth of sequential
+// email sends; give the daily job room and keep the work batched.
+export const maxDuration = 60;
+
+const SEND_CONCURRENCY = 5;
 
 function termCountLabel(count: number) {
   if (count === 1) return "termín";
   if (count > 1 && count < 5) return "termíny";
   return "termínov";
+}
+
+async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+type Supabase = ReturnType<typeof getSupabaseAdminClient>;
+
+async function lookupNames(supabase: Supabase, clientIds: string[], serviceIds: string[]) {
+  const [profilesResult, servicesResult] = await Promise.all([
+    clientIds.length
+      ? supabase.from("profiles").select("id, email, full_name").in("id", clientIds)
+      : Promise.resolve({ data: [], error: null }),
+    serviceIds.length
+      ? supabase.from("services").select("id, name").in("id", serviceIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (profilesResult.error) throw profilesResult.error;
+  if (servicesResult.error) throw servicesResult.error;
+  return {
+    profiles: new Map((profilesResult.data ?? []).map((row) => [row.id, row])),
+    services: new Map((servicesResult.data ?? []).map((row) => [row.id, row.name])),
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -87,9 +126,6 @@ export async function GET(request: NextRequest) {
   // ---- Client reminders -------------------------------------------------
   const { startIso: windowStart, endIso: windowEnd } = reminderWindowFor(now);
 
-  // Fetch appointments in the reminder window. We use individual profile/service
-  // lookups to avoid TypeScript issues with the generated join types before the
-  // migration is applied in production.
   const { data: appointments, error } = await supabase
     .from("appointments")
     .select("id, starts_at, service_id, client_id")
@@ -100,57 +136,72 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     await reportError("cron-reminders", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Could not load appointments" }, { status: 500 });
   }
 
+  const candidates = (appointments ?? []).filter((appt) => appt.client_id);
   let sent = 0;
-  for (const appt of appointments ?? []) {
-    if (!appt.client_id) continue;
+  let failed = 0;
+  const notifications: NotificationInput[] = [];
 
-    const [{ data: profile }, { data: service }] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("email, full_name")
-        .eq("id", appt.client_id)
-        .single(),
-      supabase
-        .from("services")
-        .select("name")
-        .eq("id", appt.service_id)
-        .single(),
-    ]);
+  if (candidates.length > 0) {
+    const { profiles, services } = await lookupNames(
+      supabase,
+      [...new Set(candidates.map((a) => a.client_id as string))],
+      [...new Set(candidates.map((a) => a.service_id))],
+    );
 
-    if (!profile?.email) continue;
+    await mapLimited(candidates, SEND_CONCURRENCY, async (appt) => {
+      const profile = profiles.get(appt.client_id as string);
+      if (!profile?.email) return;
 
-    const date = dateInShopTimeZone(appt.starts_at);
-    const time = timeInShopTimeZone(appt.starts_at);
+      // Claim first: only the run that flips reminded_at from null sends.
+      const { data: claimed } = await supabase
+        .from("appointments")
+        .update({ reminded_at: new Date().toISOString() })
+        .eq("id", appt.id)
+        .is("reminded_at", null)
+        .select("id")
+        .maybeSingle();
+      if (!claimed) return;
 
-    await sendEmail({
-      to: profile.email,
-      subject: `Pripomienka: termín zajtra o ${time}`,
-      react: AppointmentReminderEmail({
-        clientName: profile.full_name ?? "klient",
-        service: service?.name ?? "",
-        date,
-        time,
-      }),
+      const date = dateInShopTimeZone(appt.starts_at);
+      const time = timeInShopTimeZone(appt.starts_at);
+      const subject = `Pripomienka: termín zajtra o ${time}`;
+
+      const delivered = await sendEmail({
+        to: profile.email,
+        subject,
+        react: AppointmentReminderEmail({
+          clientName: profile.full_name ?? "klient",
+          service: services.get(appt.service_id) ?? "",
+          date,
+          time,
+        }),
+      });
+
+      if (!delivered) {
+        // Release the claim so tomorrow's run (or a manual re-run) retries.
+        failed += 1;
+        await supabase.from("appointments").update({ reminded_at: null }).eq("id", appt.id);
+        return;
+      }
+
+      sent += 1;
+      notifications.push({
+        user_id: appt.client_id,
+        channel: "email",
+        recipient: profile.email,
+        subject,
+        pushUrl: "/client/reservations",
+      });
     });
 
-    // Stamp reminded_at so the cron never double-sends even if it runs twice.
-    await supabase
-      .from("appointments")
-      .update({ reminded_at: new Date().toISOString() })
-      .eq("id", appt.id);
-
-    await createNotification(supabase, {
-      user_id: appt.client_id,
-      channel: "email",
-      recipient: profile.email,
-      subject: `Pripomienka: termín zajtra o ${time}`,
-      pushUrl: "/client/reservations",
-    });
-
-    sent += 1;
+    try {
+      await createNotifications(supabase, notifications);
+    } catch (notifyError) {
+      await reportError("cron-reminder-notifications", notifyError);
+    }
   }
 
   // ---- Barber morning agenda -------------------------------------------
@@ -164,58 +215,67 @@ export async function GET(request: NextRequest) {
       const from = new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString();
       const to = new Date(now.getTime() + 36 * 60 * 60 * 1000).toISOString();
 
-      const { data: todaysAppts } = await supabase
+      const { data: todaysAppts, error: agendaError } = await supabase
         .from("appointments")
         .select("starts_at, service_id, client_id, customer_name")
         .eq("status", "confirmed")
         .gte("starts_at", from)
         .lte("starts_at", to)
         .order("starts_at");
+      if (agendaError) throw agendaError;
 
       const forToday = (todaysAppts ?? []).filter(
         (a) => dateInShopTimeZone(a.starts_at) === todayShop,
       );
+      const { profiles, services } = await lookupNames(
+        supabase,
+        [...new Set(forToday.flatMap((a) => (a.client_id ? [a.client_id] : [])))],
+        [...new Set(forToday.map((a) => a.service_id))],
+      );
 
-      const items: AgendaItem[] = [];
-      for (const appt of forToday) {
-        const [{ data: svc }, { data: prof }] = await Promise.all([
-          supabase.from("services").select("name").eq("id", appt.service_id).single(),
-          appt.client_id
-            ? supabase.from("profiles").select("full_name").eq("id", appt.client_id).single()
-            : Promise.resolve({ data: null }),
-        ]);
-        items.push({
-          time: timeInShopTimeZone(appt.starts_at),
-          service: svc?.name ?? "",
-          customer: prof?.full_name ?? appt.customer_name ?? "Walk-in",
-        });
-      }
+      const items: AgendaItem[] = forToday.map((appt) => ({
+        time: timeInShopTimeZone(appt.starts_at),
+        service: services.get(appt.service_id) ?? "",
+        customer:
+          (appt.client_id ? profiles.get(appt.client_id)?.full_name : null) ??
+          appt.customer_name ??
+          "Walk-in",
+      }));
 
-      await sendEmail({
+      agendaSent = await sendEmail({
         to: barberEmail,
         subject: `Dnes: ${items.length} ${termCountLabel(items.length)}`,
         react: BarberAgendaEmail({ date: todayShop, items }),
       });
-      agendaSent = true;
     }
   } catch (agendaError) {
     // Never let the agenda failure fail the whole cron (reminders already sent).
     await reportError("cron-agenda", agendaError);
   }
 
-  logEvent("cron-reminders", {
+  // ---- Housekeeping -------------------------------------------------------
+  // rate_limits rows are never read again once their window closed.
+  let prunedRateLimits = 0;
+  try {
+    const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    const { count } = await supabase
+      .from("rate_limits")
+      .delete({ count: "exact" })
+      .lt("reset_at", cutoff);
+    prunedRateLimits = count ?? 0;
+  } catch (pruneError) {
+    await reportError("cron-prune-rate-limits", pruneError);
+  }
+
+  const summary = {
     sent,
+    failed,
     agendaSent,
     completed,
     declinedRequests,
     expiredProposals,
-  });
-  return NextResponse.json({
-    ok: true,
-    sent,
-    agendaSent,
-    completed,
-    declinedRequests,
-    expiredProposals,
-  });
+    prunedRateLimits,
+  };
+  logEvent("cron-reminders", summary);
+  return NextResponse.json({ ok: true, ...summary });
 }

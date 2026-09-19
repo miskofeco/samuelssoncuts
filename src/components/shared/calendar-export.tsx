@@ -1,11 +1,14 @@
 "use client";
 
-import { AppleIcon, Copy01Icon, Download04Icon, Link01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
-import { useState } from "react";
+import { AppleIcon, Copy01Icon, Download04Icon, Link01Icon, Refresh01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { useState, useTransition } from "react";
 
+import { rotateCalendarTokenAction } from "@/app/actions";
 import { Button, buttonClass } from "@/components/shared/button";
+import { Feedback } from "@/components/shared/feedback";
 import { Icon } from "@/components/shared/icon";
 import { Modal } from "@/components/shared/modal";
+import type { ActionResult } from "@/domain/types";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useT } from "@/i18n/provider";
@@ -17,6 +20,21 @@ export function CalendarExport({ feedUrl }: { feedUrl?: string }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [rotating, startRotate] = useTransition();
+  const [rotateResult, setRotateResult] = useState<ActionResult | null>(null);
+
+  // The feed URL is a bearer secret; a leaked one can only be revoked by
+  // rotating. The action revalidates the page, so the new URL flows in as a prop.
+  function rotate() {
+    setRotateResult(null);
+    startRotate(async () => {
+      try {
+        setRotateResult(await rotateCalendarTokenAction());
+      } catch {
+        setRotateResult({ ok: false, error: t.common.somethingWentWrong });
+      }
+    });
+  }
 
   // Apple Calendar subscribes via the webcal:// scheme.
   const webcalUrl = feedUrl?.replace(/^https?:\/\//, "webcal://");
@@ -91,6 +109,19 @@ export function CalendarExport({ feedUrl }: { feedUrl?: string }) {
                     {t.admin.exportSubscribeApple}
                   </a>
                 ) : null}
+                <p className="mt-4 text-xs leading-5 text-muted-foreground">{t.admin.exportRotateHint}</p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={rotate}
+                  loading={rotating}
+                  className="mt-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Icon icon={Refresh01Icon} className="size-4" strokeWidth={2} />
+                  {t.admin.exportRotate}
+                </Button>
+                <Feedback result={rotateResult} className="mt-3" />
               </section>
             </>
           ) : null}

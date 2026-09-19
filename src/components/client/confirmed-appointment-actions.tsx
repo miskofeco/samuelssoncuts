@@ -130,7 +130,9 @@ export function ConfirmedAppointmentActions({
         cancelLabel={t.client.keepAppointment}
         loading={pending}
         onConfirm={cancel}
-      />
+      >
+        <Feedback result={feedback && !feedback.ok ? feedback : null} />
+      </ConfirmDialog>
 
       <Modal
         open={rescheduling}

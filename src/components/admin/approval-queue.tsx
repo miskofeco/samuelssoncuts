@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
 import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
+import { isReadyForApproval } from "@/domain/approval";
 import type { ActionResult, ClientProfile } from "@/domain/types";
 import { useT } from "@/i18n/provider";
 
@@ -35,7 +36,7 @@ export function ApprovalQueue({ clients }: { clients: ClientProfile[] }) {
   const [rejecting, setRejecting] = useState<ClientProfile | null>(null);
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
 
-  const pending = clients.filter((client) => client.emailConfirmed);
+  const pending = clients.filter(isReadyForApproval);
   const awaitingVerification = clients.length - pending.length;
 
   function run(action: (id: string) => Promise<ActionResult>, id: string) {
@@ -169,7 +170,9 @@ export function ApprovalQueue({ clients }: { clients: ClientProfile[] }) {
         onConfirm={() => {
           if (rejecting) run(rejectClientAction, rejecting.id);
         }}
-      />
+      >
+        <Feedback result={feedback && !feedback.ok ? feedback : null} />
+      </ConfirmDialog>
     </Card>
   );
 }

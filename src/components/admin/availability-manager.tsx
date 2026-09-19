@@ -57,21 +57,29 @@ export function AvailabilityManager({
     if (invalidRange) return;
     setFeedback(null);
     startTransition(async () => {
-      const result = await blockDateAction({
-        start,
-        end: sliceMode ? start : end,
-        reason: reason || undefined,
-        ...(sliceMode ? { startTime, endTime } : {}),
-      });
-      setFeedback(result);
-      if (result.ok) setReason("");
+      try {
+        const result = await blockDateAction({
+          start,
+          end: sliceMode ? start : end,
+          reason: reason || undefined,
+          ...(sliceMode ? { startTime, endTime } : {}),
+        });
+        setFeedback(result);
+        if (result.ok) setReason("");
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
   }
 
   function unblock(id: string) {
     setFeedback(null);
     startTransition(async () => {
-      setFeedback(await unblockDateAction(id));
+      try {
+        setFeedback(await unblockDateAction(id));
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
+      }
     });
   }
 

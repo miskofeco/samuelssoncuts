@@ -106,17 +106,22 @@ export function PasswordField({
           className="pr-11"
           {...props}
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => setVisible((v) => !v)}
-          aria-label={visible ? t.common.hidePassword : t.common.showPassword}
-          aria-pressed={visible}
-          className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground"
-        >
-          <Icon icon={visible ? ViewOffSlashIcon : ViewIcon} />
-        </Button>
+        {/* The wrapper owns the vertical centring: the button's own press
+            transform (active:translate-y-px) would otherwise replace it and
+            make the toggle jump on click. */}
+        <span className="absolute inset-y-0 right-1 flex items-center">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setVisible((v) => !v)}
+            aria-label={visible ? t.common.hidePassword : t.common.showPassword}
+            aria-pressed={visible}
+            className="text-muted-foreground"
+          >
+            <Icon icon={visible ? ViewOffSlashIcon : ViewIcon} />
+          </Button>
+        </span>
       </div>
     </FieldShell>
   );

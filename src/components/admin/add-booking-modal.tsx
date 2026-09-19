@@ -122,18 +122,22 @@ function BookingForm({
     event.preventDefault();
     setFeedback(null);
     startTransition(async () => {
-      const result = await createAdminBookingAction({
-        clientId: mode === "client" ? clientId || undefined : undefined,
-        customerName: mode === "walkin" ? customerName.trim() || undefined : undefined,
-        serviceId,
-        date,
-        time,
-        note: note.trim() || undefined,
-      });
-      setFeedback(result);
-      if (result.ok) {
-        toast.success(result.message ?? t.feedback.bookingAdded);
-        onClose();
+      try {
+        const result = await createAdminBookingAction({
+          clientId: mode === "client" ? clientId || undefined : undefined,
+          customerName: mode === "walkin" ? customerName.trim() || undefined : undefined,
+          serviceId,
+          date,
+          time,
+          note: note.trim() || undefined,
+        });
+        setFeedback(result);
+        if (result.ok) {
+          toast.success(result.message ?? t.feedback.bookingAdded);
+          onClose();
+        }
+      } catch {
+        setFeedback({ ok: false, error: t.common.somethingWentWrong });
       }
     });
   }
