@@ -1,24 +1,16 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { ATTENTION_COUNTS_EVENT } from "@/hooks/use-live-attention";
 
 // Tables whose changes affect the admin sidebar "needs attention" badges.
 const WATCHED_TABLES = ["booking_requests", "profiles"] as const;
 
-// Keep the admin sidebar badge counts fresh. The counts themselves are computed
-// on the server (loadAttentionCounts) and passed down as props; they already
-// update after the current admin's own actions because those server actions call
-// revalidatePath("/admin", "layout").
-//
-// This hook covers the OTHER case: a booking request or profile changing in the
-// background (a new request comes in, or another admin/device acts). It listens
-// for Postgres changes on the relevant tables and calls router.refresh() to
-// re-run the server components, which recomputes the counts. Refreshes are
-// throttled so a burst of changes triggers at most one refresh per interval.
+// Background changes update just the navigation counts. Refreshing the whole
+// route here would re-run expensive calendar/analytics loaders and disturb an
+// admin mid-edit. Server actions still revalidate their affected pages.
 export function useAttentionRefresh() {
-  const router = useRouter();
   const channelId = useId();
   const channelName = `admin-attention-${channelId.replaceAll(":", "")}`;
   const lastRefresh = useRef(0);
@@ -27,13 +19,30 @@ export function useAttentionRefresh() {
   useEffect(() => {
     const supabase = createClient();
     const MIN_INTERVAL_MS = 1500;
+    let controller: AbortController | null = null;
+
+    async function refreshCounts() {
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const response = await fetch("/api/admin/attention", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const counts = await response.json();
+        window.dispatchEvent(new CustomEvent(ATTENTION_COUNTS_EVENT, { detail: counts }));
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
 
     function scheduleRefresh() {
       const now = Date.now();
       const elapsed = now - lastRefresh.current;
       if (elapsed >= MIN_INTERVAL_MS) {
         lastRefresh.current = now;
-        router.refresh();
+        void refreshCounts();
         return;
       }
       // Coalesce rapid changes into a single trailing refresh.
@@ -41,7 +50,7 @@ export function useAttentionRefresh() {
       pending.current = setTimeout(() => {
         pending.current = null;
         lastRefresh.current = Date.now();
-        router.refresh();
+        void refreshCounts();
       }, MIN_INTERVAL_MS - elapsed);
     }
 
@@ -55,9 +64,18 @@ export function useAttentionRefresh() {
     }
     channel.subscribe();
 
+    function onVisibility() {
+      if (document.visibilityState === "visible") scheduleRefresh();
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", scheduleRefresh);
+
     return () => {
       if (pending.current) clearTimeout(pending.current);
+      controller?.abort();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", scheduleRefresh);
       supabase.removeChannel(channel);
     };
-  }, [router, channelName]);
+  }, [channelName]);
 }

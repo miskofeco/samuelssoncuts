@@ -17,7 +17,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getBarberEmail } from "@/lib/email";
 import { getCronSecret } from "@/lib/env";
 import { logEvent, reportError } from "@/lib/observability";
 import { dateInShopTimeZone, timeInShopTimeZone } from "@/lib/time-zone";
@@ -32,6 +31,7 @@ import { isAuthorizedCronRequest } from "@/server/cron-auth";
 import { enforceRateLimit } from "@/server/rate-limit";
 import { createNotifications, type NotificationInput } from "@/server/notifications";
 import { reminderWindowFor } from "@/server/reminder-window";
+import { getShopBarberEmail, getShopBarberId } from "@/server/shop-barber";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -209,7 +209,7 @@ export async function GET(request: NextRequest) {
   // the shop time zone, so query a generous UTC window and filter by shop-date.
   let agendaSent = false;
   try {
-    const barberEmail = getBarberEmail();
+    const barberEmail = await getShopBarberEmail();
     if (barberEmail) {
       const todayShop = dateInShopTimeZone(now.toISOString());
       const from = new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString();
@@ -218,6 +218,7 @@ export async function GET(request: NextRequest) {
       const { data: todaysAppts, error: agendaError } = await supabase
         .from("appointments")
         .select("starts_at, service_id, client_id, customer_name")
+        .eq("barber_id", await getShopBarberId())
         .eq("status", "confirmed")
         .gte("starts_at", from)
         .lte("starts_at", to)

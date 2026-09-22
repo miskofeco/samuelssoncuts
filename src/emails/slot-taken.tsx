@@ -6,7 +6,7 @@ import { getSiteUrl } from "@/lib/env";
 export function SlotTakenEmail({ clientName }: { clientName: string }) {
   return (
     <EmailLayout preview="Požadovaný termín už nie je dostupný" accent="danger">
-      <EmailHeading>Termín už nie je dostupný</EmailHeading>
+      <EmailHeading icon="alert" accent="danger">Termín už nie je dostupný</EmailHeading>
       <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
         Požadovaný čas bol práve potvrdený pre inú rezerváciu. Vyberte si,

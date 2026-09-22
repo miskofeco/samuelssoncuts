@@ -25,7 +25,7 @@ test("appointment RLS no longer exposes all raw appointment rows to every client
   assert.match(migrations, /create policy "appointments own or admin read"/);
   assert.match(migrations, /client_id = auth\.uid\(\) or public\.is_admin\(\)/);
   assert.match(migrations, /confirmed_appointment_slots/);
-  assert.match(dashboardData, /rpc\("confirmed_appointment_slots"/);
+  assert.match(dashboardData, /rpc\("confirmed_appointment_slots_window"/);
   assert.doesNotMatch(bookingDataBody, /from\("appointments"\)\.select\("\*"\)/);
 });
 

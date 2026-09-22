@@ -34,7 +34,7 @@ test("sidebar badge counts are computed server-side and refresh via revalidatePa
   // The counts come from loadAttentionCounts() (server) and are passed to the
   // sidebar as props, so they update immediately after an admin action (which
   // calls revalidatePath) — no manual reload needed. The realtime hook only
-  // nudges a router.refresh() for background changes by other admins/clients.
+  // fetches only the badge counts for background changes by other users.
   const dashboardData = readFileSync("src/server/dashboard-data.ts", "utf8");
   const adminLayout = readFileSync("src/app/admin/layout.tsx", "utf8");
   const appShell = readFileSync("src/components/layout/app-shell.tsx", "utf8");
@@ -44,7 +44,8 @@ test("sidebar badge counts are computed server-side and refresh via revalidatePa
   assert.match(appShell, /requests: attention\?\.requests \?\? 0/);
   assert.match(appShell, /approvals: attention\?\.approvals \?\? 0/);
   assert.match(badgeHook, /export function useAttentionRefresh/);
-  assert.match(badgeHook, /router\.refresh\(\)/);
+  assert.match(badgeHook, /fetch\("\/api\/admin\/attention"/);
+  assert.doesNotMatch(badgeHook, /router\.refresh\(\)/);
 });
 
 test("service image upload failure keeps the modal open and surfaces the error", () => {

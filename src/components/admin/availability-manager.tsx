@@ -182,8 +182,9 @@ export function AvailabilityManager({
             ]}
             className="sm:max-w-sm"
           />
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className={sliceMode ? "grid min-w-0 gap-3" : "grid min-w-0 gap-3 sm:grid-cols-2"}>
             <DateField
+              className="min-w-0"
               label={t.admin.from}
               value={start}
               min={addDays(0)}
@@ -193,8 +194,9 @@ export function AvailabilityManager({
               }}
             />
             {sliceMode ? (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                 <Field
+                  className="min-w-0"
                   type="time"
                   label={t.admin.startTime}
                   value={startTime}
@@ -202,6 +204,7 @@ export function AvailabilityManager({
                   onChange={(event) => setStartTime(event.target.value)}
                 />
                 <Field
+                  className="min-w-0"
                   type="time"
                   label={t.admin.endTime}
                   value={endTime}

@@ -1,10 +1,12 @@
 import "server-only";
 
+import { after } from "next/server";
 import webpush from "web-push";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/database.types";
-import { getBarberEmail, getSiteUrl, getWebPushEnv } from "@/lib/env";
+import { getSiteUrl, getWebPushEnv } from "@/lib/env";
+import { getShopBarberEmail } from "@/server/shop-barber";
 import { reportError } from "@/lib/observability";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { derivePushNotification } from "@/server/push-payloads";
@@ -163,30 +165,32 @@ export async function sendPushToUser(
     }),
   );
 
-  for (const subscription of subscriptions) {
-    try {
-      await webpush.sendNotification(
-        {
-          endpoint: subscription.endpoint,
-          keys: {
-            p256dh: subscription.p256dh,
-            auth: subscription.auth,
+  for (let index = 0; index < subscriptions.length; index += 4) {
+    await Promise.all(subscriptions.slice(index, index + 4).map(async (subscription) => {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: subscription.endpoint,
+            keys: {
+              p256dh: subscription.p256dh,
+              auth: subscription.auth,
+            },
           },
-        },
-        payload,
-        {
-          TTL: 60 * 60 * 24,
-          urgency: "normal",
-        },
-      );
-      await markPushSuccess(subscription);
-    } catch (error) {
-      await markPushFailure(subscription, error);
-      await reportError("push-notification", error, {
-        userId,
-        endpoint: subscription.endpoint.slice(0, 80),
-      });
-    }
+          payload,
+          {
+            TTL: 60 * 60 * 24,
+            urgency: "normal",
+          },
+        );
+        await markPushSuccess(subscription);
+      } catch (error) {
+        await markPushFailure(subscription, error);
+        await reportError("push-notification", error, {
+          userId,
+          endpoint: subscription.endpoint.slice(0, 80),
+        });
+      }
+    }));
   }
 }
 
@@ -196,13 +200,16 @@ async function sendPushToUsers(
   pushUrl?: string,
 ) {
   const uniqueIds = [...new Set((userIds ?? []).filter(Boolean))];
-  for (const userId of uniqueIds) {
-    await sendPushToUser(userId, notification, { url: pushUrl });
+  for (let index = 0; index < uniqueIds.length; index += 4) {
+    await Promise.all(uniqueIds.slice(index, index + 4).map((userId) =>
+      sendPushToUser(userId, notification, { url: pushUrl }),
+    ));
   }
 }
 
 function toNotificationRow(notification: NotificationInput): NotificationInsert {
   const { pushUserIds: _pushUserIds, pushUrl, ...row } = notification;
+  void _pushUserIds;
   return { ...row, action_url: pushUrl ?? row.action_url ?? null };
 }
 
@@ -219,7 +226,7 @@ export async function createNotification(
   }
 
   const fallbackUserIds = notification.user_id ? [notification.user_id] : [];
-  await sendPushToUsers(pushUserIds ?? fallbackUserIds, notification, pushUrl);
+  after(() => sendPushToUsers(pushUserIds ?? fallbackUserIds, notification, pushUrl));
 }
 
 export async function createNotifications(
@@ -235,10 +242,12 @@ export async function createNotifications(
     return;
   }
 
-  for (const notification of notifications) {
-    const fallbackUserIds = notification.user_id ? [notification.user_id] : [];
-    await sendPushToUsers(notification.pushUserIds ?? fallbackUserIds, notification, notification.pushUrl);
-  }
+  after(async () => {
+    for (const notification of notifications) {
+      const fallbackUserIds = notification.user_id ? [notification.user_id] : [];
+      await sendPushToUsers(notification.pushUserIds ?? fallbackUserIds, notification, notification.pushUrl);
+    }
+  });
 }
 
 export async function createAdminNotification(
@@ -252,7 +261,7 @@ export async function createAdminNotification(
   await createNotification(supabase, {
     ...notification,
     user_id: null,
-    recipient: notification.recipient ?? getBarberEmail(),
+    recipient: notification.recipient ?? await getShopBarberEmail(),
     pushUserIds,
     pushUrl: notification.pushUrl ?? "/admin",
   });

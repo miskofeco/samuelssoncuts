@@ -68,6 +68,7 @@ test("email backgrounds use only white or neutral gray surfaces", () => {
       "barber-agenda",
       "booking-received",
       "booking-request",
+      "booking-request-declined",
       "client-responded",
       "slot-taken",
     ].map((name) => `src/emails/${name}.tsx`),
@@ -90,6 +91,7 @@ test("transactional email templates are localized to Slovak", () => {
     "src/emails/barber-agenda.tsx",
     "src/emails/booking-received.tsx",
     "src/emails/booking-request.tsx",
+    "src/emails/booking-request-declined.tsx",
     "src/emails/client-responded.tsx",
     "src/emails/slot-taken.tsx",
   ].map((file) => readFileSync(file, "utf8")).join("\n");
@@ -103,16 +105,46 @@ test("transactional email templates are localized to Slovak", () => {
 
 test("confirmed appointment email includes Google and Apple calendar actions", () => {
   const source = readFileSync("src/emails/appointment-confirmed.tsx", "utf8");
+  const emailLayout = readFileSync("src/emails/layout.tsx", "utf8");
   const actions = readFileSync("src/app/actions.ts", "utf8");
 
   assert.match(source, /buildCalendarLinks/);
-  assert.match(source, /Pridať do Google Kalendára|Pridat do Google Kalendara/);
-  assert.match(source, /Pridať do Apple Kalendára|Pridat do Apple Kalendara/);
+  assert.match(source, /EmailCalendarActions/);
+  assert.match(emailLayout, /Google Kalendár|Google Kalendar/);
+  assert.match(emailLayout, /Apple Kalendár|Apple Kalendar/);
+  assert.match(emailLayout, /icon="google"/);
+  assert.match(emailLayout, /icon="apple"/);
   assert.match(source, /startIso/);
   assert.match(source, /endIso/);
   assert.match(actions, /appointmentId/);
   assert.match(actions, /startIso: request\.requested_start/);
   assert.match(actions, /endIso: request\.requested_end/);
+});
+
+test("email design system uses email-safe icon images and structured appointment cards", () => {
+  assert.match(layout, /\/email-icons\/\$\{name\}\.png/);
+  assert.match(layout, /export function EmailAppointmentCard/);
+  assert.match(layout, /@react-email\/components/);
+
+  for (const icon of ["apple", "google", "calendar", "clock", "scissors", "tick"]) {
+    assert.equal(existsSync(`public/email-icons/${icon}.png`), true);
+  }
+});
+
+test("email status icons keep a fixed square and calendar providers use branded buttons", () => {
+  const heading = layout.slice(
+    layout.indexOf("export function EmailHeading"),
+    layout.indexOf("export function EmailParagraph"),
+  );
+  const calendarActions = layout.slice(layout.indexOf("export function EmailCalendarActions"));
+
+  assert.match(heading, /width=\{48\}/);
+  assert.match(heading, /height=\{48\}/);
+  assert.doesNotMatch(heading, /rounded-xl p-3/);
+  assert.match(calendarActions, /icon="google" variant="secondary"/);
+  assert.match(calendarActions, /icon="apple" variant="apple"/);
+  assert.match(layout, /backgroundColor: apple \? "#000000"/);
+  assert.match(layout, /color: apple \? "#ffffff"/);
 });
 
 test("calendar link helpers build Google and Apple-compatible URLs", () => {

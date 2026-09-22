@@ -43,7 +43,7 @@ export async function NotificationList({
         {notifications.length === 0 ? (
           <EmptyState icon={<Icon icon={Notification03Icon} />} title={t.client.noNotifications} />
         ) : (
-          <ul className="divide-y">
+          <ul className="space-y-2">
             {notifications.map((notification) => {
               const unread = !notification.read;
               const channelIcon = notification.channel === "SMS" ? Message01Icon : Mail01Icon;
@@ -51,7 +51,7 @@ export async function NotificationList({
                 <li
                   key={notification.id}
                   className={cn(
-                    "-mx-2 flex gap-3 rounded-xl px-2 py-3 sm:-mx-3 sm:px-3",
+                    "flex min-w-0 gap-3 rounded-xl px-2 py-3 sm:px-3",
                     unread && "bg-sky-500/6 dark:bg-sky-400/8",
                   )}
                 >
@@ -75,7 +75,7 @@ export async function NotificationList({
                     <div className="flex items-start justify-between gap-3">
                       <p
                         className={cn(
-                          "min-w-0 text-sm text-foreground",
+                          "min-w-0 break-words text-sm text-foreground",
                           unread ? "font-semibold" : "font-medium",
                         )}
                       >
@@ -86,7 +86,7 @@ export async function NotificationList({
                       </span>
                     </div>
                     {notification.body ? (
-                      <p className="mt-1 text-sm whitespace-pre-line text-muted-foreground">
+                      <p className="mt-1 break-words text-sm whitespace-pre-line text-muted-foreground">
                         {notification.body}
                       </p>
                     ) : null}
@@ -101,7 +101,7 @@ export async function NotificationList({
                       {notification.actionUrl?.startsWith("/client/reservations") ? (
                         <Link
                           href={notification.actionUrl}
-                          className="inline-flex min-h-8 items-center gap-1 rounded-lg px-1.5 text-xs font-semibold text-sky-700 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-sky-400"
+                          className="inline-flex min-h-11 items-center gap-1 rounded-lg px-1.5 text-xs font-semibold text-sky-700 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 sm:min-h-8 dark:text-sky-400"
                         >
                           {t.client.viewReservations}
                           <Icon icon={ArrowRight01Icon} className="size-3.5" strokeWidth={2} />

@@ -135,18 +135,20 @@ export function BusinessHoursEditor({
 
                 {/* Time pickers */}
                 {!day.closed ? (
-                  <div className="grid flex-1 grid-cols-[1fr_auto_1fr] items-start gap-2 sm:max-w-sm sm:ml-auto">
+                  <div className="grid min-w-0 flex-1 grid-cols-1 items-start gap-2 lg:ml-auto lg:max-w-sm lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
                     <Field
+                      className="min-w-0"
                       label={t.admin.from}
                       type="time"
                       step={1800}
                       value={day.opensAt}
                       onChange={(e) => update(day.weekday, { opensAt: e.target.value })}
                     />
-                    <span aria-hidden className="mt-[2.25rem] text-sm text-muted-foreground">
+                    <span aria-hidden className="mt-[2.25rem] hidden text-sm text-muted-foreground lg:block">
                       –
                     </span>
                     <Field
+                      className="min-w-0"
                       label={t.admin.to}
                       type="time"
                       step={1800}

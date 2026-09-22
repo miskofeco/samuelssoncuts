@@ -9,10 +9,10 @@ import { loadBlockedDays, loadBusinessHours } from "@/server/dashboard-data";
 export const dynamic = "force-dynamic";
 
 export default async function AdminAvailabilityPage() {
-  const admin = await requireAdmin();
+  await requireAdmin();
   const [{ ranges, dates }, businessHours, lang, t] = await Promise.all([
     loadBlockedDays(),
-    loadBusinessHours(admin.id),
+    loadBusinessHours(),
     getLang(),
     getDict(),
   ]);

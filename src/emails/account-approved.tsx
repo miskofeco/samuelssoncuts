@@ -5,7 +5,7 @@ import { getSiteUrl } from "@/lib/env";
 export function AccountApprovedEmail({ clientName }: { clientName: string }) {
   return (
     <EmailLayout preview="Váš účet v Samuelsson Cuts bol schválený" accent="positive">
-      <EmailHeading>Účet je schválený</EmailHeading>
+      <EmailHeading icon="user-check" accent="positive">Účet je schválený</EmailHeading>
       <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
         Váš účet v Samuelsson Cuts je aktívny. Odteraz si môžete rezervovať

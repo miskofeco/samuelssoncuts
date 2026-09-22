@@ -35,6 +35,7 @@ import {
 import { useT } from "@/i18n/provider";
 import type { AuthProfile } from "@/server/auth";
 import { cn } from "@/lib/classnames";
+import { useLiveAttention } from "@/hooks/use-live-attention";
 
 import { ProfileBadges } from "./account-panel";
 import { Tooltip } from "@/components/shared/tooltip";
@@ -57,6 +58,7 @@ export function AppSidebar({
   counts: NavCounts;
 }) {
   const pathname = usePathname();
+  const liveCounts = useLiveAttention(counts);
   const t = useT();
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
@@ -98,7 +100,7 @@ export function AppSidebar({
               <SidebarMenu className="gap-1">
                 {section.items.map((item) => {
                   const active = isNavActive(pathname, item.href);
-                  const count = badgeFor(item, counts);
+                  const count = badgeFor(item, liveCounts);
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton

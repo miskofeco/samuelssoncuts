@@ -53,10 +53,17 @@ export function AuthEmail({
 }) {
   const copy = COPY[(kind as AuthEmailKind)] ?? COPY.email;
   const accent = kind === "recovery" ? "danger" : "brand";
+  const icon = kind === "recovery"
+    ? "key"
+    : kind === "magiclink"
+      ? "lock"
+      : kind === "email_change"
+        ? "refresh"
+        : "shield";
 
   return (
     <EmailLayout preview={copy.preview} accent={accent}>
-      <EmailHeading>{copy.heading}</EmailHeading>
+      <EmailHeading icon={icon} accent={accent}>{copy.heading}</EmailHeading>
       <EmailParagraph>{copy.body}</EmailParagraph>
       <EmailButton href={confirmUrl} accent={accent}>
         {copy.cta}

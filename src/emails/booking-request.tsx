@@ -1,5 +1,5 @@
 // Sent to the barber when a client submits a new booking request.
-import { EmailButton, EmailDetail, EmailDetails, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
+import { EmailAppointmentCard, EmailButton, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
 import { formatEmailDate } from "./date";
 import { getSiteUrl } from "@/lib/env";
 
@@ -20,15 +20,11 @@ export function BookingRequestEmail({
 
   return (
     <EmailLayout preview={`${clientName} žiada termín ${formattedDate} o ${time}`}>
-      <EmailHeading>Nová rezervácia</EmailHeading>
+      <EmailHeading icon="inbox">Nová rezervácia</EmailHeading>
       <EmailParagraph>
         <strong>{clientName}</strong> poslal žiadosť o termín.
       </EmailParagraph>
-      <EmailDetails>
-        <EmailDetail label="Služba" value={service} />
-        <EmailDetail label="Dátum" value={formattedDate} />
-        <EmailDetail label="Čas" value={time} />
-      </EmailDetails>
+      <EmailAppointmentCard service={service} date={formattedDate} time={time} />
       {note ? <EmailNote>{note}</EmailNote> : null}
       <EmailButton href={`${getSiteUrl()}/admin/requests`}>
         Otvoriť žiadosti

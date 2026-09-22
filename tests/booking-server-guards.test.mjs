@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   isSlotInsideBusinessHours,
   slotOverlapsRange,
-} from "../src/server/booking-guards.ts";
+} from "../src/domain/booking-guards.ts";
 
 test("booking guard accepts slots fully contained inside open business hours", () => {
   assert.equal(

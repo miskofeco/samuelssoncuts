@@ -1,5 +1,5 @@
 // Sent ~24 hours before a confirmed appointment.
-import { EmailButton, EmailDetail, EmailDetails, EmailHeading, EmailLayout, EmailParagraph } from "./layout";
+import { EmailAppointmentCard, EmailButton, EmailHeading, EmailLayout, EmailParagraph } from "./layout";
 import { formatEmailDate } from "./date";
 import { getSiteUrl } from "@/lib/env";
 
@@ -18,16 +18,12 @@ export function AppointmentReminderEmail({
 
   return (
     <EmailLayout preview={`Pripomienka: termín zajtra o ${time}`}>
-      <EmailHeading>Pripomienka termínu</EmailHeading>
+      <EmailHeading icon="notification">Pripomienka termínu</EmailHeading>
       <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
         Pripomíname váš termín, ktorý máte naplánovaný na zajtra.
       </EmailParagraph>
-      <EmailDetails>
-        <EmailDetail label="Služba" value={service} />
-        <EmailDetail label="Dátum" value={formattedDate} />
-        <EmailDetail label="Čas" value={time} />
-      </EmailDetails>
+      <EmailAppointmentCard service={service} date={formattedDate} time={time} />
       <EmailButton href={`${getSiteUrl()}/client/reservations`}>
         Zobraziť rezervácie
       </EmailButton>

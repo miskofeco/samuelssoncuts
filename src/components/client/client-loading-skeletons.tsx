@@ -25,7 +25,7 @@ export function ClientOverviewSkeleton() {
     <LoadingPage>
       <SkeletonStatGrid />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.6fr)]">
-        <SkeletonCard className="min-h-56 bg-emerald-600/20">
+        <SkeletonCard className="min-h-56">
           <Skeleton className="h-3 w-32" />
           <Skeleton className="mt-4 h-9 w-56 max-w-full" />
           <Skeleton className="mt-2 h-5 w-72 max-w-full" />

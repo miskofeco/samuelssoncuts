@@ -28,6 +28,7 @@ import { SelectField, TextAreaField } from "@/components/shared/form";
 import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { requiresAdminRequestAction } from "@/domain/request-actionability";
 import {
   addDays,
   dayCapacity,
@@ -108,7 +109,7 @@ export function ProposalComposer({
   const service = serviceById(request.serviceId, services);
   const tone = statusTone[request.status];
   const label = statusLabel(t, request.status);
-  const canPropose = request.status === "pending" || request.status === "declined";
+  const canPropose = requiresAdminRequestAction(request.status);
   // The client picked an exact slot (new flow) and it's awaiting confirmation.
   const hasChosenSlot = Boolean(request.requestedDate && request.requestedTime);
   const hasDetails =
@@ -526,11 +527,7 @@ export function ProposalComposer({
                     loading={pending}
                     className="mt-4 w-full sm:w-auto"
                   >
-                    {pending
-                      ? t.common.sending
-                      : request.status === "declined"
-                        ? t.admin.reproposeAt(formatDay(date, locale), time)
-                        : t.admin.proposeAt(formatDay(date, locale), time)}
+                    {pending ? t.common.sending : t.admin.proposeAt(formatDay(date, locale), time)}
                   </Button>
                 </CollapsibleContent>
               </Collapsible>

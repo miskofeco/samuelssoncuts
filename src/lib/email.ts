@@ -11,8 +11,9 @@
 import "server-only";
 
 import { Resend } from "resend";
-import { getBarberEmail, getEmailFrom, getResendApiKey } from "@/lib/env";
+import { getEmailFrom, getResendApiKey } from "@/lib/env";
 import { reportError } from "@/lib/observability";
+import { getShopBarberEmail } from "@/server/shop-barber";
 import type { ReactElement } from "react";
 
 export type EmailPayload = {
@@ -44,7 +45,7 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
   try {
     const { error } = await resend.emails.send({
       from: getEmailFrom(),
-      replyTo: getBarberEmail(),
+      replyTo: await getShopBarberEmail(),
       to: payload.to,
       subject: payload.subject,
       react: payload.react,
@@ -59,6 +60,3 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
     return false;
   }
 }
-
-// Convenience re-export so callers don't need a separate import.
-export { getBarberEmail };

@@ -1,17 +1,11 @@
 import type { createClient } from "@/lib/supabase/server";
+import { isSlotInsideBusinessHours, type BusinessHoursWindow } from "@/domain/booking-guards";
+import { getShopBarberId } from "@/server/shop-barber";
+
+export { isSlotInsideBusinessHours, slotOverlapsRange } from "@/domain/booking-guards";
+export type { BusinessHoursWindow, TimeRangeRow } from "@/domain/booking-guards";
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
-
-export type BusinessHoursWindow = {
-  closed: boolean;
-  opensAt: string;
-  closesAt: string;
-};
-
-export type TimeRangeRow = {
-  starts_at: string;
-  ends_at: string;
-};
 
 const DEFAULT_BUSINESS_HOURS: BusinessHoursWindow = {
   closed: false,
@@ -23,34 +17,6 @@ function weekdayForDate(date: string) {
   return new Date(`${date}T12:00:00`).getDay();
 }
 
-function minutesFromClock(value: string) {
-  const [hours = "0", minutes = "0"] = value.slice(0, 5).split(":");
-  return Number(hours) * 60 + Number(minutes);
-}
-
-export function isSlotInsideBusinessHours(
-  window: BusinessHoursWindow,
-  startTime: string,
-  durationMinutes: number,
-) {
-  if (window.closed) return false;
-
-  const opens = minutesFromClock(window.opensAt);
-  const closes = minutesFromClock(window.closesAt);
-  const start = minutesFromClock(startTime);
-  const end = start + durationMinutes;
-
-  return closes > opens && start >= opens && end <= closes;
-}
-
-export function slotOverlapsRange(startIso: string, endIso: string, range: TimeRangeRow) {
-  const startMs = new Date(startIso).getTime();
-  const endMs = new Date(endIso).getTime();
-  const rangeStartMs = new Date(range.starts_at).getTime();
-  const rangeEndMs = new Date(range.ends_at).getTime();
-
-  return startMs < rangeEndMs && rangeStartMs < endMs;
-}
 
 async function loadBusinessHoursWindow(
   supabase: SupabaseClient,
@@ -162,35 +128,33 @@ export async function guardSlot(
   supabase: SupabaseClient,
   input: SlotGuardInput,
 ): Promise<SlotGuardResult> {
-  if (
-    !(await isSlotInsideConfiguredBusinessHours(supabase, {
-      barberId: input.barberId,
+  const barberId = input.barberId ?? await getShopBarberId();
+  const [insideHours, blocked, conflict] = await Promise.all([
+    isSlotInsideConfiguredBusinessHours(supabase, {
+      barberId,
       date: input.date,
       time: input.time,
       durationMinutes: input.durationMinutes,
-    }))
-  ) {
-    return { ok: false, reason: "outside-hours" };
-  }
-
-  if (
-    await hasBlockedTimeOverlap(supabase, {
-      barberId: input.barberId,
+    }),
+    hasBlockedTimeOverlap(supabase, {
+      barberId,
       start: input.start,
       end: input.end,
-    })
-  ) {
-    return { ok: false, reason: "blocked" };
-  }
-
-  if (
-    await hasConfirmedAppointmentOverlap(supabase, {
-      barberId: input.barberId,
+    }),
+    hasConfirmedAppointmentOverlap(supabase, {
+      barberId,
       start: input.start,
       end: input.end,
       excludeAppointmentId: input.excludeAppointmentId,
-    })
-  ) {
+    }),
+  ]);
+  if (!insideHours) {
+    return { ok: false, reason: "outside-hours" };
+  }
+  if (blocked) {
+    return { ok: false, reason: "blocked" };
+  }
+  if (conflict) {
     return { ok: false, reason: "conflict" };
   }
 

@@ -13,7 +13,7 @@ const dictionaries = readFileSync("src/i18n/dictionaries.ts", "utf8");
 test("client overview receives future barber blocked ranges from the overview loader", () => {
   assert.match(dashboardData, /blockedRanges: Array<\{ id: string; start: string; end: string; reason: string \| null \}>/);
   // Blocked days load concurrently with the other overview queries.
-  assert.match(dashboardData, /supabase\.from\("services"\)\.select\("\*"\),\s*loadBlockedDays\(\),\s*\]\);/);
+  assert.match(dashboardData, /supabase\.from\("services"\)\.select\("\*"\),\s*loadBlockedDays\(blockedWindow\),\s*\]\);/);
   assert.match(dashboardData, /blockedRanges: blocked\.ranges/);
   assert.match(clientPage, /blockedRanges=\{data\.blockedRanges\}/);
 });

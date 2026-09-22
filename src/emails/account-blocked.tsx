@@ -4,7 +4,7 @@ import { EmailHeading, EmailLayout, EmailParagraph } from "./layout";
 export function AccountBlockedEmail({ clientName }: { clientName: string }) {
   return (
     <EmailLayout preview="Prístup k účtu Samuelsson Cuts bol zrušený" accent="danger">
-      <EmailHeading>Prístup bol zrušený</EmailHeading>
+      <EmailHeading icon="user-block" accent="danger">Prístup bol zrušený</EmailHeading>
       <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
         Prístup k účtu Samuelsson Cuts bol zrušený. Všetky rozpracované

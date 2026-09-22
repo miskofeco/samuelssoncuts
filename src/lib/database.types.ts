@@ -20,6 +20,7 @@ export type Database = {
           avatar_url: string | null;
           calendar_token: string;
           email_confirmed_at: string | null;
+          is_shop_barber: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -33,6 +34,7 @@ export type Database = {
           avatar_url?: string | null;
           calendar_token?: string;
           email_confirmed_at?: string | null;
+          is_shop_barber?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -381,6 +383,15 @@ export type Database = {
       };
       confirmed_appointment_slots: {
         Args: Record<string, never>;
+        Returns: Array<{
+          id: string;
+          starts_at: string;
+          ends_at: string;
+          service_id: string;
+        }>;
+      };
+      confirmed_appointment_slots_window: {
+        Args: { p_from: string; p_to: string };
         Returns: Array<{
           id: string;
           starts_at: string;

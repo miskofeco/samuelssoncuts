@@ -17,7 +17,7 @@ export function BookingRequestDeclinedEmail({
 }) {
   return (
     <EmailLayout preview="Vaša žiadosť o rezerváciu bola odmietnutá" accent="danger">
-      <EmailHeading>Žiadosť bola odmietnutá</EmailHeading>
+      <EmailHeading icon="alert" accent="danger">Žiadosť bola odmietnutá</EmailHeading>
       <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
         Váš požadovaný termín sa nám tentoraz nepodarilo potvrdiť. Môžete si vybrať iný

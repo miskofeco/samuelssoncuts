@@ -22,6 +22,7 @@ export function MarkReadButton({ hasUnread }: { hasUnread: boolean }) {
       variant="secondary"
       disabled={!hasUnread}
       loading={pending}
+      className="min-h-11 w-full sm:min-h-9 sm:w-auto"
       onClick={() =>
         startTransition(async () => {
           try {
@@ -47,7 +48,8 @@ export function MarkNotificationReadButton({ notificationId }: { notificationId:
       type="button"
       variant="ghost"
       size="sm"
-      className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+      className="ml-auto min-h-11 min-w-11 shrink-0 px-0 text-xs text-muted-foreground hover:text-foreground sm:ml-0 sm:min-h-8 sm:min-w-0 sm:px-2"
+      title={t.client.markRead}
       loading={pending}
       onClick={() =>
         startTransition(async () => {
@@ -60,7 +62,7 @@ export function MarkNotificationReadButton({ notificationId }: { notificationId:
       }
     >
       {pending ? null : <Icon icon={Tick02Icon} className="size-3.5" strokeWidth={2.2} />}
-      {t.client.markRead}
+      <span className="sr-only sm:not-sr-only">{t.client.markRead}</span>
     </Button>
   );
 }

@@ -20,7 +20,7 @@ import { ButtonLink } from "@/components/shared/button";
 import { Card } from "@/components/shared/card";
 import { Icon, type IconSource } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
-import { formatFullDay } from "@/domain/schedule";
+import { DEFAULT_PRICING_SETTINGS, formatFullDay } from "@/domain/schedule";
 import { localeFor } from "@/i18n/config";
 import { getDict, getLang } from "@/i18n/server";
 import { getShopAddress, getShopMapUrl, getShopPhone } from "@/lib/env";
@@ -37,11 +37,11 @@ export default async function AppointmentDetailPage({
 }) {
   const profile = await requireApprovedClient();
   const { id } = await params;
-  const [appt, bookingData] = await Promise.all([
-    loadClientAppointmentDetail(profile, id),
-    loadBookingData(),
-  ]);
+  const appt = await loadClientAppointmentDetail(profile, id);
   if (!appt) notFound();
+  const bookingData = appt.status === "confirmed" && appt.canModify
+    ? await loadBookingData()
+    : null;
 
   const t = await getDict();
   const locale = localeFor(await getLang());
@@ -54,7 +54,7 @@ export default async function AppointmentDetailPage({
     startIso: appt.startIso,
     endIso: appt.endIso,
   });
-  const service = bookingData.services.find((item) => item.id === appt.serviceId) ?? {
+  const service = bookingData?.services.find((item) => item.id === appt.serviceId) ?? {
     id: appt.serviceId,
     name: appt.serviceName,
     duration: appt.serviceDuration,
@@ -178,12 +178,12 @@ export default async function AppointmentDetailPage({
               canModify: appt.canModify,
             }}
             service={service}
-            services={bookingData.services}
-            pricingSettings={bookingData.pricingSettings}
-            bookedSlots={bookingData.appointments}
-            pendingRequests={bookingData.pendingRequests}
-            blockedDates={bookingData.blockedDates}
-            businessHours={bookingData.businessHours}
+            services={bookingData?.services ?? []}
+            pricingSettings={bookingData?.pricingSettings ?? DEFAULT_PRICING_SETTINGS}
+            bookedSlots={bookingData?.appointments ?? []}
+            pendingRequests={bookingData?.pendingRequests ?? []}
+            blockedDates={bookingData?.blockedDates ?? new Set<string>()}
+            businessHours={bookingData?.businessHours ?? []}
           />
         ) : null}
 

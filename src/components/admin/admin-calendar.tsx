@@ -9,6 +9,7 @@ import {
   Clock01Icon,
 } from "@hugeicons/core-free-icons";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/shared/button";
@@ -42,8 +43,6 @@ import {
 } from "@/domain/schedule";
 import { addDaysToDate, nowMinutesInShopTimeZone } from "@/lib/time-zone";
 
-import { AddBookingModal } from "./add-booking-modal";
-import { AppointmentDetailModal } from "./appointment-detail-modal";
 import type {
   Appointment,
   BookingRequest,
@@ -55,6 +54,15 @@ import { localeFor } from "@/i18n/config";
 import type { Dict } from "@/i18n/dictionaries";
 import { useLang, useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
+
+const AddBookingModal = dynamic(
+  () => import("./add-booking-modal").then((module) => module.AddBookingModal),
+  { ssr: false },
+);
+const AppointmentDetailModal = dynamic(
+  () => import("./appointment-detail-modal").then((module) => module.AppointmentDetailModal),
+  { ssr: false },
+);
 
 export type CalendarItem = {
   id: string;
@@ -128,6 +136,10 @@ export function AdminCalendar({
   const isMobile = useSyncExternalStore(subscribeMobile, mobileSnapshot, () => false);
   const [draft, setDraft] = useState<{ date?: string; time?: string } | null>(null);
   const [selected, setSelected] = useState<CalendarItem | null>(null);
+  const [addOpened, setAddOpened] = useState(false);
+  const [detailOpened, setDetailOpened] = useState(false);
+  if (draft && !addOpened) setAddOpened(true);
+  if (selected && !detailOpened) setDetailOpened(true);
   const today = todayIso();
   const requestedView = searchParams.get("view");
   const view: CalendarView =
@@ -166,6 +178,7 @@ export function AdminCalendar({
   const itemsByDate = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
     const requestsById = new Map(requests.map((request) => [request.id, request]));
+    const clientsById = new Map(clients.map((client) => [client.id, client]));
     const push = (date: string, item: CalendarItem) => {
       const list = map.get(date) ?? [];
       list.push(item);
@@ -174,7 +187,7 @@ export function AdminCalendar({
 
     for (const appointment of appointments) {
       const service = serviceById(appointment.serviceId, services);
-      const client = clients.find((c) => c.id === appointment.clientId);
+      const client = appointment.clientId ? clientsById.get(appointment.clientId) : undefined;
       const bookedPriceCents = appointment.requestId
         ? requestsById.get(appointment.requestId)?.priceCents ?? Math.round(service.price * 100)
         : Math.round(service.price * 100);
@@ -200,8 +213,8 @@ export function AdminCalendar({
     }
     for (const proposal of proposals) {
       if (proposal.status !== "sent") continue;
-      const request = requests.find((r) => r.id === proposal.requestId);
-      const client = clients.find((c) => c.id === request?.clientId);
+      const request = requestsById.get(proposal.requestId);
+      const client = request?.clientId ? clientsById.get(request.clientId) : undefined;
       const service = request ? serviceById(request.serviceId, services) : undefined;
       const bookedPriceCents = request?.priceCents ?? Math.round((service?.price ?? 0) * 100);
       push(proposal.date, {
@@ -474,21 +487,25 @@ export function AdminCalendar({
         )}
       </Card>
 
-      <AddBookingModal
-        open={draft !== null}
-        onClose={() => setDraft(null)}
-        clients={clients}
-        services={services}
-        initialDate={draft?.date}
-        initialTime={draft?.time}
-        bookedByDate={bookedByDate}
-      />
+      {addOpened ? (
+        <AddBookingModal
+          open={draft !== null}
+          onClose={() => setDraft(null)}
+          clients={clients}
+          services={services}
+          initialDate={draft?.date}
+          initialTime={draft?.time}
+          bookedByDate={bookedByDate}
+        />
+      ) : null}
 
-      <AppointmentDetailModal
-        item={selected}
-        onClose={() => setSelected(null)}
-        bookedByDate={bookedByDate}
-      />
+      {detailOpened ? (
+        <AppointmentDetailModal
+          item={selected}
+          onClose={() => setSelected(null)}
+          bookedByDate={bookedByDate}
+        />
+      ) : null}
     </div>
   );
 }

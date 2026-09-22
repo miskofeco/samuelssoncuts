@@ -13,6 +13,7 @@ import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { useT } from "@/i18n/provider";
 import type { AuthProfile } from "@/server/auth";
 import { cn } from "@/lib/classnames";
+import { useLiveAttention } from "@/hooks/use-live-attention";
 
 import { AccountPanel } from "./account-panel";
 import {
@@ -43,6 +44,7 @@ export function MobileNav({
   counts: NavCounts;
 }) {
   const t = useT();
+  const liveCounts = useLiveAttention(counts);
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -61,7 +63,7 @@ export function MobileNav({
   const tabs = centerPrimaryTab(pinned, pinned.length + (needsMore ? 1 : 0));
   const overflow = needsMore ? items.slice(MOBILE_TAB_LIMIT) : [];
   const overflowActive = overflow.some((item) => isNavActive(pathname, item.href));
-  const overflowBadge = overflow.reduce((sum, item) => sum + badgeFor(item, counts), 0);
+  const overflowBadge = overflow.reduce((sum, item) => sum + badgeFor(item, liveCounts), 0);
 
   return (
     <div className="md:hidden">
@@ -102,7 +104,7 @@ export function MobileNav({
               {item.primary ? (
                 <PrimaryTabLink item={item} active={isNavActive(pathname, item.href)} />
               ) : (
-                <TabLink item={item} active={isNavActive(pathname, item.href)} count={badgeFor(item, counts)} />
+                <TabLink item={item} active={isNavActive(pathname, item.href)} count={badgeFor(item, liveCounts)} />
               )}
             </li>
           ))}
@@ -142,7 +144,7 @@ export function MobileNav({
         <ul className="grid grid-cols-2 gap-2">
           {overflow.map((item) => {
             const active = isNavActive(pathname, item.href);
-            const count = badgeFor(item, counts);
+            const count = badgeFor(item, liveCounts);
             return (
               <li key={item.href}>
                 <Link

@@ -14,7 +14,7 @@ export default async function AdminSettingsPage() {
   const profile = await requireAdmin();
   const [services, pricingSettings] = await Promise.all([
     loadAllServices(),
-    loadPricingSettings(profile.id),
+    loadPricingSettings(),
   ]);
   const t = await getDict();
   // A real catalogue price makes the surcharge preview concrete.

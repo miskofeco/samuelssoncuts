@@ -1,12 +1,13 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { getSiteUrl } from "@/lib/env";
-import { getBarberEmail, sendEmail } from "@/lib/email";
+import { sendEmail } from "@/lib/email";
 import { reportError } from "@/lib/observability";
 import { AccountApprovedEmail } from "@/emails/account-approved";
 import { AccountBlockedEmail } from "@/emails/account-blocked";
@@ -45,6 +46,7 @@ import { authErrorPath, authNoticePath } from "@/i18n/auth-notices";
 import { recordAdminAction } from "@/server/audit";
 import { notificationOrFilter } from "@/server/dashboard-data";
 import { quoteClientSlot } from "@/server/booking-pricing";
+import { getShopBarberEmail, getShopBarberId } from "@/server/shop-barber";
 import { enforceRateLimit } from "@/server/rate-limit";
 import { createAdminNotification, createNotification, createNotifications } from "@/server/notifications";
 import type { ActionResult } from "@/domain/types";
@@ -488,15 +490,19 @@ export async function rotateCalendarTokenAction(): Promise<ActionResult> {
     return { ok: false, error: limit.error };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("rotate_my_calendar_token");
+  const { error } = profile.role === "admin"
+    ? await getSupabaseAdminClient()
+      .from("profiles")
+      .update({ calendar_token: randomUUID() })
+      .eq("id", await getShopBarberId())
+    : await (await createClient()).rpc("rotate_my_calendar_token");
   if (error) {
     await reportError("calendar-rotate-token", error, { userId: profile.id });
     return { ok: false, error: t.common.somethingWentWrong };
   }
 
   if (profile.role === "admin") {
-    await recordAdminAction("calendar.rotate_token", { targetType: "profile", targetId: profile.id });
+    await recordAdminAction("calendar.rotate_token", { targetType: "profile", targetId: await getShopBarberId() });
   }
   revalidatePath("/admin/calendar");
   revalidatePath("/client/reservations");
@@ -602,13 +608,21 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
   if (!isStartInClientBookingWindow(start)) {
     return { ok: false, error: t.feedback.chooseWithinTwoWeeks };
   }
-  const guarded = await guardSlot(supabase, {
-    date: parsed.data.date,
-    time: parsed.data.time,
-    durationMinutes: service.duration_minutes,
-    start,
-    end,
-  });
+  const [guarded, quote] = await Promise.all([
+    guardSlot(supabase, {
+      date: parsed.data.date,
+      time: parsed.data.time,
+      durationMinutes: service.duration_minutes,
+      start,
+      end,
+    }),
+    quoteClientSlot(supabase, {
+      date: parsed.data.date,
+      time: parsed.data.time,
+      durationMinutes: service.duration_minutes,
+      basePriceCents: service.price_cents,
+    }),
+  ]);
   if (!guarded.ok) {
     const error = guarded.reason === "outside-hours"
       ? t.feedback.slotOutsideHours
@@ -618,12 +632,6 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
     return { ok: false, error };
   }
 
-  const quote = await quoteClientSlot(supabase, {
-    date: parsed.data.date,
-    time: parsed.data.time,
-    durationMinutes: service.duration_minutes,
-    basePriceCents: service.price_cents,
-  });
   if (!quote.ok) {
     return { ok: false, error: t.feedback.pickGeneratedSlot };
   }
@@ -646,37 +654,39 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
     return { ok: false, error: t.common.somethingWentWrong };
   }
 
-  const barberEmail = getBarberEmail();
-  await createAdminNotification({
-    channel: "email",
-    recipient: barberEmail,
-    subject: `${profile.full_name} žiada termín ${parsed.data.date} o ${parsed.data.time}`,
-    pushUrl: "/admin/requests",
-  });
-  await sendEmail({
-    to: barberEmail,
-    subject: `${profile.full_name} žiada termín ${parsed.data.date} o ${parsed.data.time}`,
-    react: BookingRequestEmail({
-      clientName: profile.full_name,
-      service: service.name,
-      date: parsed.data.date,
-      time: parsed.data.time,
-      note: parsed.data.note,
+  const barberEmail = await getShopBarberEmail();
+  const deliveries: Promise<unknown>[] = [
+    createAdminNotification({
+      channel: "email",
+      recipient: barberEmail,
+      subject: `${profile.full_name} žiada termín ${parsed.data.date} o ${parsed.data.time}`,
+      pushUrl: "/admin/requests",
     }),
-  });
+    sendEmail({
+      to: barberEmail,
+      subject: `${profile.full_name} žiada termín ${parsed.data.date} o ${parsed.data.time}`,
+      react: BookingRequestEmail({
+        clientName: profile.full_name,
+        service: service.name,
+        date: parsed.data.date,
+        time: parsed.data.time,
+        note: parsed.data.note,
+      }),
+    }),
+  ];
 
   // Acknowledge to the client too (they used to hear nothing until confirmation).
   if (profile.email) {
     const clientSubject = "Vašu rezerváciu sme prijali";
-    await createNotification(supabase, {
+    deliveries.push(createNotification(supabase, {
       user_id: profile.id,
       channel: "email",
       recipient: profile.email,
       subject: clientSubject,
       body: `Žiadosť o ${service.name} na ${parsed.data.date} o ${parsed.data.time} sme prijali. Termín bude ešte potvrdený.`,
       pushUrl: "/client/reservations",
-    });
-    await sendEmail({
+    }));
+    deliveries.push(sendEmail({
       to: profile.email,
       subject: clientSubject,
       react: BookingReceivedEmail({
@@ -685,8 +695,9 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
         date: parsed.data.date,
         time: parsed.data.time,
       }),
-    });
+    }));
   }
+  await Promise.all(deliveries);
 
   revalidatePath("/client", "layout");
   revalidatePath("/admin", "layout");
@@ -1097,7 +1108,7 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
   const end = addMinutes(start, service.duration_minutes);
 
   const guarded = await guardSlot(supabase, {
-    barberId: admin.id,
+    barberId: await getShopBarberId(),
     date: parsed.data.date,
     time: parsed.data.time,
     durationMinutes: service.duration_minutes,
@@ -1124,7 +1135,7 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
     .from("appointment_proposals")
     .insert({
       request_id: parsed.data.requestId,
-      barber_id: admin.id,
+      barber_id: await getShopBarberId(),
       starts_at: start,
       ends_at: end,
       note: parsed.data.note ?? null,
@@ -1306,7 +1317,7 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
     return { ok: false, error: t.feedback.slotOutsideHours };
   }
   const guarded = await guardSlot(supabase, {
-    barberId: admin.id,
+    barberId: await getShopBarberId(),
     date: requestedDate,
     time: requestedTime,
     durationMinutes: requestedDuration,
@@ -1336,7 +1347,7 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
 
   const { data: appointmentId, error: confirmError } = await supabase.rpc("confirm_booking_request", {
     p_request_id: request.id,
-    p_barber_id: admin.id,
+    p_barber_id: await getShopBarberId(),
   });
 
   if (confirmError || !appointmentId) {
@@ -1474,7 +1485,7 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
   const end = addMinutes(start, service.duration_minutes);
 
   const guarded = await guardSlot(supabase, {
-    barberId: admin.id,
+    barberId: await getShopBarberId(),
     date: parsed.data.date,
     time: parsed.data.time,
     durationMinutes: service.duration_minutes,
@@ -1627,7 +1638,7 @@ export async function cancelAppointmentAdminAction(input: unknown): Promise<Acti
 }
 
 export async function createAdminBookingAction(input: unknown): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  await requireAdmin();
   const t = await getDict();
   const parsed = adminBookingSchema.safeParse(input);
 
@@ -1672,7 +1683,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
   const end = addMinutes(start, service.duration_minutes);
 
   const guarded = await guardSlot(supabase, {
-    barberId: admin.id,
+    barberId: await getShopBarberId(),
     date: parsed.data.date,
     time: parsed.data.time,
     durationMinutes: service.duration_minutes,
@@ -1693,7 +1704,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
     proposal_id: null,
     client_id: parsed.data.clientId ?? null,
     customer_name: parsed.data.customerName ?? null,
-    barber_id: admin.id,
+    barber_id: await getShopBarberId(),
     service_id: parsed.data.serviceId,
     starts_at: start,
     ends_at: end,
@@ -1822,7 +1833,7 @@ export async function respondToProposalAction(
     return { ok: false, error: accepted ? t.feedback.timeJustTaken : t.feedback.cannotRespond };
   }
 
-  const barberEmailForResponse = getBarberEmail();
+  const barberEmailForResponse = await getShopBarberEmail();
   const respondDate = dateInShopTimeZone(proposal.starts_at);
   const respondTime = timeFromIso(proposal.starts_at);
   const respondSubject = accepted
@@ -2136,7 +2147,7 @@ export async function savePricingSettingsAction(input: {
   gapSurchargePercent: number;
   vipSurchargePercent: number;
 }): Promise<ActionResult> {
-  const profile = await requireAdmin();
+  await requireAdmin();
   const t = await getDict();
   const parsed = pricingSettingsSchema.safeParse(input);
 
@@ -2144,12 +2155,11 @@ export async function savePricingSettingsAction(input: {
     return { ok: false, error: t.feedback.checkPricingSettings };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase
+  const { error } = await getSupabaseAdminClient()
     .from("pricing_settings")
     .upsert(
       {
-        barber_id: profile.id,
+        barber_id: await getShopBarberId(),
         gap_surcharge_percent: parsed.data.gapSurchargePercent,
         vip_surcharge_percent: parsed.data.vipSurchargePercent,
       },
@@ -2162,7 +2172,7 @@ export async function savePricingSettingsAction(input: {
 
   await recordAdminAction("pricing_settings.update", {
     targetType: "pricing_settings",
-    targetId: profile.id,
+    targetId: await getShopBarberId(),
     detail: parsed.data,
   });
 
@@ -2285,7 +2295,7 @@ export async function blockDateAction(input: {
   end: string;
   reason?: string;
 }): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  await requireAdmin();
   const t = await getDict();
   const parsed = blockDateSchema.safeParse(input);
 
@@ -2319,7 +2329,7 @@ export async function blockDateAction(input: {
   }
 
   const { error } = await supabase.from("blocked_times").insert({
-    barber_id: admin.id,
+    barber_id: await getShopBarberId(),
     starts_at: starts,
     ends_at: ends,
     reason: parsed.data.reason ?? null,
@@ -2350,7 +2360,8 @@ export async function unblockDateAction(blockId: string): Promise<ActionResult> 
   const { error } = await supabase
     .from("blocked_times")
     .delete()
-    .eq("id", parsedBlockId.data);
+    .eq("id", parsedBlockId.data)
+    .eq("barber_id", await getShopBarberId());
 
   if (error) {
     return { ok: false, error: error.message };
@@ -2486,7 +2497,7 @@ export async function saveBusinessHoursAction(
     closed: boolean;
   }>,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  await requireAdmin();
   const t = await getDict();
   const parsed = businessHoursSchema.safeParse(days);
 
@@ -2494,17 +2505,16 @@ export async function saveBusinessHoursAction(
     return { ok: false, error: t.feedback.pickValidDateTime };
   }
 
-  const supabase = await createClient();
-
+  const barberId = await getShopBarberId();
   const rows = parsed.data.map((d) => ({
-    barber_id: admin.id,
+    barber_id: barberId,
     weekday: d.weekday,
     opens_at: d.opensAt,
     closes_at: d.closesAt,
     closed: d.closed,
   }));
 
-  const { error } = await supabase
+  const { error } = await getSupabaseAdminClient()
     .from("business_hours")
     .upsert(rows, { onConflict: "barber_id,weekday" });
 
@@ -2581,7 +2591,7 @@ export async function cancelConfirmedAppointmentAction(
   }
 
   // Notify the barber (email + notification row), non-fatal on failure.
-  const barberEmail = getBarberEmail();
+  const barberEmail = await getShopBarberEmail();
   const cancelDate = dateInShopTimeZone(appointment.starts_at);
   const cancelTime = timeFromIso(appointment.starts_at);
   const { data: cancelService } = await supabase
@@ -2637,7 +2647,7 @@ export async function requestRescheduleAction(
 
   const { data: appointment, error } = await supabase
     .from("appointments")
-    .select("id, client_id, barber_id, service_id, starts_at, ends_at, status")
+    .select("id, client_id, service_id, starts_at, ends_at, status")
     .eq("id", parsed.data.appointmentId)
     .single();
 
@@ -2671,7 +2681,7 @@ export async function requestRescheduleAction(
     return { ok: false, error: t.feedback.chooseWithinTwoWeeks };
   }
   const guarded = await guardSlot(supabase, {
-    barberId: appointment.barber_id,
+    barberId: await getShopBarberId(),
     date: parsed.data.date,
     time: parsed.data.time,
     durationMinutes,
@@ -2728,7 +2738,7 @@ export async function requestRescheduleAction(
   }
 
   // Notify the barber that a confirmed slot needs re-confirming at a new time.
-  const barberEmail = getBarberEmail();
+  const barberEmail = await getShopBarberEmail();
   const rescheduleSubject = `${profile.full_name} žiada presun na ${parsed.data.date} o ${parsed.data.time}`;
   await createAdminNotification({
     channel: "email",

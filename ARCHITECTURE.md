@@ -96,12 +96,13 @@ API routes:
 - `/api/auth/send-email`: Supabase Send Email Hook, verified with Standard Webhooks HMAC, sends branded auth emails through Resend.
 - `/auth/callback`: OAuth/PKCE callback and recovery-session handoff.
 - `/auth/confirm`: token-hash auth email verification.
-- `/api/cron/reminders`: the single daily Vercel cron job (`0 8 * * *`), authorized by `CRON_SECRET`. In one pass it runs the outcome sweep (marks confirmed appointments `completed` after they ended at least two hours ago unless an outcome was already recorded, declines expired pending requests, expires unaccepted proposals), then sends next-day client reminders and the barber agenda. The project deploys on the Vercel Hobby plan, which only allows cron jobs that run once per day, so do not add more frequent schedules or additional cron entries to `vercel.json`.
+- `/api/cron/reminders`: the single daily Vercel cron job (`0 8 * * *`), authorized by `CRON_SECRET`. In one pass it runs the outcome sweep (marks confirmed appointments `completed` after they ended at least two hours ago unless an outcome was already recorded, declines expired pending requests, expires unaccepted proposals), then sends next-day client reminders and the designated barber's agenda to his profile email. The project deploys on the Vercel Hobby plan, which only allows cron jobs that run once per day, so do not add more frequent schedules or additional cron entries to `vercel.json`.
 - `/api/calendar/export`: authenticated one-off ICS download.
 - `/api/calendar/feed/[token]`: token-authorized ICS subscription feed through a SECURITY DEFINER RPC.
 - `/api/calendar/event/[appointmentId]`: appointment ICS event.
 - `/api/push/public-key`: authenticated public VAPID key fetch.
 - `/api/push/subscriptions`: same-origin authenticated subscription upsert/delete.
+- `/api/admin/attention`: admin-only, uncached attention counts for realtime navigation badges; background changes no longer refresh the whole route.
 
 ## Auth And Authorization
 
@@ -122,12 +123,13 @@ Sign-in and registration flow:
 - Every phone write path (`registerAction`, `completePhoneAction`, `updateProfileAction`) stores the canonical form; migration `0031` makes `phone_taken` compare both sides through `normalize_phone()` so pre-existing rows with spaces still collide correctly.
 
 Supabase RLS is the primary data boundary. Admin-only bypasses use `getSupabaseAdminClient()` and must remain server-only.
+Migrations `0038` and `0039` preserve the existing RLS roles and predicates while caching row-independent `auth.uid()`, `auth.jwt()`, and `is_admin()` checks once per statement. Each migration checks the reviewed policy fingerprint before applying. Migration `0040` adds the five previously missing foreign-key indexes on proposals, appointments, and requests; none of these migrations changes table columns or generated TypeScript row types.
 
 ## Core Data Model
 
 Primary tables and concepts:
 
-- `profiles`: auth-linked users, roles, approval status, phone, avatar, calendar token.
+- `profiles`: auth-linked users, roles, approval status, phone, avatar, calendar token, and the unique `is_shop_barber` marker.
 - `services`: barber services, duration, price, active flag, optional image.
 - `business_hours`: weekly open/closed windows.
 - `blocked_times`: date or time ranges the barber cannot take bookings.
@@ -154,7 +156,7 @@ Important RPCs and constraints live in migrations:
 - Profile deletion scrubs the person's `notifications` rows (trigger `profiles_scrub_notifications`).
 - `has_confirmed_appointment_overlap()` detects booking conflicts.
 - `confirm_booking_request()` and `respond_to_appointment_proposal()` make request/proposal transitions transactional.
-- `client_cancel_confirmed_appointment()` and `client_request_reschedule()` handle client self-service safely. `client_request_reschedule` is service-role only and takes the acting client id plus the server-computed quote; clients cannot call it (or insert into `booking_requests`) directly, so a booking price can only ever come from `quoteClientSlot`.
+- `client_cancel_confirmed_appointment()` and `client_request_reschedule()` handle client self-service safely. `client_request_reschedule` is service-role only and takes the acting client id plus the server-computed quote; clients cannot call it (or insert into `booking_requests`) directly, so a booking price can only ever come from `quoteClientSlot`. Reschedule conflict checks use the designated barber even when the old appointment has another owner.
 - `record_admin_action()` writes audit rows after re-checking admin privileges.
 - `calendar_feed()` powers token-based ICS feeds.
 - A Postgres exclusion constraint prevents overlapping confirmed appointments per barber.
@@ -183,26 +185,30 @@ Important RPCs and constraints live in migrations:
 
 Client exact-slot booking:
 
-1. Client pages load services, blocked ranges, business hours, pricing settings, confirmed busy slots, and pending requested slots.
+1. `src/server/shop-barber.ts` resolves the sole approved barber from `profiles.is_shop_barber` (migration `0033`). Client pages load that barber's blocked ranges, business hours, pricing settings, confirmed busy slots, and pending requested slots. The picker limits blocked times, pending requests, and the `confirmed_appointment_slots_window` RPC (migration `0036`) to today's two-week booking horizon; slot quotes request only one day. Migration `0037` adds the composite index for blocked-time lookups. A missing marker fails closed instead of selecting an arbitrary admin row.
 2. UI uses `clientSlotsForService`, `slotStatusFor`, and `priceForSlot` to display availability and pricing.
-3. `createBookingRequestAction` validates the slot, checks future/window/business hours/blocked/confirmed conflicts, inserts the request, and notifies admins.
-4. Admin can confirm directly, propose alternatives, or cancel/decline through server actions.
+3. `createBookingRequestAction` validates the slot against the same barber's hours/blocks/confirmed appointments, checks the future/window, inserts the request, and notifies admins. Independent slot guards, quote reads, and post-insert notification/email delivery run concurrently while preserving the guard's error priority.
+4. Any approved admin (including Michal's management account) can confirm directly, propose alternatives, reschedule, or cancel/decline through server actions, but new appointments and proposals are owned by the designated barber account (Samuel). `confirm_booking_request` checks that `p_barber_id` is marked `is_shop_barber` before writing, and the rescheduling RPCs use the same marker.
+
+The client reservations list loads picker context only when it has upcoming appointments; a detail page skips that context for cancelled or locked appointments. The reschedule picker and admin calendar action modals are separate lazy client chunks. Admin overview requests use a summary projection without note text or embedded proposals/preferences, while the request queue keeps its richer records.
 
 Admin booking and calendar changes:
 
-- `createAdminBookingAction` can book an existing client or a walk-in.
+- `createAdminBookingAction` can book an existing client or a walk-in under the designated barber, regardless of which approved admin performs the action. Availability, pricing, blocked-time management, the operational calendar, analytics, and the admin calendar feed also use the designated barber. Migration `0035` moves still-future bookings and sent proposals from older admin owners to Samuel after checking appointment and blocked-time conflicts; past appointments stay with their original owner.
 - Reschedules and cancellations go through server actions that re-run conflict guards, update appointments, create notifications/email, and audit the action.
 - Confirmed appointment overlap protection exists both in app guards and in the database exclusion constraint/RPCs.
 
 ## Notifications, Email, And Push
 
-- Transactional emails are React components in `src/emails` and go through `sendEmail()` in `src/lib/email.ts`.
+- Transactional emails are React components in `src/emails` and go through `sendEmail()` in `src/lib/email.ts`. The reply-to and operational barber recipient resolve from the designated barber profile, not an admin account or `BARBER_EMAIL` environment setting.
+- Email presentation is shared by `src/emails/layout.tsx`: React Email table-based primitives reproduce the app's stone cards, status accents, appointment summaries, and actions. Email icons are PNG assets in `public/email-icons` so common mail clients can display them without SVG support; transactional icons follow the app's Hugeicons family, while the calendar actions use Google's official multicolor gradient G and Apple's official white logo on a black button alongside text labels.
 - Missing `RESEND_API_KEY` is non-fatal in local dev; emails are logged and notification rows still exist.
 - In-app notifications should be created through `createNotification`, `createNotifications`, or `createAdminNotification` in `src/server/notifications.ts`.
-- Push delivery is best-effort and non-fatal. Invalid subscriptions are deleted or marked failed. Push payloads carry the subject only, never the free-text body.
+- Push delivery is best-effort and non-fatal. Notification rows are inserted before `after()` defers push delivery beyond the action/route response. Invalid subscriptions are deleted or marked failed. Push payloads carry the subject only, never the free-text body.
 - The daily cron claims `reminded_at` atomically before sending (and releases it when the send fails), batches profile/service lookups, sends with bounded concurrency, sets `maxDuration = 60`, and prunes expired `rate_limits` rows.
-- `PushBadgeSync` registers `public/sw.js` and keeps foreground app badge counts aligned.
-- Admin navigation attention counts are server-computed and refreshed by `revalidatePath`; Supabase Realtime is only a background refresh nudge.
+- `PushBadgeSync` registers `public/sw.js` once and keeps foreground app badge counts aligned with both server counts and admin realtime count events.
+- Admin navigation attention counts are server-computed and refreshed by `revalidatePath`; Supabase Realtime fetches `/api/admin/attention` for background changes and updates only mounted badge views instead of refreshing the whole route.
+- `vercel.json` pins functions to `dub1`, close to the Supabase project in `eu-west-1`; the change takes effect on the next Vercel deployment.
 
 ## App Shell And Navigation
 
@@ -215,7 +221,7 @@ Admin booking and calendar changes:
 
 ## Realtime Attention Refresh Constraint
 
-`useAttentionRefresh` is mounted exactly once per shell by `layout/attention-refresh.tsx` (admin only). Do not call it from navigation components: the desktop sidebar and phone navigation both stay mounted, so a hook inside them would run twice.
+`useAttentionRefresh` is mounted exactly once per shell by `layout/attention-refresh.tsx` (admin only). Do not call it from navigation components: the desktop sidebar and phone navigation both stay mounted, so a hook inside them would open two Realtime channels. Both navigation components may subscribe to the lightweight local count event through `useLiveAttention`.
 
 `useAttentionRefresh` must keep using a per-mount stable channel name derived from `useId`. Do not replace it with a static channel name like `supabase.channel("admin-attention")`.
 

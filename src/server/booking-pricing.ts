@@ -36,7 +36,11 @@ async function confirmedSlotsForDay(
   excludeStartsAt?: string,
 ): Promise<SlotAppt[]> {
   const { startIso, endIso } = shopDayRangeUtc(date);
-  const { data } = await supabase.rpc("confirmed_appointment_slots");
+  const { data, error } = await supabase.rpc("confirmed_appointment_slots_window", {
+    p_from: startIso,
+    p_to: endIso,
+  });
+  if (error) throw new Error(`confirmed_appointment_slots: ${error.message}`);
 
   return (data ?? [])
     .filter((slot) => slot.starts_at >= startIso && slot.starts_at < endIso)
@@ -59,8 +63,11 @@ export async function quoteClientSlot(
   supabase: SupabaseClient,
   input: SlotQuoteInput,
 ): Promise<SlotQuote> {
-  const confirmedForDay = await confirmedSlotsForDay(supabase, input.date, input.excludeStartsAt);
-  const businessHours = await loadBusinessHours();
+  const [confirmedForDay, businessHours, pricingSettings] = await Promise.all([
+    confirmedSlotsForDay(supabase, input.date, input.excludeStartsAt),
+    loadBusinessHours(),
+    loadPricingSettings(),
+  ]);
 
   const generated = clientSlotsForService(
     input.date,
@@ -79,7 +86,6 @@ export async function quoteClientSlot(
     confirmedForDay,
     businessHours,
   );
-  const pricingSettings = await loadPricingSettings();
   const basePrice = Math.round(input.basePriceCents / 100);
   const priceCents = priceForSlot(basePrice, preferred, {
     startsAt: input.time,

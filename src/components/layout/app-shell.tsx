@@ -42,7 +42,6 @@ export async function AppShell({
     approvals: attention?.approvals ?? 0,
     unread: unreadNotifications ?? 0,
   };
-  const badgeCount = role === "admin" ? counts.requests + counts.approvals : counts.unread;
   const sidebarCookie = (await cookies()).get("sidebar_state")?.value;
   const sidebarOpen = sidebarCookie ? sidebarCookie === "true" : true;
 
@@ -52,7 +51,7 @@ export async function AppShell({
       // Wider icon rail than shadcn's 3rem so 40px buttons sit with breathing room.
       style={{ "--sidebar-width-icon": "4rem" } as CSSProperties}
     >
-      <PushBadgeSync badgeCount={badgeCount} />
+      <PushBadgeSync counts={counts} role={role} />
       {role === "admin" ? <AttentionRefresh /> : null}
 
       <AppSidebar sections={sections} profile={profile} counts={counts} />

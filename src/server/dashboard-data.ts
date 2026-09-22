@@ -1,6 +1,6 @@
 import { analyticsPeriodStart } from "@/domain/analytics";
 import { adminCalendarWindowDates } from "@/domain/calendar-window";
-import { DEFAULT_PRICING_SETTINGS, addDays, eachDate, todayIso } from "@/domain/schedule";
+import { DEFAULT_PRICING_SETTINGS, addDays, eachDate, latestClientBookingDate, todayIso } from "@/domain/schedule";
 import type {
   Appointment,
   BookingRequest,
@@ -13,9 +13,11 @@ import type {
   Service,
 } from "@/domain/types";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/database.types";
-import { dateInShopTimeZone, formatInShopTimeZone, shopDayRangeUtc, timeInShopTimeZone } from "@/lib/time-zone";
-import type { AuthProfile } from "@/server/auth";
+import { addDaysToDate, dateInShopTimeZone, formatInShopTimeZone, shopDayRangeUtc, timeInShopTimeZone } from "@/lib/time-zone";
+import { requireAdmin, type AuthProfile } from "@/server/auth";
+import { getShopBarberId } from "@/server/shop-barber";
 
 type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -44,13 +46,20 @@ type PricingSettingsRow = Pick<
 type BusySlotRow = Database["public"]["Functions"]["confirmed_appointment_slots"]["Returns"][number];
 
 // booking_requests with embedded preferences + proposals (FK-hinted).
-type RequestRow = Database["public"]["Tables"]["booking_requests"]["Row"] & {
+type RequestBaseRow = Database["public"]["Tables"]["booking_requests"]["Row"];
+type RequestRow = Pick<
+  RequestBaseRow,
+  "id" | "client_id" | "service_id" | "status" | "created_at" |
+  "selected_proposal_id" | "requested_start" | "price_cents" | "surcharge"
+> & Partial<Pick<RequestBaseRow, "note">> & {
   booking_preferences?: Database["public"]["Tables"]["booking_preferences"]["Row"][];
   appointment_proposals?: Database["public"]["Tables"]["appointment_proposals"]["Row"][];
 };
 
 const REQUEST_SELECT =
   "*, booking_preferences(*), appointment_proposals!appointment_proposals_request_id_fkey(*)";
+const REQUEST_SUMMARY_SELECT =
+  "id, client_id, service_id, status, created_at, selected_proposal_id, requested_start, price_cents, surcharge";
 const APPOINTMENT_SELECT =
   "id, request_id, client_id, customer_name, service_id, starts_at, ends_at, status, outcome";
 const PROFILE_SELECT =
@@ -259,31 +268,35 @@ export async function loadAllServices(): Promise<
 
 export async function loadPricingSettings(barberId?: string): Promise<PricingSettings> {
   const supabase = await createClient();
-  let query = supabase
+  const shopBarberId = barberId ?? await getShopBarberId();
+  const query = supabase
     .from("pricing_settings")
     .select("gap_surcharge_percent, vip_surcharge_percent")
+    .eq("barber_id", shopBarberId)
     .limit(1);
 
-  if (barberId) {
-    query = query.eq("barber_id", barberId);
-  }
-
   const { data, error } = await query;
-  if (error || !data || data.length === 0) return DEFAULT_PRICING_SETTINGS;
+  fail("pricing_settings", error);
+  if (!data || data.length === 0) return DEFAULT_PRICING_SETTINGS;
 
   return mapPricingSettingsRow(data[0]);
 }
 
 /** Blocked calendar days expanded from blocked_times ranges. */
-export async function loadBlockedDays(): Promise<{
+export async function loadBlockedDays(window?: { fromIso: string; toIso: string }): Promise<{
   dates: Set<string>;
   ranges: Array<{ id: string; start: string; end: string; reason: string | null }>;
 }> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const barberId = await getShopBarberId();
+  let query = supabase
     .from("blocked_times")
-    .select("*")
-    .order("starts_at");
+    .select("id, starts_at, ends_at, reason")
+    .eq("barber_id", barberId);
+  if (window) {
+    query = query.lt("starts_at", window.toIso).gt("ends_at", window.fromIso);
+  }
+  const { data, error } = await query.order("starts_at");
 
   fail("blocked_times", error);
 
@@ -291,7 +304,10 @@ export async function loadBlockedDays(): Promise<{
   const ranges = (data ?? []).map((row) => {
     // Whole-day blocks end at the NEXT shop day's midnight (exclusive), so the
     // last covered day comes from eachDate rather than the raw end instant.
-    const days = eachDate(row.starts_at, row.ends_at);
+    const days = eachDate(
+      window && row.starts_at < window.fromIso ? window.fromIso : row.starts_at,
+      window && row.ends_at > window.toIso ? window.toIso : row.ends_at,
+    );
     for (const day of days) {
       dates.add(day);
     }
@@ -358,6 +374,18 @@ export async function loadCalendarToken(profileId: string): Promise<string | nul
     .select("calendar_token")
     .eq("id", profileId)
     .maybeSingle();
+  return data?.calendar_token ?? null;
+}
+
+/** Shared shop calendar token, readable only after an admin page gate. */
+export async function loadShopCalendarToken(): Promise<string | null> {
+  await requireAdmin();
+  const { data, error } = await getSupabaseAdminClient()
+    .from("profiles")
+    .select("calendar_token")
+    .eq("id", await getShopBarberId())
+    .maybeSingle();
+  fail("shop calendar token", error);
   return data?.calendar_token ?? null;
 }
 
@@ -479,6 +507,10 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
   blockedRanges: Array<{ id: string; start: string; end: string; reason: string | null }>;
 }> {
   const supabase = await createClient();
+  const blockedWindow = {
+    fromIso: shopDayRangeUtc(todayIso()).startIso,
+    toIso: shopDayRangeUtc(addDaysToDate(latestClientBookingDate(), 1)).startIso,
+  };
   const [requestsResult, appointmentsResult, servicesResult, blocked] = await Promise.all([
     supabase
       .from("booking_requests")
@@ -492,7 +524,7 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
       .eq("status", "confirmed")
       .order("starts_at"),
     supabase.from("services").select("*"),
-    loadBlockedDays(),
+    loadBlockedDays(blockedWindow),
   ]);
 
   fail("booking_requests", requestsResult.error);
@@ -510,7 +542,7 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
 }
 
 /** Services + blocked days + booked/pending context for the booking picker. */
-export async function loadBookingData(): Promise<{
+export async function loadBookingData(options: { includeServices?: boolean } = {}): Promise<{
   services: Service[];
   pricingSettings: PricingSettings;
   businessHours: BusinessHoursDay[];
@@ -522,29 +554,34 @@ export async function loadBookingData(): Promise<{
 }> {
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
+  const fromIso = shopDayRangeUtc(todayIso()).startIso;
+  const toIso = shopDayRangeUtc(addDaysToDate(latestClientBookingDate(), 1)).startIso;
   const [servicesResult, appointmentsResult, requestsResult, blocked, pricingSettings, businessHours] =
     await Promise.all([
-      supabase.from("services").select("*").eq("active", true).order("duration_minutes"),
-      supabase.rpc("confirmed_appointment_slots"),
+      options.includeServices === false
+        ? Promise.resolve(null)
+        : supabase.from("services").select("*").eq("active", true).order("duration_minutes"),
+      supabase.rpc("confirmed_appointment_slots_window", { p_from: fromIso, p_to: toIso }),
       supabase
         .from("booking_requests")
-        .select(REQUEST_SELECT)
+        .select(REQUEST_SUMMARY_SELECT)
         .eq("status", "pending")
         .gte("requested_start", nowIso)
+        .lt("requested_start", toIso)
         .order("created_at", { ascending: false }),
-      loadBlockedDays(),
+      loadBlockedDays({ fromIso, toIso }),
       loadPricingSettings(),
       loadBusinessHours(),
     ]);
 
-  fail("services", servicesResult.error);
+  if (servicesResult) fail("services", servicesResult.error);
   fail("appointments", appointmentsResult.error);
   fail("booking_requests", requestsResult.error);
 
   const rows = asRequestRows(requestsResult.data);
   const requests = rows.map(mapRequestRow);
   return {
-    services: (servicesResult.data ?? []).map(mapServiceRow),
+    services: (servicesResult?.data ?? []).map(mapServiceRow),
     pricingSettings,
     businessHours,
     blockedDates: blocked.dates,
@@ -564,7 +601,6 @@ export async function loadAdminOverview(): Promise<{
   services: Service[];
   clients: ClientProfile[];
   requests: BookingRequest[];
-  proposals: Proposal[];
   appointments: Appointment[];
   analyticsAppointments: Appointment[];
   pricingSettings: PricingSettings;
@@ -577,10 +613,11 @@ export async function loadAdminOverview(): Promise<{
       supabase.from("profiles").select(PROFILE_SELECT).order("created_at", { ascending: false }),
       supabase
         .from("booking_requests")
-        .select(REQUEST_SELECT)
+        .select(REQUEST_SUMMARY_SELECT)
         .gte("created_at", floor)
         .order("created_at", { ascending: false }),
-      supabase.from("appointments").select(APPOINTMENT_SELECT).gte("starts_at", floor).order("starts_at"),
+      supabase.from("appointments").select(APPOINTMENT_SELECT)
+        .eq("barber_id", await getShopBarberId()).gte("starts_at", floor).order("starts_at"),
       loadPricingSettings(),
     ]);
 
@@ -594,7 +631,6 @@ export async function loadAdminOverview(): Promise<{
     services: (servicesResult.data ?? []).map(mapServiceRow),
     clients: (profilesResult.data ?? []).map(mapClientRow),
     requests: rows.map(mapRequestRow),
-    proposals: proposalsFromRequests(rows),
     appointments: confirmedOnly(appointmentsResult.data).map(mapAppointmentRow),
     analyticsAppointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
     pricingSettings,
@@ -630,10 +666,11 @@ export async function loadAdminCalendar(window: { fromIso: string; toIso: string
       supabase
         .from("appointments")
         .select(APPOINTMENT_SELECT)
+        .eq("barber_id", await getShopBarberId())
         .gte("starts_at", window.fromIso)
         .lt("starts_at", window.toIso)
         .order("starts_at"),
-      loadBlockedDays(),
+      loadBlockedDays(window),
     ]);
 
   fail("services", servicesResult.error);
@@ -695,7 +732,8 @@ export async function loadRequestQueue(): Promise<{
         .or(`status.in.(pending,proposed),created_at.gte.${recentIso}`)
         .order("created_at", { ascending: false }),
       // Trailing year: enough for same-day conflict checks and no-show counts.
-      supabase.from("appointments").select(APPOINTMENT_SELECT).gte("starts_at", floor).order("starts_at"),
+      supabase.from("appointments").select(APPOINTMENT_SELECT)
+        .eq("barber_id", await getShopBarberId()).gte("starts_at", floor).order("starts_at"),
       loadBlockedDays(),
     ]);
 
@@ -744,10 +782,13 @@ export async function loadClientHistory(clientId: string): Promise<{
         .select(REQUEST_SELECT)
         .eq("client_id", clientId)
         .order("created_at", { ascending: false }),
+      // Reschedules retain cancelled rows for audit/analytics; the profile
+      // lists actual bookings, not each historical version.
       supabase
         .from("appointments")
         .select(APPOINTMENT_SELECT)
         .eq("client_id", clientId)
+        .eq("status", "confirmed")
         .order("starts_at"),
       supabase.from("services").select("*"),
     ]);
@@ -787,7 +828,7 @@ export async function loadExportAppointments(
   fromIso: string,
   toIso: string,
   // When set, only that client's appointments are returned (client self-export).
-  // Omitted for the admin, who exports the whole schedule. RLS still applies:
+  // Omitted for the admin, who exports the shop barber's schedule. RLS still applies:
   // clients can read all appointment rows but only their own profile, so the
   // customer name resolves to their own name (fine — it's their calendar).
   clientId?: string,
@@ -802,6 +843,8 @@ export async function loadExportAppointments(
     .order("starts_at");
   if (clientId) {
     appointmentsQuery = appointmentsQuery.eq("client_id", clientId);
+  } else {
+    appointmentsQuery = appointmentsQuery.eq("barber_id", await getShopBarberId());
   }
 
   const [appointmentsResult, servicesResult, profilesResult] = await Promise.all([
@@ -909,25 +952,21 @@ const DEFAULT_HOURS: BusinessHoursDay[] = Array.from({ length: 7 }, (_, w) => ({
 
 export async function loadBusinessHours(barberId?: string): Promise<BusinessHoursDay[]> {
   const supabase = await createClient();
+  const shopBarberId = barberId ?? await getShopBarberId();
 
-  let query = supabase
+  const query = supabase
     .from("business_hours")
     .select("barber_id, weekday, opens_at, closes_at, closed")
+    .eq("barber_id", shopBarberId)
     .order("weekday");
 
-  if (barberId) {
-    query = query.eq("barber_id", barberId);
-  }
-
   const { data, error } = await query;
-
-  if (error || !data || data.length === 0) return DEFAULT_HOURS;
-
-  const rows = barberId ? data : data.filter((row) => row.barber_id === data[0]?.barber_id);
+  fail("business_hours", error);
+  if (!data || data.length === 0) return DEFAULT_HOURS;
 
   // Fill in any missing weekdays with defaults.
   return DEFAULT_HOURS.map((def) => {
-    const row = rows.find((r) => r.weekday === def.weekday);
+    const row = data.find((r) => r.weekday === def.weekday);
     if (!row) return def;
     return {
       weekday: row.weekday,

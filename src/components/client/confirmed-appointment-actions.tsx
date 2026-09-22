@@ -1,6 +1,7 @@
 "use client";
 
 import { Cancel01Icon, LockIcon, RepeatIcon } from "@hugeicons/core-free-icons";
+import dynamic from "next/dynamic";
 import { useState, useTransition } from "react";
 
 import {
@@ -12,6 +13,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Feedback } from "@/components/shared/feedback";
 import { Icon } from "@/components/shared/icon";
 import { Modal } from "@/components/shared/modal";
+import { Skeleton } from "@/components/shared/skeleton";
 import type {
   ActionResult,
   Appointment,
@@ -23,7 +25,12 @@ import type {
 } from "@/domain/types";
 import { useT } from "@/i18n/provider";
 
-import { SlotPicker, type SlotChoice } from "./slot-picker";
+import type { SlotChoice } from "./slot-picker";
+
+const SlotPicker = dynamic(
+  () => import("./slot-picker").then((module) => module.SlotPicker),
+  { ssr: false, loading: () => <Skeleton className="h-96 w-full rounded-xl" /> },
+);
 
 type Props = {
   appointment: ClientAppointment;
@@ -51,6 +58,8 @@ export function ConfirmedAppointmentActions({
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
+  const [pickerOpened, setPickerOpened] = useState(false);
+  if (rescheduling && !pickerOpened) setPickerOpened(true);
   const [date, setDate] = useState<string | null>(null);
   const [slot, setSlot] = useState<SlotChoice | null>(null);
 
@@ -165,22 +174,24 @@ export function ConfirmedAppointmentActions({
           </>
         }
       >
-        <SlotPicker
-          service={service}
-          services={services}
-          pricingSettings={pricingSettings}
-          date={date}
-          onDateChange={(next) => {
-            setDate(next);
-            setSlot(null);
-          }}
-          selectedTime={slot?.time ?? null}
-          onSelectTime={setSlot}
-          appointments={bookedSlots}
-          pendingRequests={pendingRequests}
-          blockedDates={blockedDates}
-          businessHours={businessHours}
-        />
+        {pickerOpened ? (
+          <SlotPicker
+            service={service}
+            services={services}
+            pricingSettings={pricingSettings}
+            date={date}
+            onDateChange={(next) => {
+              setDate(next);
+              setSlot(null);
+            }}
+            selectedTime={slot?.time ?? null}
+            onSelectTime={setSlot}
+            appointments={bookedSlots}
+            pendingRequests={pendingRequests}
+            blockedDates={blockedDates}
+            businessHours={businessHours}
+          />
+        ) : null}
       </Modal>
     </>
   );

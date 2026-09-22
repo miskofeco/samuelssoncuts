@@ -11,13 +11,17 @@ export const dynamic = "force-dynamic";
 
 export default async function ReservationsPage() {
   const profile = await requireApprovedClient();
-  const [data, bookingData, t, token] = await Promise.all([
+  const [data, t, token] = await Promise.all([
     loadClientReservations(profile),
-    loadBookingData(),
     getDict(),
     // The client's own secret feed token → subscription URL (their appointments).
     loadCalendarToken(profile.id),
   ]);
+  // Most clients have no upcoming appointment. Avoid loading the slot picker
+  // context until there is an appointment whose actions can actually use it.
+  const bookingData = data.upcomingAppointments.length > 0
+    ? await loadBookingData({ includeServices: false })
+    : null;
   const feedUrl = token ? `${getSiteUrl()}/api/calendar/feed/${token}` : undefined;
 
   return (
@@ -26,15 +30,17 @@ export default async function ReservationsPage() {
         <CalendarExport feedUrl={feedUrl} />
         <ButtonLink href="/client/book">{t.client.newRequest}</ButtonLink>
       </div>
-      <UpcomingAppointments
-        appointments={data.upcomingAppointments}
-        services={data.services}
-        pricingSettings={bookingData.pricingSettings}
-        bookedSlots={bookingData.appointments}
-        pendingRequests={bookingData.pendingRequests}
-        blockedDates={bookingData.blockedDates}
-        businessHours={bookingData.businessHours}
-      />
+      {bookingData ? (
+        <UpcomingAppointments
+          appointments={data.upcomingAppointments}
+          services={data.services}
+          pricingSettings={bookingData.pricingSettings}
+          bookedSlots={bookingData.appointments}
+          pendingRequests={bookingData.pendingRequests}
+          blockedDates={bookingData.blockedDates}
+          businessHours={bookingData.businessHours}
+        />
+      ) : null}
       <ReservationsView
         requests={data.requests}
         proposals={data.proposals}

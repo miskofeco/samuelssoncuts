@@ -1,5 +1,5 @@
 // Sent to a client when the barber cancels their confirmed appointment.
-import { EmailButton, EmailDetail, EmailDetails, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
+import { EmailAppointmentCard, EmailButton, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
 import { formatEmailDate } from "./date";
 import { getSiteUrl } from "@/lib/env";
 
@@ -20,16 +20,12 @@ export function AppointmentCancelledEmail({
 
   return (
     <EmailLayout preview="Váš termín bol zrušený" accent="danger">
-      <EmailHeading>Termín bol zrušený</EmailHeading>
+      <EmailHeading icon="cancel" accent="danger">Termín bol zrušený</EmailHeading>
       <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
         Tento termín bol zrušený. Ospravedlňujeme sa za nepríjemnosť.
       </EmailParagraph>
-      <EmailDetails>
-        <EmailDetail label="Služba" value={service} />
-        <EmailDetail label="Dátum" value={formattedDate} />
-        <EmailDetail label="Čas" value={time} />
-      </EmailDetails>
+      <EmailAppointmentCard service={service} date={formattedDate} time={time} />
       {note ? <EmailNote>{note}</EmailNote> : null}
       <EmailButton href={`${getSiteUrl()}/client/book`}>Vybrať nový termín</EmailButton>
     </EmailLayout>

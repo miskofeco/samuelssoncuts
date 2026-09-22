@@ -1,5 +1,5 @@
 // Sent to a client when the barber reschedules a confirmed appointment.
-import { EmailButton, EmailDetail, EmailDetails, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
+import { EmailAppointmentCard, EmailButton, EmailHeading, EmailLayout, EmailNote, EmailParagraph } from "./layout";
 import { formatEmailDate } from "./date";
 import { getSiteUrl } from "@/lib/env";
 
@@ -20,17 +20,19 @@ export function AppointmentRescheduledEmail({
 
   return (
     <EmailLayout preview={`Termín bol presunutý: ${formattedDate} o ${time}`}>
-      <EmailHeading>Termín bol presunutý</EmailHeading>
+      <EmailHeading icon="refresh">Termín bol presunutý</EmailHeading>
       <EmailParagraph>Dobrý deň, {clientName},</EmailParagraph>
       <EmailParagraph>
         Váš termín bol presunutý na nový návrh. Prosím, potvrďte ho alebo
         odmietnite v klientskom účte.
       </EmailParagraph>
-      <EmailDetails>
-        <EmailDetail label="Služba" value={service} />
-        <EmailDetail label="Nový dátum" value={formattedDate} />
-        <EmailDetail label="Nový čas" value={time} />
-      </EmailDetails>
+      <EmailAppointmentCard
+        service={service}
+        date={formattedDate}
+        time={time}
+        dateLabel="Nový dátum"
+        timeLabel="Nový čas"
+      />
       {note ? <EmailNote>{note}</EmailNote> : null}
       <EmailButton href={`${getSiteUrl()}/client/reservations`}>
         Zobraziť a odpovedať

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import type { NavCounts } from "@/components/layout/nav-items";
+import { useLiveAttention } from "@/hooks/use-live-attention";
 
 declare global {
   interface Navigator {
@@ -28,23 +30,29 @@ async function setBadge(count: number) {
   }
 }
 
-export function PushBadgeSync({ badgeCount }: { badgeCount: number }) {
+export function PushBadgeSync({ counts, role }: { counts: NavCounts; role: "admin" | "client" }) {
+  const liveCounts = useLiveAttention(counts);
+  const badgeCount = role === "admin"
+    ? liveCounts.requests + liveCounts.approvals
+    : liveCounts.unread;
+
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
-
-    let cancelled = false;
-    // Post to the *ready* registration: `register()` may resolve while the
-    // worker is still installing, in which case `active` is null.
     navigator.serviceWorker.register("/sw.js")
-      .then(() => navigator.serviceWorker.ready)
-      .then((registration) => {
-        if (cancelled) return;
-        registration.active?.postMessage({ type: "SET_BADGE", count: badgeCount });
-      })
       .catch(() => {
         // Service worker support can be disabled by browser/device policy.
       });
+  }, []);
 
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    let cancelled = false;
+    // `ready` waits for the active worker even on the first registration.
+    navigator.serviceWorker.ready.then((registration) => {
+      if (!cancelled) registration.active?.postMessage({ type: "SET_BADGE", count: badgeCount });
+    }).catch(() => {
+      // Service worker support can be disabled by browser/device policy.
+    });
     return () => {
       cancelled = true;
     };

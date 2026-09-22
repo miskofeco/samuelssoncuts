@@ -20,7 +20,6 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_SHOP_TIME_ZONE=Europe/Bratislava
 RESEND_API_KEY=
 RESEND_FROM_ADDRESS="Samuelsson Cuts <noreply@example.com>"
-BARBER_EMAIL=
 WEB_PUSH_PUBLIC_KEY=
 WEB_PUSH_PRIVATE_KEY=
 WEB_PUSH_SUBJECT=mailto:noreply@example.com
@@ -28,7 +27,7 @@ CRON_SECRET=
 ERROR_REPORT_WEBHOOK_URL=
 ```
 
-3. Apply Supabase migrations in `supabase/migrations` to the target project.
+3. Apply Supabase migrations in `supabase/migrations` to the target project. After Samuel's approved admin profile exists, ensure it is the sole profile with `is_shop_barber = true`; a fresh database without that profile intentionally rejects booking rather than choosing an arbitrary admin.
 
 4. Start the app:
 
@@ -56,7 +55,7 @@ The test suite includes production-hardening checks for booking guards, cron aut
 - Notification inserts are restricted to `user_id = auth.uid() OR is_admin()` (migration `0018`). The reminder cron uses the service-role client and is unaffected.
 - `NEXT_PUBLIC_SHOP_TIME_ZONE` controls booking date/time conversion and display. The default is `Europe/Bratislava`; set it explicitly in every environment.
 - Auth, booking mutations, cron, and calendar feeds use the `public.check_rate_limit` RPC backed by `public.rate_limits`.
-- `RESEND_API_KEY`, `RESEND_FROM_ADDRESS`, and `BARBER_EMAIL` should be configured before launch. Without `RESEND_API_KEY`, email sends are skipped and logged.
+- `RESEND_API_KEY` and `RESEND_FROM_ADDRESS` should be configured before launch. Operational mail and reply-to addresses come from the designated shop barber profile. Without `RESEND_API_KEY`, email sends are skipped and logged.
 - `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, and `WEB_PUSH_SUBJECT` enable installed-PWA push notifications and app-icon badges. Generate the VAPID pair once with `npx web-push generate-vapid-keys --json`; keep the private key server-only and never expose it with a `NEXT_PUBLIC_` prefix.
 - `ERROR_REPORT_WEBHOOK_URL` is optional. When set, structured server errors are posted there (with a 3s timeout) in addition to platform logs. Configure your host log drain for stdout/stderr so `logEvent` and `reportError` JSON is retained.
 - Uncaught server errors (Server Components, Route Handlers, Server Actions) are captured centrally by `src/instrumentation.ts` (`onRequestError`) and forwarded to `reportError`. To add Sentry, install `@sentry/nextjs` and call `Sentry.captureRequestError(...)` inside that hook.

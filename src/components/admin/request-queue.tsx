@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/shared/icon";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
+import { requiresAdminRequestAction } from "@/domain/request-actionability";
 import type {
   Appointment,
   BookingRequest,
@@ -26,7 +27,7 @@ type FilterKey = "actionable" | "pending" | "proposed" | "confirmed" | "all";
 function matches(status: RequestStatus, filter: FilterKey) {
   switch (filter) {
     case "actionable":
-      return status === "pending" || status === "declined";
+      return requiresAdminRequestAction(status);
     case "pending":
       return status === "pending";
     case "proposed":
@@ -106,6 +107,8 @@ export function RequestQueue({
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
     [requests, filter],
   );
+  const clientsById = useMemo(() => new Map(clients.map((client) => [client.id, client])), [clients]);
+  const proposalsById = useMemo(() => new Map(proposals.map((proposal) => [proposal.id, proposal])), [proposals]);
 
   return (
     <section className="space-y-4">
@@ -144,11 +147,11 @@ export function RequestQueue({
           visible.map((request) => (
             <ProposalComposer
               key={request.id}
-              client={clients.find((item) => item.id === request.clientId)}
+              client={clientsById.get(request.clientId)}
               appointments={appointments}
               request={request}
               services={services}
-              activeProposal={proposals.find((item) => item.id === request.proposalId)}
+              activeProposal={request.proposalId ? proposalsById.get(request.proposalId) : undefined}
               blockedDates={blockedDates}
             />
           ))

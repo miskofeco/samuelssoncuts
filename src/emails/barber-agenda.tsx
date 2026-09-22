@@ -24,7 +24,7 @@ export function BarberAgendaEmail({
 
   return (
     <EmailLayout preview={`Dnes: ${count} ${termText}`} accent="brand">
-      <EmailHeading>Dnešný prehľad</EmailHeading>
+      <EmailHeading icon="calendar">Dnešný prehľad</EmailHeading>
       <EmailParagraph>
         {formattedDate} - máte {count} {confirmedText} {termText}.
       </EmailParagraph>
@@ -35,6 +35,7 @@ export function BarberAgendaEmail({
               key={index}
               label={item.time}
               value={`${item.service} · ${item.customer}`}
+              icon="clock"
             />
           ))}
         </EmailDetails>

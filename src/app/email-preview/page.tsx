@@ -15,6 +15,7 @@ import { AuthEmail } from "@/emails/auth-email";
 import { BarberAgendaEmail } from "@/emails/barber-agenda";
 import { BookingReceivedEmail } from "@/emails/booking-received";
 import { BookingRequestEmail } from "@/emails/booking-request";
+import { BookingRequestDeclinedEmail } from "@/emails/booking-request-declined";
 import { ClientRespondedEmail } from "@/emails/client-responded";
 import { SlotTakenEmail } from "@/emails/slot-taken";
 
@@ -155,6 +156,16 @@ const EMAIL_PREVIEWS: EmailPreview[] = [
     title: "Termín obsadený",
     description: "Požadovaný čas bol potvrdený pre inú rezerváciu.",
     component: <SlotTakenEmail clientName={SAMPLE.clientName} />,
+  },
+  {
+    title: "Žiadosť odmietnutá",
+    description: "Klient dostane dôvod a cestu k výberu nového termínu.",
+    component: (
+      <BookingRequestDeclinedEmail
+        clientName={SAMPLE.clientName}
+        reason="Vybraný čas už nie je možné potvrdiť."
+      />
+    ),
   },
   {
     title: "Klient potvrdil návrh",
