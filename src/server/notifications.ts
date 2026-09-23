@@ -9,6 +9,7 @@ import { getSiteUrl, getWebPushEnv } from "@/lib/env";
 import { getShopBarberEmail } from "@/server/shop-barber";
 import { reportError } from "@/lib/observability";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { PushCopy } from "@/domain/push-copy";
 import { derivePushNotification } from "@/server/push-payloads";
 
 type Supabase = SupabaseClient<Database>;
@@ -18,6 +19,8 @@ type PushSubscriptionRow = Database["public"]["Tables"]["push_subscriptions"]["R
 export type NotificationInput = NotificationInsert & {
   pushUserIds?: string[];
   pushUrl?: string;
+  /** Structured lock-screen copy; never derived from the free-text `body`. */
+  push?: PushCopy;
 };
 
 let vapidConfigured = false;
@@ -136,7 +139,7 @@ async function markPushFailure(subscription: PushSubscriptionRow, error: unknown
 
 export async function sendPushToUser(
   userId: string,
-  notification: { subject: string; body?: string | null },
+  notification: { subject: string; body?: string | null; push?: PushCopy | null },
   options: { url?: string; tag?: string } = {},
 ) {
   if (!configureWebPush()) return;
@@ -196,7 +199,7 @@ export async function sendPushToUser(
 
 async function sendPushToUsers(
   userIds: string[] | undefined,
-  notification: NotificationInsert,
+  notification: NotificationInsert & { push?: PushCopy },
   pushUrl?: string,
 ) {
   const uniqueIds = [...new Set((userIds ?? []).filter(Boolean))];
@@ -208,14 +211,15 @@ async function sendPushToUsers(
 }
 
 function toNotificationRow(notification: NotificationInput): NotificationInsert {
-  const { pushUserIds: _pushUserIds, pushUrl, ...row } = notification;
+  const { pushUserIds: _pushUserIds, pushUrl, push: _push, ...row } = notification;
   void _pushUserIds;
+  void _push;
   return { ...row, action_url: pushUrl ?? row.action_url ?? null };
 }
 
 export async function createNotification(
   supabase: Supabase,
-  { pushUserIds, pushUrl, ...notification }: NotificationInput,
+  { pushUserIds, pushUrl, push, ...notification }: NotificationInput,
 ) {
   const { error } = await supabase
     .from("notifications")
@@ -226,7 +230,7 @@ export async function createNotification(
   }
 
   const fallbackUserIds = notification.user_id ? [notification.user_id] : [];
-  after(() => sendPushToUsers(pushUserIds ?? fallbackUserIds, notification, pushUrl));
+  after(() => sendPushToUsers(pushUserIds ?? fallbackUserIds, { ...notification, push }, pushUrl));
 }
 
 export async function createNotifications(
@@ -254,6 +258,7 @@ export async function createAdminNotification(
   notification: Omit<NotificationInsert, "user_id" | "recipient"> & {
     recipient?: string;
     pushUrl?: string;
+    push?: PushCopy;
   },
 ) {
   const supabase = getSupabaseAdminClient();

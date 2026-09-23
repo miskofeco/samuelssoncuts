@@ -29,6 +29,7 @@ import {
 } from "@/server/appointment-outcomes";
 import { isAuthorizedCronRequest } from "@/server/cron-auth";
 import { enforceRateLimit } from "@/server/rate-limit";
+import { clientReminderPush } from "@/domain/push-copy";
 import { createNotifications, type NotificationInput } from "@/server/notifications";
 import { reminderWindowFor } from "@/server/reminder-window";
 import { getShopBarberEmail, getShopBarberId } from "@/server/shop-barber";
@@ -193,6 +194,7 @@ export async function GET(request: NextRequest) {
         channel: "email",
         recipient: profile.email,
         subject,
+        push: clientReminderPush({ service: services.get(appt.service_id), date, time }),
         pushUrl: "/client/reservations",
       });
     });

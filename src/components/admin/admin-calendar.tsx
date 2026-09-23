@@ -340,6 +340,20 @@ export function AdminCalendar({
             className="md:max-w-xs"
           />
           <div className="flex items-center gap-1 md:ml-auto">
+            {/* Placed before the arrows: the group is right-aligned, so a
+                Today button appearing here grows leftwards and never shifts
+                the period switcher. */}
+            {!isOnToday ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={jumpToToday}
+                className="mr-1 hidden h-10 sm:inline-flex"
+              >
+                {t.common.today}
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"
@@ -397,17 +411,6 @@ export function AdminCalendar({
             >
               <Icon icon={ArrowRight01Icon} strokeWidth={2} />
             </Button>
-            {!isOnToday ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={jumpToToday}
-                className="ml-1 hidden h-10 sm:inline-flex"
-              >
-                {t.common.today}
-              </Button>
-            ) : null}
             <Button
               type="button"
               size="icon"
@@ -540,6 +543,10 @@ const START_HOUR = 7;
 const END_HOUR = 21; // exclusive end — 07:00 open, last book 20:00 (runs to ~21:00)
 const GRID_HOURS = END_HOUR - START_HOUR;
 const HOUR_HEIGHT = 64;
+// Vertical gap between a booking chip's box and the hour gridlines it spans.
+// The chip's ring-1 is a box-shadow painted 1px outside the box, so 2px keeps
+// the ring itself 1px clear of the line at both the start and the end.
+const CHIP_GAP = 2;
 const WEEK_GRID_COLUMNS = "64px repeat(7, minmax(0, 1fr))";
 // Visible height of the scrollable grid body (the full grid is taller and scrolls).
 const VIEWPORT_HEIGHT = 9 * HOUR_HEIGHT;
@@ -1078,10 +1085,12 @@ function DayColumn({
         </div>
       ) : null}
 
-      {/* Bookings positioned by start time, sized by duration */}
+      {/* Bookings positioned by start time, sized by duration. Chips are inset
+          by CHIP_GAP on top and bottom so the hour gridline at their start and
+          end stays visible instead of being painted over. */}
       {layoutOverlappingItems(items).map(({ item, column, columnCount }) => {
-        const top = (minutesFromStart(item.time) / 60) * HOUR_HEIGHT;
-        const height = Math.max((item.durationMinutes / 60) * HOUR_HEIGHT, 22);
+        const top = (minutesFromStart(item.time) / 60) * HOUR_HEIGHT + CHIP_GAP;
+        const height = Math.max((item.durationMinutes / 60) * HOUR_HEIGHT, 22) - CHIP_GAP * 2;
         const widthPercent = 100 / columnCount;
         return (
           <CalendarChip
@@ -1162,7 +1171,7 @@ function CalendarChip({
         onClick={() => onSelect(item)}
         style={style}
         className={cn(
-          "absolute z-10 flex overflow-hidden rounded-md py-0.5 pr-1.5 pl-3.5 text-left leading-tight transition",
+          "absolute z-10 flex overflow-hidden rounded-sm py-0.5 pr-1.5 pl-3.5 text-left leading-tight transition",
           neutralChipClasses,
         )}
       >

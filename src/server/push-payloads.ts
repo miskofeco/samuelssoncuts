@@ -1,3 +1,5 @@
+import type { PushCopy } from "@/domain/push-copy";
+
 export type PushPayload = {
   title: string;
   body?: string;
@@ -6,14 +8,17 @@ export type PushPayload = {
   tag?: string;
 };
 
-// The free-text body (client notes, names in context) deliberately never
-// reaches the push service: only the short subject travels off-platform.
+// Structured push copy (see `src/domain/push-copy.ts`) gives the lock screen a
+// short action title and a detail body. Without it, only the in-app subject
+// travels; the free-text notification body (client notes, admin reasons)
+// deliberately never reaches the push service.
 export function derivePushNotification(
-  notification: { subject: string; body?: string | null },
+  notification: { subject: string; body?: string | null; push?: PushCopy | null },
   options: { badgeCount: number; url: string; tag?: string },
 ): PushPayload {
   return {
-    title: notification.subject,
+    title: notification.push?.title ?? notification.subject,
+    body: notification.push?.body || undefined,
     url: options.url,
     badgeCount: Math.max(0, options.badgeCount),
     tag: options.tag,

@@ -42,6 +42,22 @@ import { dashboardPathFor, getCurrentProfile, requireAdmin, requireApprovedClien
 import { isReadyForApproval } from "@/domain/approval";
 import type { AuthFormState } from "@/domain/auth-form";
 import { parsePhone } from "@/domain/phone";
+import {
+  accountApprovedPush,
+  accountBlockedPush,
+  accountRejectedPush,
+  adminClientCancelledPush,
+  adminNewRequestPush,
+  adminProposalResponsePush,
+  adminRescheduleRequestPush,
+  clientCancelledPush,
+  clientConfirmedPush,
+  clientProposedPush,
+  clientRequestDeclinedPush,
+  clientRequestReceivedPush,
+  clientRescheduledPush,
+  clientSlotTakenPush,
+} from "@/domain/push-copy";
 import { authErrorPath, authNoticePath } from "@/i18n/auth-notices";
 import { recordAdminAction } from "@/server/audit";
 import { notificationOrFilter } from "@/server/dashboard-data";
@@ -660,6 +676,12 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
       channel: "email",
       recipient: barberEmail,
       subject: `${profile.full_name} žiada termín ${parsed.data.date} o ${parsed.data.time}`,
+      push: adminNewRequestPush({
+        client: profile.full_name,
+        service: service.name,
+        date: parsed.data.date,
+        time: parsed.data.time,
+      }),
       pushUrl: "/admin/requests",
     }),
     sendEmail({
@@ -684,6 +706,7 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
       recipient: profile.email,
       subject: clientSubject,
       body: `Žiadosť o ${service.name} na ${parsed.data.date} o ${parsed.data.time} sme prijali. Termín bude ešte potvrdený.`,
+      push: clientRequestReceivedPush({ service: service.name, date: parsed.data.date, time: parsed.data.time }),
       pushUrl: "/client/reservations",
     }));
     deliveries.push(sendEmail({
@@ -760,6 +783,7 @@ export async function approveClientAction(clientId: string): Promise<ActionResul
     recipient: profile.email,
     subject: "Váš účet Samuelsson Cuts bol schválený",
     body: `Dobrý deň, ${profile.full_name}, váš účet je schválený. Môžete si rezervovať termín.`,
+    push: accountApprovedPush(),
     pushUrl: "/client",
   });
   await sendEmail({
@@ -807,6 +831,7 @@ export async function rejectClientAction(clientId: string): Promise<ActionResult
     recipient: profile.email,
     subject: "Informácia k účtu Samuelsson Cuts",
     body: `Dobrý deň, ${profile.full_name}, váš účet momentálne nevieme schváliť.`,
+    push: accountRejectedPush(),
     pushUrl: "/client/notifications",
   });
   await sendEmail({
@@ -887,6 +912,7 @@ export async function blockClientAction(clientId: string): Promise<ActionResult>
     channel: "email",
     recipient: profile.email,
     subject: "Prístup k účtu Samuelsson Cuts bol zrušený",
+    push: accountBlockedPush(),
     pushUrl: "/client/notifications",
   });
   await sendEmail({
@@ -1158,6 +1184,7 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
     recipient: clientProfile?.email ?? "client",
     subject: `Navrhnutý termín ${parsed.data.date} o ${parsed.data.time}`,
     body: parsed.data.note ?? null,
+    push: clientProposedPush({ service: service.name, date: parsed.data.date, time: parsed.data.time }),
     pushUrl: "/client/reservations",
   });
   if (clientProfile?.email) {
@@ -1246,6 +1273,7 @@ export async function declineRequestAdminAction(input: unknown): Promise<ActionR
       recipient: clientProfile.email,
       subject: t.feedback.requestDeclinedSubject,
       body: parsed.data.reason || t.feedback.requestDeclinedBody,
+      push: clientRequestDeclinedPush(),
       pushUrl: "/client/reservations",
     });
     await sendEmail({
@@ -1369,6 +1397,7 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
         channel: "email" as const,
         recipient: siblingProfiles?.find((p) => p.id === s.client_id)?.email ?? "client",
         subject: "Požadovaný termín už nie je dostupný",
+        push: clientSlotTakenPush(),
         pushUrl: "/client/book",
       })),
     );
@@ -1390,6 +1419,7 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
     channel: "email",
     recipient: confirmedClient?.email ?? "client",
     subject: "Váš termín je potvrdený",
+    push: clientConfirmedPush({ service: confirmedService?.name, date: requestedDate, time: requestedTime }),
     pushUrl: "/client/reservations",
   });
   if (confirmedClient?.email) {
@@ -1531,6 +1561,7 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
     recipient: clientProfile?.email ?? "client",
     subject: `Termín bol presunutý: ${parsed.data.date} o ${parsed.data.time}`,
     body: parsed.data.note ?? null,
+    push: clientRescheduledPush({ service: rescheduleService?.name, date: parsed.data.date, time: parsed.data.time }),
     pushUrl: "/client/reservations",
   });
   if (clientProfile?.email) {
@@ -1615,6 +1646,7 @@ export async function cancelAppointmentAdminAction(input: unknown): Promise<Acti
       recipient: clientProfile.email,
       subject: "Váš termín bol zrušený",
       body: parsed.data.note ?? null,
+      push: clientCancelledPush({ service: cancelService?.name, date: cancelDate, time: cancelTime }),
       pushUrl: "/client/reservations",
     });
     await sendEmail({
@@ -1847,6 +1879,13 @@ export async function respondToProposalAction(
     channel: "email",
     recipient: barberEmailForResponse,
     subject: respondSubject,
+    push: adminProposalResponsePush({
+      client: profile.full_name,
+      service: respondService?.name,
+      date: respondDate,
+      time: respondTime,
+      accepted,
+    }),
     pushUrl: "/admin/requests",
   });
   await sendEmail({
@@ -2607,6 +2646,12 @@ export async function cancelConfirmedAppointmentAction(
     channel: "email",
     recipient: barberEmail,
     subject: cancelSubject,
+    push: adminClientCancelledPush({
+      client: profile.full_name,
+      service: cancelService?.name,
+      date: cancelDate,
+      time: cancelTime,
+    }),
     pushUrl: "/admin/calendar",
   });
   await sendEmail({
@@ -2747,6 +2792,12 @@ export async function requestRescheduleAction(
     channel: "email",
     recipient: barberEmail,
     subject: rescheduleSubject,
+    push: adminRescheduleRequestPush({
+      client: profile.full_name,
+      service: rescheduleService.name,
+      date: parsed.data.date,
+      time: parsed.data.time,
+    }),
     pushUrl: "/admin/requests",
   });
   await sendEmail({

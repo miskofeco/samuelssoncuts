@@ -125,7 +125,7 @@ export function AppSidebar({
                           <span
                             className={cn(
                               "flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
-                              active && "bg-primary text-primary-foreground shadow-xs",
+                              active && "text-sidebar-accent-foreground",
                             )}
                           >
                             <Icon icon={item.icon} strokeWidth={active ? 2.2 : 1.8} />

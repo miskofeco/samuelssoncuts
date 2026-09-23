@@ -45,7 +45,7 @@ export function RequestDayPreview({
     .filter((item) => item.placement !== null);
 
   return (
-    <figure className="hidden min-w-0 border-t border-foreground/10 pt-5 lg:block xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
+    <figure className="hidden min-w-0 flex-col border-t border-foreground/10 pt-5 lg:flex xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
       <figcaption className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground">{t.admin.requestDayPreview}</p>
@@ -53,7 +53,7 @@ export function RequestDayPreview({
         </div>
         <Link
           href={`/admin/calendar?view=day&date=${encodeURIComponent(date)}`}
-          className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="-mr-2 inline-flex min-h-10 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           {t.admin.viewCalendar}
           <Icon icon={ArrowRight01Icon} className="size-3.5" />
@@ -64,7 +64,7 @@ export function RequestDayPreview({
         <span>{t.admin.previewConfirmed}</span>
         <span>{kind === "pending" ? t.admin.previewRequested : t.admin.previewProposed}</span>
       </div>
-      <div className="relative mt-1 grid h-32 grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)] gap-x-3" role="img" aria-label={t.admin.previewAccessible(time, nearby.length)}>
+      <div className="relative mt-1 grid min-h-32 flex-1 grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)] gap-x-3" role="img" aria-label={t.admin.previewAccessible(time, nearby.length)}>
         <div className="relative">
           {Array.from({ length: 5 }, (_, index) => (
             <span
