@@ -66,6 +66,12 @@ test("blocked days are painted red and announced in every calendar", () => {
   assert.match(slotPicker, /<span className="sr-only">\{t\.client\.unavailable\}<\/span>/);
 });
 
+test("admin month calendar can shrink to a phone viewport", () => {
+  assert.match(scheduleCalendar, /day: cn\(\s*"group\/day relative min-w-0 flex-1/);
+  assert.match(scheduleCalendar, /flex size-full min-w-0 flex-col overflow-hidden/);
+  assert.match(adminCalendar, /className="sr-only sm:not-sr-only sm:truncate"/);
+});
+
 test("client booking only marks closed days inside the booking window", () => {
   assert.match(slotPicker, /const isClosedInWindow = \(iso: string\) =>\s*isDateInClientBookingWindow\(iso\) &&/);
   assert.match(slotPicker, /blockedDates\.has\(iso\) \|\| isDateClosedForBusinessHours\(iso, businessHours\)/);

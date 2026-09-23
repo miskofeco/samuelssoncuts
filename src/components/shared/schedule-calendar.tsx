@@ -103,10 +103,10 @@ export function ScheduleCalendar({
         month_grid: "w-full border-collapse",
         weekdays: "flex",
         weekday:
-          "flex-1 pb-1 text-center text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase select-none",
-        week: "mt-1 flex w-full gap-1",
+          "min-w-0 flex-1 pb-1 text-center text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase select-none",
+        week: "mt-1 flex min-w-0 w-full gap-1",
         day: cn(
-          "group/day relative flex-1 select-none p-0 text-center",
+          "group/day relative min-w-0 flex-1 select-none p-0 text-center",
           fluid ? "min-h-[4.75rem]" : "aspect-square",
         ),
         today: "",
@@ -146,7 +146,7 @@ function ScheduleDayButton({
       data-today={modifiers.today || undefined}
       data-outside={modifiers.outside || undefined}
       className={cn(
-        "flex size-full flex-col rounded-lg border bg-card text-foreground transition outline-none",
+        "flex size-full min-w-0 flex-col overflow-hidden rounded-lg border bg-card text-foreground transition outline-none",
         fluid ? "items-start justify-start p-1.5 text-left" : "items-center justify-center gap-0.5",
         "hover:not-disabled:border-foreground/60 active:not-disabled:scale-[0.97]",
         "focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50",
@@ -161,7 +161,11 @@ function ScheduleDayButton({
       {...props}
     >
       <span className="text-sm font-semibold tabular-nums leading-none">{day.date.getDate()}</span>
-      {extra ? <span className={cn("flex", fluid ? "mt-1.5 w-full flex-1" : "mt-0.5")}>{extra}</span> : null}
+      {extra ? (
+        <span className={cn("flex min-w-0 overflow-hidden", fluid ? "mt-1.5 w-full flex-1" : "mt-0.5")}>
+          {extra}
+        </span>
+      ) : null}
     </button>
   );
 }

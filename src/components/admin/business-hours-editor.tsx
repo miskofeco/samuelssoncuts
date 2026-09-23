@@ -107,7 +107,7 @@ export function BusinessHoursEditor({
               <li
                 key={day.weekday}
                 className={cn(
-                  "flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-start sm:px-4",
+                  "flex min-w-0 flex-col gap-3 px-3 py-3 sm:flex-row sm:items-start sm:px-4",
                   day.closed ? "bg-muted/40" : "bg-card",
                 )}
               >
@@ -135,9 +135,9 @@ export function BusinessHoursEditor({
 
                 {/* Time pickers */}
                 {!day.closed ? (
-                  <div className="grid min-w-0 flex-1 grid-cols-1 items-start gap-2 lg:ml-auto lg:max-w-sm lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                  <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] items-start gap-2 sm:flex-1 lg:ml-auto lg:max-w-sm lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
                     <Field
-                      className="min-w-0"
+                      className="w-full min-w-0 max-w-full"
                       label={t.admin.from}
                       type="time"
                       step={1800}
@@ -148,7 +148,7 @@ export function BusinessHoursEditor({
                       –
                     </span>
                     <Field
-                      className="min-w-0"
+                      className="w-full min-w-0 max-w-full"
                       label={t.admin.to}
                       type="time"
                       step={1800}

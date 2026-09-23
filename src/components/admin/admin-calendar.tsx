@@ -459,9 +459,9 @@ export function AdminCalendar({
                 const items = itemsByDate.get(iso) ?? [];
                 if (modifiers.blocked) {
                   return (
-                    <span className="inline-flex items-center gap-1 text-[0.65rem] font-semibold tracking-wide uppercase">
-                      <Icon icon={BlockedIcon} className="size-3" strokeWidth={2.5} />
-                      {t.admin.off}
+                    <span className="inline-flex min-w-0 items-center gap-1 text-[0.65rem] font-semibold tracking-wide uppercase">
+                      <Icon icon={BlockedIcon} className="size-3 shrink-0" strokeWidth={2.5} />
+                      <span className="sr-only sm:not-sr-only sm:truncate">{t.admin.off}</span>
                     </span>
                   );
                 }

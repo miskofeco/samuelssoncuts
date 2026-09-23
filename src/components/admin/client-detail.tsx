@@ -147,7 +147,7 @@ export function ClientDetail({
           </div>
 
           {/* Block / Unblock / Delete actions */}
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:flex-wrap sm:justify-end">
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:shrink-0 sm:flex-wrap sm:justify-end">
             {isBlocked ? (
               <Button
                 type="button"
@@ -155,7 +155,7 @@ export function ClientDetail({
                 size="lg"
                 loading={pending}
                 onClick={() => run(() => unblockClientAction(client.id))}
-                className="sm:w-auto"
+                className="w-full sm:w-auto"
               >
                 <Icon icon={UserCheck01Icon} />
                 {t.admin.unblockClient}
@@ -167,7 +167,7 @@ export function ClientDetail({
                 size="lg"
                 disabled={pending}
                 onClick={() => setConfirmAction("block")}
-                className="text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200 sm:w-auto"
+                className="w-full text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200 sm:w-auto"
               >
                 <Icon icon={UserBlock01Icon} />
                 {t.admin.blockClient}
@@ -179,7 +179,7 @@ export function ClientDetail({
               size="lg"
               disabled={pending}
               onClick={() => setConfirmAction("delete")}
-              className="sm:w-auto"
+              className="w-full sm:w-auto"
             >
               <Icon icon={Delete02Icon} />
               {t.admin.deleteClient}
