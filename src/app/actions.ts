@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -2137,6 +2137,7 @@ export async function createServiceAction(input: {
     detail: { name: parsed.data.name },
   });
 
+  updateTag("service-catalog");
   revalidatePath("/admin", "layout");
   return { ok: true, message: t.feedback.serviceAdded, id: data.id };
 }
@@ -2181,6 +2182,7 @@ export async function updateServiceAction(
     detail: { name: parsed.data.name },
   });
 
+  updateTag("service-catalog");
   revalidatePath("/admin", "layout");
   return { ok: true, message: t.feedback.serviceUpdated };
 }
@@ -2249,6 +2251,7 @@ export async function toggleServiceActiveAction(
     detail: { active },
   });
 
+  updateTag("service-catalog");
   revalidatePath("/admin", "layout");
   return { ok: true, message: active ? t.feedback.serviceActivated : t.feedback.serviceHidden };
 }
@@ -2323,6 +2326,7 @@ export async function uploadServiceImageAction(
     return { ok: false, error: updateError.message };
   }
 
+  updateTag("service-catalog");
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
   return { ok: true, message: t.feedback.serviceImageUpdated, url: publicUrl };

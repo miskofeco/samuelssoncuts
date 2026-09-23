@@ -24,6 +24,7 @@ type CustomerMode = "client" | "walkin";
 export function AddBookingModal({
   open,
   onClose,
+  onCreated,
   clients,
   services,
   initialDate,
@@ -32,6 +33,7 @@ export function AddBookingModal({
 }: {
   open: boolean;
   onClose: () => void;
+  onCreated: () => void;
   clients: ClientProfile[];
   services: Service[];
   initialDate?: string;
@@ -56,6 +58,7 @@ export function AddBookingModal({
         initialTime={initialTime}
         bookedByDate={bookedByDate}
         onClose={onClose}
+        onCreated={onCreated}
       />
     </Modal>
   );
@@ -68,6 +71,7 @@ function BookingForm({
   initialTime,
   bookedByDate,
   onClose,
+  onCreated,
 }: {
   clients: ClientProfile[];
   services: Service[];
@@ -75,6 +79,7 @@ function BookingForm({
   initialTime?: string;
   bookedByDate: Map<string, BookedSlot[]>;
   onClose: () => void;
+  onCreated: () => void;
 }) {
   const t = useT();
   // Only real, non-admin clients can be booked from the dropdown.
@@ -135,6 +140,7 @@ function BookingForm({
         if (result.ok) {
           toast.success(result.message ?? t.feedback.bookingAdded);
           onClose();
+          onCreated();
         }
       } catch {
         setFeedback({ ok: false, error: t.common.somethingWentWrong });

@@ -6,7 +6,7 @@ import {
   Clock01Icon,
   InformationCircleIcon,
 } from "@hugeicons/core-free-icons";
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 
 import { localDateToIso } from "@/components/shared/date-field";
@@ -109,7 +109,9 @@ export function SlotPicker({
   date,
   onDateChange,
   selectedTime,
+  selectedChoice,
   onSelectTime,
+  onInvalidSelection,
   appointments,
   pendingRequests,
   blockedDates,
@@ -123,7 +125,9 @@ export function SlotPicker({
   date: string | null;
   onDateChange: (date: string) => void;
   selectedTime: string | null;
+  selectedChoice?: SlotChoice | null;
   onSelectTime: (choice: SlotChoice) => void;
+  onInvalidSelection?: () => void;
   appointments: Appointment[];
   pendingRequests: BookingRequest[];
   blockedDates: ReadonlySet<string>;
@@ -197,6 +201,22 @@ export function SlotPicker({
         return s.status !== "taken" && isStartInFuture(start) && isStartInClientBookingWindow(start);
       });
   }, [businessHours, date, confirmed, pendingStarts, pricingSettings, service.duration, service.price]);
+
+  useEffect(() => {
+    if (!selectedTime || !date) return;
+    const current = slots.find((slot) => slot.time === selectedTime);
+    if (blockedDates.has(date) || !current) {
+      onInvalidSelection?.();
+    } else if (selectedChoice &&
+      (selectedChoice.price !== current.price || selectedChoice.priceKind !== current.priceKind)) {
+      onSelectTime({
+        time: current.time,
+        surcharge: current.priceKind !== "base",
+        price: current.price,
+        priceKind: current.priceKind,
+      });
+    }
+  }, [blockedDates, date, onInvalidSelection, onSelectTime, selectedChoice, selectedTime, slots]);
 
   const isBookable = (iso: string) =>
     isDateInClientBookingWindow(iso) &&

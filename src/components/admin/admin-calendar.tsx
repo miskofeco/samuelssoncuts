@@ -8,12 +8,13 @@ import {
   Calendar03Icon,
   Clock01Icon,
 } from "@hugeicons/core-free-icons";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/shared/button";
 import { openCalendarRequestSlots } from "@/domain/calendar-open-requests";
+import { calendarWindowCovers } from "@/domain/calendar-window";
 import { CalendarExport } from "@/components/shared/calendar-export";
 import { Card } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -57,6 +58,8 @@ import { localeFor } from "@/i18n/config";
 import type { Dict } from "@/i18n/dictionaries";
 import { useLang, useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
+import { createClient } from "@/lib/supabase/client";
+import { useLiveSnapshot } from "@/hooks/use-live-snapshot";
 
 const AddBookingModal = dynamic(
   () => import("./add-booking-modal").then((module) => module.AddBookingModal),
@@ -117,13 +120,14 @@ function mobileSnapshot() {
 }
 
 export function AdminCalendar({
-  appointments,
-  proposals,
-  requests,
-  clients,
-  services,
-  pricingSettings,
-  blockedDates,
+  appointments: initialAppointments,
+  proposals: initialProposals,
+  requests: initialRequests,
+  clients: initialClients,
+  services: initialServices,
+  pricingSettings: initialPricingSettings,
+  blockedDates: initialBlockedDates,
+  calendarWindow,
   feedUrl,
 }: {
   appointments: Appointment[];
@@ -133,6 +137,7 @@ export function AdminCalendar({
   services: Service[];
   pricingSettings: PricingSettings;
   blockedDates: Set<string>;
+  calendarWindow: { anchorDate: string; fromDate: string; toDate: string };
   feedUrl?: string;
 }) {
   const t = useT();
@@ -160,6 +165,33 @@ export function AdminCalendar({
   const selectedDate = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)
     ? requestedDate
     : today;
+  const initialCalendar = useMemo(() => ({
+    appointments: initialAppointments,
+    proposals: initialProposals,
+    requests: initialRequests,
+    clients: initialClients,
+    services: initialServices,
+    pricingSettings: initialPricingSettings,
+    blockedDates: [...initialBlockedDates],
+  }), [initialAppointments, initialProposals, initialRequests, initialClients, initialServices,
+    initialPricingSettings, initialBlockedDates]);
+  const { data: liveCalendar, refresh: refreshCalendar } = useLiveSnapshot(
+    initialCalendar,
+    `/api/admin/calendar?date=${encodeURIComponent(calendarWindow.anchorDate)}`,
+    20000,
+  );
+  const { appointments, proposals, requests, clients, services, pricingSettings } = liveCalendar;
+  const blockedDates = useMemo(() => new Set(liveCalendar.blockedDates), [liveCalendar.blockedDates]);
+  const channelId = useId();
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase.channel(`calendar-${channelId.replaceAll(":", "")}`);
+    for (const table of ["appointments", "booking_requests", "appointment_proposals", "blocked_times", "services"] as const) {
+      channel.on("postgres_changes", { event: "*", schema: "public", table }, refreshCalendar);
+    }
+    channel.subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [channelId, refreshCalendar]);
   const weekMonday = weekStart(selectedDate);
 
   function navigateCalendar(nextView: CalendarView, nextDate = selectedDate, replace = false) {
@@ -167,7 +199,10 @@ export function AdminCalendar({
     params.set("view", nextView);
     params.set("date", nextDate);
     const href = `${pathname}?${params.toString()}`;
-    if (replace) router.replace(href, { scroll: false });
+    if (calendarWindowCovers(nextView, nextDate, calendarWindow)) {
+      if (replace) window.history.replaceState(null, "", href);
+      else window.history.pushState(null, "", href);
+    } else if (replace) router.replace(href, { scroll: false });
     else router.push(href, { scroll: false });
   }
 
@@ -270,6 +305,14 @@ export function AdminCalendar({
     }
     return map;
   }, [itemsByDate]);
+  const selectedLive = useMemo(() => {
+    if (!selected) return null;
+    for (const items of itemsByDate.values()) {
+      const current = items.find((item) => item.id === selected.id);
+      if (current) return current;
+    }
+    return null;
+  }, [itemsByDate, selected]);
 
   // Toolbar navigation is shared by all three views: prev / period label /
   // next, plus a "today" shortcut. The label opens a shadcn Calendar popover
@@ -325,8 +368,8 @@ export function AdminCalendar({
         </div>
       </div>
 
-      {/* Toolbar: sticky under the phone top bar, static from md */}
-      <div className="sticky top-[calc(max(0.5rem,env(safe-area-inset-top))+2.75rem+1px)] z-20 -mx-4 bg-background/92 px-4 py-2 backdrop-blur-xl sm:-mx-6 sm:px-6 md:static md:mx-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+      {/* The phone top bar scrolls away, so the toolbar sticks to the viewport edge. */}
+      <div className="sticky top-0 z-20 -mx-4 bg-background px-4 py-2 sm:-mx-6 sm:px-6 md:static md:mx-0 md:bg-transparent md:p-0">
         <div className="flex flex-col gap-2 rounded-xl bg-card p-2 shadow-xs ring-1 ring-foreground/10 md:flex-row md:items-center md:gap-3">
           <SegmentedControl
             ariaLabel={t.admin.calendarView}
@@ -509,6 +552,7 @@ export function AdminCalendar({
         <AddBookingModal
           open={draft !== null}
           onClose={() => setDraft(null)}
+          onCreated={refreshCalendar}
           clients={clients}
           services={services}
           initialDate={draft?.date}
@@ -519,8 +563,8 @@ export function AdminCalendar({
 
       {detailOpened ? (
         <AppointmentDetailModal
-          item={selected}
-          onClose={() => setSelected(null)}
+          item={selectedLive}
+          onClose={() => { setSelected(null); refreshCalendar(); }}
           bookedByDate={bookedByDate}
         />
       ) : null}

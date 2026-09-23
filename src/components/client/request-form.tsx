@@ -9,7 +9,7 @@ import {
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import type { FormEvent, ReactNode } from "react";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
 
 import { createRequestFromClientAction } from "@/app/actions";
@@ -38,6 +38,7 @@ import type {
 } from "@/domain/types";
 import { localeFor } from "@/i18n/config";
 import { useLang, useT } from "@/i18n/provider";
+import { useLiveSnapshot } from "@/hooks/use-live-snapshot";
 import { cn } from "@/lib/classnames";
 
 import { SlotPicker, StepBadge, type SlotChoice } from "./slot-picker";
@@ -90,6 +91,22 @@ export function RequestForm({
 }) {
   const t = useT();
   const locale = localeFor(useLang());
+  const initialAvailability = useMemo(() => ({
+    appointments,
+    pendingRequests,
+    blockedDates: [...blockedDates],
+    businessHours,
+    pricingSettings,
+  }), [appointments, pendingRequests, blockedDates, businessHours, pricingSettings]);
+  const { data: availability, refresh: refreshAvailability } = useLiveSnapshot(
+    initialAvailability,
+    "/api/client/booking-availability",
+    8000,
+  );
+  const liveBlockedDates = useMemo(
+    () => new Set(availability.blockedDates),
+    [availability.blockedDates],
+  );
   const orderedServices = orderClientServices(services);
   const [serviceId, setServiceId] = useState(
     initialServiceId ?? defaultClientServiceId(services),
@@ -109,9 +126,9 @@ export function RequestForm({
   const service = serviceById(serviceId, services);
   const priceCalculation = slot
     ? slot.priceKind === "vip"
-      ? `${service.price} € + ${pricingSettings.vipSurchargePercent}%`
+      ? `${service.price} € + ${availability.pricingSettings.vipSurchargePercent}%`
       : slot.priceKind === "gap"
-        ? `${service.price} € + ${pricingSettings.gapSurchargePercent}%`
+        ? `${service.price} € + ${availability.pricingSettings.gapSurchargePercent}%`
         : `${service.price} €`
     : null;
 
@@ -128,6 +145,7 @@ export function RequestForm({
           toast.success(result.message ?? t.client.bookingSuccessTitle);
         } else {
           setFeedback(result);
+          refreshAvailability();
         }
       } catch {
         setFeedback({ ok: false, error: t.common.somethingWentWrong });
@@ -312,18 +330,23 @@ export function RequestForm({
         <SlotPicker
           service={service}
           services={services}
-          pricingSettings={pricingSettings}
+          pricingSettings={availability.pricingSettings}
           date={date}
           onDateChange={(next) => {
             setDate(next);
             setSlot(null);
           }}
           selectedTime={slot?.time ?? null}
+          selectedChoice={slot}
           onSelectTime={setSlot}
-          appointments={appointments}
-          pendingRequests={pendingRequests}
-          blockedDates={blockedDates}
-          businessHours={businessHours}
+          onInvalidSelection={() => {
+            setSlot(null);
+            setFeedback({ ok: false, error: t.feedback.slotTaken });
+          }}
+          appointments={availability.appointments}
+          pendingRequests={availability.pendingRequests}
+          blockedDates={liveBlockedDates}
+          businessHours={availability.businessHours}
           steps={{ date: 2, time: 3 }}
           aside={
             <>
@@ -338,7 +361,7 @@ export function RequestForm({
 
               {slot?.priceKind === "gap" ? (
                 <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-300">
-                  {t.client.surchargeWarning(pricingSettings.gapSurchargePercent)}
+                  {t.client.surchargeWarning(availability.pricingSettings.gapSurchargePercent)}
                 </p>
               ) : null}
               {slot?.priceKind === "vip" ? (

@@ -103,6 +103,8 @@ API routes:
 - `/api/push/public-key`: authenticated public VAPID key fetch.
 - `/api/push/subscriptions`: same-origin authenticated subscription upsert/delete.
 - `/api/admin/attention`: admin-only, uncached attention counts for realtime navigation badges; background changes no longer refresh the whole route.
+- `/api/admin/calendar`: admin-only, uncached calendar snapshot for the loaded three-month window. Day/week navigation inside that window uses native history updates without another server render; moving beyond it loads a new window. The mounted calendar refreshes its data after local changes, on Realtime changes when publication is available, every 20 seconds while visible, and on focus/reconnect. Its form and view state remain mounted.
+- `/api/client/booking-availability`: approved-client-only, uncached two-week busy slots, pending requests, blocks, hours, and pricing. The booking picker refreshes while visible every 8 seconds and on focus/reconnect; it clears a selected time if it becomes unavailable. Clients use this read rather than raw appointment Realtime events, which RLS restricts to their own records.
 
 ## Auth And Authorization
 
@@ -160,6 +162,7 @@ Important RPCs and constraints live in migrations:
 - `record_admin_action()` writes audit rows after re-checking admin privileges.
 - `calendar_feed()` powers token-based ICS feeds.
 - A Postgres exclusion constraint prevents overlapping confirmed appointments per barber.
+- Migration `0042` enrolls appointments, requests, proposals, blocks, and services in the `supabase_realtime` publication. Existing RLS controls who receives raw change events; client availability still comes only from the sanitized server read. Profiles stay out of the publication because their change payloads can contain calendar feed tokens.
 
 ## Domain Boundaries
 
@@ -172,7 +175,7 @@ Important RPCs and constraints live in migrations:
 
 `src/server` is for server-only orchestration:
 
-- `dashboard-data.ts`: Supabase reads, row-to-domain mapping, page-specific loaders.
+- `dashboard-data.ts`: Supabase reads, row-to-domain mapping, page-specific loaders. The service catalog used by the client booking page and admin calendar is cached for up to five minutes with the `service-catalog` tag. Service create/update/visibility/image actions expire the tag immediately. Availability, blocked times, business hours, pricing, appointments, and requests remain uncached; every booking mutation still checks conflicts on the server.
 - `booking-guards.ts`: server-side business hour, blocked time, and overlap guards.
 - `rate-limit.ts`: wrapper around the `check_rate_limit` RPC.
 - `audit.ts`: admin action audit RPC wrapper.

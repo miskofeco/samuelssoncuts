@@ -1,4 +1,5 @@
 import { analyticsPeriodStart } from "@/domain/analytics";
+import { unstable_cache } from "next/cache";
 import { adminCalendarWindowDates } from "@/domain/calendar-window";
 import {
   DEFAULT_PRICING_SETTINGS,
@@ -71,6 +72,16 @@ const APPOINTMENT_SELECT =
   "id, request_id, client_id, customer_name, service_id, starts_at, ends_at, status, outcome";
 const PROFILE_SELECT =
   "id, full_name, email, phone, role, approval_status, email_confirmed_at, created_at, avatar_url";
+
+// The service catalog changes through admin actions, which expire this tag.
+// Keep appointment slots, blocks, hours and prices out of the persistent cache.
+const loadCachedServices = unstable_cache(async (activeOnly: boolean): Promise<Service[]> => {
+  let query = getSupabaseAdminClient().from("services").select("*");
+  if (activeOnly) query = query.eq("active", true);
+  const { data, error } = await query.order("duration_minutes");
+  fail("services", error);
+  return (data ?? []).map(mapServiceRow);
+}, ["service-catalog-v1"], { tags: ["service-catalog"], revalidate: 300 });
 
 // Analytics never looks back further than 12 trailing months (plus the month
 // before for period-over-period comparison), so admin loaders bound history
@@ -577,11 +588,11 @@ export async function loadBookingData(options: { includeServices?: boolean } = {
   const nowIso = new Date().toISOString();
   const fromIso = shopDayRangeUtc(todayIso()).startIso;
   const toIso = shopDayRangeUtc(addDaysToDate(latestClientBookingDate(), 1)).startIso;
-  const [servicesResult, appointmentsResult, requestsResult, blocked, pricingSettings, businessHours] =
+  const [services, appointmentsResult, requestsResult, blocked, pricingSettings, businessHours] =
     await Promise.all([
       options.includeServices === false
-        ? Promise.resolve(null)
-        : supabase.from("services").select("*").eq("active", true).order("duration_minutes"),
+        ? Promise.resolve([] as Service[])
+        : loadCachedServices(true),
       supabase.rpc("confirmed_appointment_slots_window", { p_from: fromIso, p_to: toIso }),
       supabase
         .from("booking_requests")
@@ -595,14 +606,13 @@ export async function loadBookingData(options: { includeServices?: boolean } = {
       loadBusinessHours(),
     ]);
 
-  if (servicesResult) fail("services", servicesResult.error);
   fail("appointments", appointmentsResult.error);
   fail("booking_requests", requestsResult.error);
 
   const rows = asRequestRows(requestsResult.data);
   const requests = rows.map(mapRequestRow);
   return {
-    services: (servicesResult?.data ?? []).map(mapServiceRow),
+    services,
     pricingSettings,
     businessHours,
     blockedDates: blocked.dates,
@@ -660,8 +670,15 @@ export async function loadAdminOverview(): Promise<{
 
 /** UTC bounds for the admin calendar query around the requested date. */
 export function adminCalendarWindow(date: string) {
-  const { fromDate, toDate } = adminCalendarWindowDates(date, todayIso());
-  return { fromIso: shopDayRangeUtc(fromDate).startIso, toIso: shopDayRangeUtc(toDate).startIso };
+  const anchorDate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayIso();
+  const { fromDate, toDate } = adminCalendarWindowDates(anchorDate, anchorDate);
+  return {
+    anchorDate,
+    fromDate,
+    toDate,
+    fromIso: shopDayRangeUtc(fromDate).startIso,
+    toIso: shopDayRangeUtc(toDate).startIso,
+  };
 }
 
 /** Admin calendar: confirmed appointments + open proposals + clients/services. */
@@ -675,9 +692,9 @@ export async function loadAdminCalendar(window: { fromIso: string; toIso: string
   blockedDates: Set<string>;
 }> {
   const supabase = await createClient();
-  const [servicesResult, profilesResult, requestsResult, appointmentsResult, blocked, pricingSettings] =
+  const [services, profilesResult, requestsResult, appointmentsResult, blocked, pricingSettings] =
     await Promise.all([
-      supabase.from("services").select("*"),
+      loadCachedServices(false),
       supabase.from("profiles").select(PROFILE_SELECT),
       // Only open requests can still render as proposals on the calendar.
       supabase
@@ -685,25 +702,24 @@ export async function loadAdminCalendar(window: { fromIso: string; toIso: string
         .select(REQUEST_SELECT)
         .in("status", ["pending", "proposed"])
         .order("created_at", { ascending: false }),
-      supabase
+      getShopBarberId().then((barberId) => supabase
         .from("appointments")
         .select(APPOINTMENT_SELECT)
-        .eq("barber_id", await getShopBarberId())
+        .eq("barber_id", barberId)
         .gte("starts_at", window.fromIso)
         .lt("starts_at", window.toIso)
-        .order("starts_at"),
+        .order("starts_at")),
       loadBlockedDays(window),
       loadPricingSettings(),
     ]);
 
-  fail("services", servicesResult.error);
   fail("profiles", profilesResult.error);
   fail("booking_requests", requestsResult.error);
   fail("appointments", appointmentsResult.error);
 
   const rows = asRequestRows(requestsResult.data);
   return {
-    services: (servicesResult.data ?? []).map(mapServiceRow),
+    services,
     clients: (profilesResult.data ?? []).map(mapClientRow),
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),

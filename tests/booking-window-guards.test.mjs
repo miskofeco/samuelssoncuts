@@ -94,7 +94,8 @@ test("client booking calendar disables configured closed weekdays", () => {
   assert.match(slotPicker, /isDateClosedForBusinessHours\(iso, businessHours\)/);
   assert.match(slotPicker, /isClosedInWindow/);
   assert.match(requestForm, /businessHours: BusinessHoursDay\[]/);
-  assert.match(requestForm, /businessHours=\{businessHours\}/);
+  assert.match(requestForm, /businessHours=\{availability\.businessHours\}/);
+  assert.match(requestForm, /booking-availability/);
 });
 
 test("server rejects client booking requests outside generated client slots", () => {

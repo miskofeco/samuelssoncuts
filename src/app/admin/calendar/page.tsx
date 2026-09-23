@@ -11,10 +11,11 @@ export default async function AdminCalendarPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const [, params] = await Promise.all([requireAdmin(), searchParams]);
-  // Only the months around the requested date are loaded; navigating the
-  // calendar changes the search params and re-renders with a new window.
+  // Load three months; the client navigates within this range locally and
+  // requests a new server window only when the visible dates leave it.
+  const calendarWindow = adminCalendarWindow(params.date ?? "");
   const [data, token] = await Promise.all([
-    loadAdminCalendar(adminCalendarWindow(params.date ?? "")),
+    loadAdminCalendar(calendarWindow),
     loadShopCalendarToken(),
   ]);
   const feedUrl = token ? `${getSiteUrl()}/api/calendar/feed/${token}` : undefined;
@@ -29,6 +30,7 @@ export default async function AdminCalendarPage({
         services={data.services}
         pricingSettings={data.pricingSettings}
         blockedDates={data.blockedDates}
+        calendarWindow={calendarWindow}
         feedUrl={feedUrl}
       />
     </div>
