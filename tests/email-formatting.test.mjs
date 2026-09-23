@@ -121,8 +121,15 @@ test("confirmed appointment email includes Google and Apple calendar actions", (
   assert.match(actions, /endIso: request\.requested_end/);
 });
 
-test("email design system uses email-safe icon images and structured appointment cards", () => {
-  assert.match(layout, /\/email-icons\/\$\{name\}\.png/);
+test("email images resolve through the public asset origin and keep text fallbacks", () => {
+  assert.match(layout, /getEmailAssetOrigin/);
+  assert.doesNotMatch(layout, /https:\/\/www\.samuelssoncuts\.sk/);
+  assert.doesNotMatch(layout, /getSiteUrl\(\)\}\/(email-icons|logo)/);
+  assert.match(layout, /emailAssetUrl\(`\/email-icons\/\$\{name\}\.png`\)/);
+  assert.match(layout, /emailAssetUrl\("\/logo-light\.png"\)/);
+  assert.match(layout, /alt="Samuelsson Cuts"/);
+  assert.match(layout, /alt=""/);
+  assert.equal(existsSync("public/logo-light.png"), true);
   assert.match(layout, /export function EmailAppointmentCard/);
   assert.match(layout, /@react-email\/components/);
 
@@ -131,16 +138,9 @@ test("email design system uses email-safe icon images and structured appointment
   }
 });
 
-test("email status icons keep a fixed square and calendar providers use branded buttons", () => {
-  const heading = layout.slice(
-    layout.indexOf("export function EmailHeading"),
-    layout.indexOf("export function EmailParagraph"),
-  );
+test("calendar providers keep clear labeled buttons with images", () => {
   const calendarActions = layout.slice(layout.indexOf("export function EmailCalendarActions"));
 
-  assert.match(heading, /width=\{48\}/);
-  assert.match(heading, /height=\{48\}/);
-  assert.doesNotMatch(heading, /rounded-xl p-3/);
   assert.match(calendarActions, /icon="google" variant="secondary"/);
   assert.match(calendarActions, /icon="apple" variant="apple"/);
   assert.match(layout, /backgroundColor: apple \? "#000000"/);

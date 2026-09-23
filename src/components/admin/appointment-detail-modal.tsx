@@ -13,7 +13,8 @@ import { useMemo, useState, useTransition } from "react";
 
 import {
   cancelAppointmentAdminAction,
-  cancelRequestAction,
+  confirmRequestAction,
+  declineRequestAdminAction,
   markAppointmentOutcomeAction,
   proposeAppointmentAction,
   rescheduleAppointmentAction,
@@ -51,8 +52,8 @@ export function AppointmentDetailModal({
     <Modal
       open={item !== null}
       onClose={onClose}
-      title={t.admin.appointment}
-      description={t.admin.appointmentDescription}
+      title={item?.type === "Proposed" ? t.admin.appointmentRequests : t.admin.appointment}
+      description={item?.type === "Proposed" ? t.admin.calendarRequestDescription : t.admin.appointmentDescription}
     >
       {item ? (
         <DetailBody key={item.id} item={item} onClose={onClose} bookedByDate={bookedByDate} />
@@ -87,9 +88,11 @@ function DetailBody({
 
   const isWalkIn = !item.clientId;
   const isConfirmed = item.type !== "Proposed";
+  const isPendingRequest = item.type === "Proposed" && item.requestStatus === "pending";
   const endTime = addMinutesToTime(item.time, item.durationMinutes);
   const hasEnded = shopDateTimeToEpochMs(item.date, endTime) <= openedAt;
-  const canManage = !hasEnded && !item.outcome;
+  const canManage = !isConfirmed || (!hasEnded && !item.outcome);
+  const canConfirmRequest = isPendingRequest && shopDateTimeToEpochMs(item.date, item.time) > openedAt;
   const finalPrice = Math.round(item.finalPriceCents / 100);
 
   const timeOptions = useMemo(
@@ -139,7 +142,7 @@ function DetailBody({
         }),
       );
     } else {
-      // Proposed: re-propose against the same request (nothing booked yet).
+      // An open request can receive a different time; nothing is booked yet.
       run(() =>
         proposeAppointmentAction({
           requestId: item.requestId,
@@ -160,8 +163,18 @@ function DetailBody({
         }),
       );
     } else if (item.requestId) {
-      // Proposed: cancel the underlying request.
-      run(() => cancelRequestAction(item.requestId as string));
+      run(() =>
+        declineRequestAdminAction({
+          requestId: item.requestId,
+          reason: note.trim() || undefined,
+        }),
+      );
+    }
+  }
+
+  function submitConfirmRequest() {
+    if (canConfirmRequest && item.requestId) {
+      run(() => confirmRequestAction(item.requestId as string));
     }
   }
 
@@ -182,8 +195,12 @@ function DetailBody({
         <div className="min-w-0 flex-1">
           <p className="truncate text-lg font-semibold text-foreground">{item.title}</p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <StatusPill tone={isConfirmed ? "success" : "info"} dot>
-              {isConfirmed ? t.admin.confirmed : t.statuses.proposedShort}
+            <StatusPill tone={isConfirmed ? "success" : isPendingRequest ? "warning" : "info"} dot>
+              {isConfirmed
+                ? t.admin.confirmed
+                : isPendingRequest
+                  ? t.admin.statusNewRequest
+                  : t.admin.statusAwaitingClient}
             </StatusPill>
             {isWalkIn ? <StatusPill tone="neutral">{t.admin.walkIn}</StatusPill> : null}
             {item.outcome === "completed" || item.outcome === "no_show" ? (
@@ -231,7 +248,7 @@ function DetailBody({
       <div className="flex items-center justify-between gap-3 rounded-xl bg-emerald-500/10 px-4 py-3 ring-1 ring-emerald-500/20 dark:bg-emerald-400/10">
         <div className="min-w-0">
           <p className="text-xs font-semibold tracking-wide text-emerald-800 uppercase dark:text-emerald-300">
-            {t.admin.finalPrice}
+            {isConfirmed ? t.admin.finalPrice : t.admin.requestedPrice}
           </p>
           {item.surcharge ? (
             <p
@@ -279,25 +296,37 @@ function DetailBody({
           ) : null}
 
           {canManage ? (
-            <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+            <div className="grid gap-2 border-t pt-4 sm:grid-cols-2">
               {isWalkIn && isConfirmed ? (
-                <p className="text-xs text-muted-foreground sm:mr-auto sm:self-center">
+                <p className="self-center text-xs text-muted-foreground">
                   {t.admin.walkInNoReschedule}
                 </p>
               ) : (
-                <Button type="button" variant="outline" size="lg" onClick={() => setMode("reschedule")}>
-                  {t.admin.reschedule}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className={canConfirmRequest ? "w-full sm:col-span-2" : "w-full"}
+                  onClick={() => setMode("reschedule")}
+                >
+                  {isConfirmed ? t.admin.reschedule : t.admin.proposeNewTime}
                 </Button>
               )}
               <Button
                 type="button"
                 variant="destructive-outline"
                 size="lg"
+                className="w-full"
                 disabled={pending}
                 onClick={() => setCancelOpen(true)}
               >
-                {t.admin.cancelAppointment}
+                {isConfirmed ? t.admin.cancelAppointment : t.admin.declineRequest}
               </Button>
+              {canConfirmRequest ? (
+                <Button type="button" size="lg" className="w-full" loading={pending} onClick={submitConfirmRequest}>
+                  {t.admin.confirmRequest}
+                </Button>
+              ) : null}
             </div>
           ) : null}
         </>
@@ -361,20 +390,26 @@ function DetailBody({
       <ConfirmDialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}
-        title={t.admin.cancelAppointment}
-        description={`${t.admin.cancelConfirmBase}${isWalkIn ? t.admin.cancelConfirmWalkIn : t.admin.cancelConfirmClient}`}
-        confirmLabel={pending ? t.admin.cancelling : t.admin.cancelAppointment}
+        title={isConfirmed ? t.admin.cancelAppointment : t.admin.declineRequestTitle}
+        description={isConfirmed
+          ? `${t.admin.cancelConfirmBase}${isWalkIn ? t.admin.cancelConfirmWalkIn : t.admin.cancelConfirmClient}`
+          : t.admin.declineRequestBody}
+        confirmLabel={pending
+          ? t.admin.cancelling
+          : isConfirmed
+            ? t.admin.cancelAppointment
+            : t.admin.declineRequest}
         loading={pending}
         onConfirm={submitCancel}
       >
         <div className="space-y-3">
           {!isWalkIn ? (
             <TextAreaField
-              label={`${t.admin.messageToClient} ${t.common.optional}`}
+              label={isConfirmed ? `${t.admin.messageToClient} ${t.common.optional}` : t.admin.declineRequestReason}
               value={note}
               onChange={(event) => setNote(event.target.value)}
               rows={2}
-              placeholder={t.admin.cancelNotePlaceholder}
+              placeholder={isConfirmed ? t.admin.cancelNotePlaceholder : t.admin.declineRequestReasonPlaceholder}
               maxLength={1000}
             />
           ) : null}

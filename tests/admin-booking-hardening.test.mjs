@@ -26,7 +26,7 @@ test("admin booking prices distinguish VIP and gap surcharges", () => {
 });
 
 test("ended or completed appointments do not expose move or cancel actions", () => {
-  assert.match(appointmentModal, /const canManage = !hasEnded && !item\.outcome/);
+  assert.match(appointmentModal, /const canManage = !isConfirmed \|\| \(!hasEnded && !item\.outcome\)/);
   assert.match(appointmentModal, /\{canManage \? \([\s\S]*t\.admin\.reschedule[\s\S]*t\.admin\.cancelAppointment/);
 });
 

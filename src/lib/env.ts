@@ -40,16 +40,68 @@ export function requireSupabaseServiceRoleKey(): string {
   return key;
 }
 
+// Canonical public production origin. Used only as the last-resort host for
+// email images, which mail clients fetch without any session or env context.
+export const PRODUCTION_SITE_ORIGIN = "https://www.samuelssoncuts.sk";
+
 export function getSiteUrl() {
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL;
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (configured) {
+    const url = new URL(configured);
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      throw new Error("Invalid public site URL: expected http or https");
+    }
+
+    if (process.env.NODE_ENV !== "production" || url.protocol === "https:") {
+      return url.origin;
+    }
+  }
+
+  // VERCEL_URL can be a protected preview deployment. Email and auth links
+  // need the stable public production domain when an HTTP dev value leaks in.
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+
+  if (process.env.VERCEL && process.env.NODE_ENV === "production") {
+    throw new Error("Missing public site URL: configure NEXT_PUBLIC_SITE_URL or expose VERCEL_PROJECT_PRODUCTION_URL");
   }
 
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
   }
 
-  return "http://localhost:3000";
+  return configured ? new URL(configured).origin : "http://localhost:3000";
+}
+
+/**
+ * Origin that hosts remote email images (logo, icons in `public/`).
+ *
+ * Mail clients and Gmail's image proxy fetch these URLs from the recipient's
+ * side, so they must be absolute, HTTPS and publicly reachable. Resolution:
+ * 1. `EMAIL_ASSET_ORIGIN` when set (HTTPS in production; HTTP allowed locally
+ *    so `/email-preview` can point at a dev server with new assets).
+ * 2. The public site URL when it is HTTPS.
+ * 3. The canonical production origin, so emails sent from local development
+ *    or an HTTP-configured environment never embed localhost image URLs.
+ */
+export function getEmailAssetOrigin(): string {
+  const configured = process.env.EMAIL_ASSET_ORIGIN?.trim();
+  if (configured) {
+    const url = new URL(configured);
+    const httpsOnly = process.env.NODE_ENV === "production";
+    if (url.protocol !== "https:" && (httpsOnly || url.protocol !== "http:")) {
+      throw new Error("Invalid EMAIL_ASSET_ORIGIN: expected a public https origin");
+    }
+    return url.origin;
+  }
+
+  const siteUrl = getSiteUrl();
+  if (siteUrl.startsWith("https://")) {
+    return siteUrl;
+  }
+
+  return PRODUCTION_SITE_ORIGIN;
 }
 
 export function getShopTimeZone() {

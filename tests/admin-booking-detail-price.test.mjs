@@ -13,6 +13,6 @@ test("admin calendar detail uses the captured client booking price when availabl
 
 test("booking detail makes the final booked price prominent", () => {
   assert.match(detailModal, /finalPrice = Math\.round\(item\.finalPriceCents \/ 100\)/);
-  assert.match(detailModal, /{t\.admin\.finalPrice}/);
+  assert.match(detailModal, /\{isConfirmed \? t\.admin\.finalPrice : t\.admin\.requestedPrice\}/);
   assert.match(detailModal, /text-2xl font-semibold/);
 });

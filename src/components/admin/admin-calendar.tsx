@@ -13,6 +13,7 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/shared/button";
+import { openCalendarRequestSlots } from "@/domain/calendar-open-requests";
 import { CalendarExport } from "@/components/shared/calendar-export";
 import { Card } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -79,6 +80,7 @@ export type CalendarItem = {
   date: string;
   durationMinutes: number;
   type: "Confirmed" | "Barber" | "Proposed";
+  requestStatus?: "pending" | "proposed";
   // Identifiers for actions (reschedule / cancel).
   appointmentId?: string;
   proposalId?: string;
@@ -221,33 +223,33 @@ export function AdminCalendar({
         outcome: appointment.outcome,
       });
     }
-    for (const proposal of proposals) {
-      if (proposal.status !== "sent") continue;
-      const request = requestsById.get(proposal.requestId);
-      const client = request?.clientId ? clientsById.get(request.clientId) : undefined;
-      const service = request ? serviceById(request.serviceId, services) : undefined;
-      const surcharge = request ? surchargeDetailsForRequest(request, pricingSettings) : null;
-      const bookedPriceCents = request?.priceCents ?? Math.round((service?.price ?? 0) * 100);
-      push(proposal.date, {
-        id: proposal.id,
+    for (const slot of openCalendarRequestSlots(requests, proposals)) {
+      const { request } = slot;
+      const client = clientsById.get(request.clientId);
+      const service = serviceById(request.serviceId, services);
+      const surcharge = surchargeDetailsForRequest(request, pricingSettings);
+      const bookedPriceCents = request.priceCents ?? Math.round(service.price * 100);
+      push(slot.date, {
+        id: slot.kind === "pending" ? request.id : slot.proposal.id,
         title: client?.name ?? t.admin.clientFallback,
-        service: service?.name ?? t.admin.proposalFallback,
-        servicePrice: service?.price ?? 0,
+        service: service.name,
+        servicePrice: service.price,
         finalPriceCents: bookedPriceCents,
-        surcharge: request?.surcharge,
+        surcharge: request.surcharge,
         surchargeKind: surcharge?.kind,
         surchargePercent: surcharge?.percent,
-        time: proposal.time,
-        date: proposal.date,
-        durationMinutes: service?.duration ?? 30,
+        time: slot.time,
+        date: slot.date,
+        durationMinutes: service.duration,
         type: "Proposed",
-        proposalId: proposal.id,
-        requestId: proposal.requestId,
-        clientId: request?.clientId ?? null,
+        requestStatus: slot.kind,
+        proposalId: slot.kind === "proposed" ? slot.proposal.id : undefined,
+        requestId: request.id,
+        clientId: request.clientId,
         clientEmail: client?.email,
         clientPhone: client?.phone,
         clientAvatarUrl: client?.avatarUrl,
-        note: proposal.note,
+        note: slot.kind === "proposed" ? slot.proposal.note : request.note,
       });
     }
     for (const list of map.values()) {
@@ -310,9 +312,9 @@ export function AdminCalendar({
       {/* Legend + secondary actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ul aria-label={t.admin.legend} className="flex flex-wrap items-center gap-2">
-          <LegendItem tone="bg-emerald-500">{t.admin.confirmed}</LegendItem>
-          <LegendItem tone="bg-blue-500">{t.admin.addBooking}</LegendItem>
-          <LegendItem tone="bg-orange-500">{t.statuses.proposedShort}</LegendItem>
+          <LegendItem tone="bg-emerald-500">{t.admin.legendConfirmedClientBookings}</LegendItem>
+          <LegendItem tone="bg-blue-500">{t.admin.legendManualBookings}</LegendItem>
+          <LegendItem tone="bg-orange-500">{t.admin.calendarOpenRequests}</LegendItem>
         </ul>
         <div className="flex items-center gap-2">
           <CalendarExport feedUrl={feedUrl} />

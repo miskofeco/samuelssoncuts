@@ -502,6 +502,14 @@ const en = {
     gapSurcharge: (percent: number) => `+${percent}% (gap)`,
     vipSurcharge: (percent: number) => `VIP +${percent}%`,
     orProposeAnother: "Or propose different time",
+    hideProposalControls: "Hide time options",
+    requestDayPreview: "Day at a glance",
+    previewConfirmed: "Booked",
+    previewRequested: "Requested",
+    previewProposed: "Proposed",
+    previewNotReserved: "This time is not reserved yet.",
+    previewAccessible: (time: string, count: number) =>
+      `${time} requested or proposed time; ${count} confirmed bookings nearby`,
     rescheduleNotePlaceholder:
       "Sorry, I need to move this — does the new time work?",
     cancelConfirmBase: "Cancel this appointment? This frees the slot",
@@ -577,6 +585,11 @@ const en = {
     nothingMatches: (query: string) => `Nothing matches “${query}”.`,
     // Redesign additions
     legend: "Legend",
+    calendarOpenRequests: "Requests & proposals",
+    calendarRequestDescription: "Review the client's time, confirm or decline it, or propose another.",
+    requestedPrice: "Requested price",
+    legendConfirmedClientBookings: "Confirmed client bookings",
+    legendManualBookings: "Manually created bookings",
     noShowConfirmTitle: "Mark as no-show?",
     noShowConfirmBody: "The client didn't turn up. This is recorded in their history.",
     serviceVisible: "Visible to clients",
@@ -1406,6 +1419,14 @@ const sk: Dict = {
     gapSurcharge: (percent: number) => `+${percent} % (medzera)`,
     vipSurcharge: (percent: number) => `VIP +${percent} %`,
     orProposeAnother: "Alebo navrhnúť iný čas",
+    hideProposalControls: "Skryť výber času",
+    requestDayPreview: "Prehľad dňa",
+    previewConfirmed: "Obsadené",
+    previewRequested: "Požadované",
+    previewProposed: "Navrhnuté",
+    previewNotReserved: "Tento čas ešte nie je rezervovaný.",
+    previewAccessible: (time: string, count: number) =>
+      `${time} požadovaný alebo navrhnutý čas; ${count} potvrdených rezervácií v okolí`,
     rescheduleNotePlaceholder:
       "Prepáčte, potrebujem to presunúť — vyhovuje vám nový čas?",
     cancelConfirmBase: "Zrušiť tento termín? Toto uvoľní časový úsek",
@@ -1478,6 +1499,11 @@ const sk: Dict = {
     nothingMatches: (query: string) => `Nič nezodpovedá „${query}“.`,
     // Redesign additions
     legend: "Legenda",
+    calendarOpenRequests: "Žiadosti a návrhy",
+    calendarRequestDescription: "Skontrolujte termín klienta, potvrďte ho, odmietnite alebo navrhnite iný.",
+    requestedPrice: "Cena žiadosti",
+    legendConfirmedClientBookings: "Potvrdené rezervácie klientov",
+    legendManualBookings: "Ručne vytvorené rezervácie",
     noShowConfirmTitle: "Označiť ako neprišiel?",
     noShowConfirmBody: "Klient sa nedostavil. Zaznamená sa to v jeho histórii.",
     serviceVisible: "Viditeľné pre klientov",

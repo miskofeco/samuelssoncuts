@@ -62,6 +62,11 @@ test("proxy sets a nonce-based CSP with strict-dynamic and Supabase origins", ()
   assert.match(proxy, /btoa\(crypto\.randomUUID\(\)\)/);
 });
 
+test("CSP img-src allows the email asset origin so /email-preview shows real email images", () => {
+  assert.match(proxy, /import \{ getEmailAssetOrigin \} from "@\/lib\/env"/);
+  assert.match(proxy, /img-src 'self' blob: data: \$\{supabaseHost\} \$\{emailAssetHost\}/);
+});
+
 test("nonce is threaded through the proxy response and into the inline theme script", () => {
   assert.match(supabaseProxy, /x-nonce/);
   assert.match(supabaseProxy, /Content-Security-Policy/);

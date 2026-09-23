@@ -16,9 +16,29 @@ import {
 } from "@react-email/components";
 import type { ReactNode } from "react";
 
-import { getSiteUrl } from "@/lib/env";
+import { getEmailAssetOrigin, getSiteUrl } from "@/lib/env";
 
 export type EmailAccent = "brand" | "positive" | "danger" | "neutral";
+
+// Remote images are fetched by the recipient's mail client (or Gmail's proxy)
+// with no session, so every `src` must be an absolute public HTTPS URL.
+// `getEmailAssetOrigin()` never resolves to localhost or a protected preview.
+function emailAssetUrl(path: string) {
+  return `${getEmailAssetOrigin()}${path}`;
+}
+
+// Alt text is the fallback when a client blocks images; style it so the
+// wordmark still reads as a heading instead of a broken-image glyph.
+const LOGO_ALT_STYLE = {
+  border: 0,
+  outline: "none",
+  textDecoration: "none",
+  color: "#1c1917",
+  fontSize: 16,
+  fontWeight: 700,
+  lineHeight: "49px",
+} as const;
+
 export type EmailIconName =
   | "alert"
   | "apple"
@@ -62,15 +82,21 @@ const ACCENT_FOREGROUND: Record<EmailAccent, string> = {
 };
 
 function EmailIcon({ name, size = 20 }: { name: EmailIconName; size?: number }) {
-  const siteUrl = getSiteUrl();
-
   return (
     <Img
-      src={`${siteUrl}/email-icons/${name}.png`}
+      src={emailAssetUrl(`/email-icons/${name}.png`)}
       alt=""
       width={size}
       height={size}
-      style={{ display: "block", height: size, width: size, margin: "0 auto" }}
+      style={{
+        display: "block",
+        height: size,
+        width: size,
+        margin: "0 auto",
+        border: 0,
+        outline: "none",
+        textDecoration: "none",
+      }}
     />
   );
 }
@@ -99,11 +125,12 @@ export function EmailLayout({
             <Section className="pb-6 text-left">
               <Link href={siteUrl} aria-label="Samuelsson Cuts">
                 <Img
-                  src={`${siteUrl}/logo-light.png`}
+                  src={emailAssetUrl("/logo-light.png")}
                   alt="Samuelsson Cuts"
                   width="172"
                   height="49"
                   className="h-auto w-[172px] max-w-full"
+                  style={LOGO_ALT_STYLE}
                 />
               </Link>
             </Section>

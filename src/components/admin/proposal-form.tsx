@@ -6,7 +6,6 @@ import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
   Calendar03Icon,
-  CalendarAdd01Icon,
   CheckmarkCircle02Icon,
   HourglassIcon,
   Note01Icon,
@@ -27,8 +26,9 @@ import { DateField } from "@/components/shared/date-field";
 import { SelectField, TextAreaField } from "@/components/shared/form";
 import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { requiresAdminRequestAction } from "@/domain/request-actionability";
+import { RequestDayPreview } from "@/components/admin/request-day-preview";
+import { nearestAlternativeTime } from "@/domain/calendar-preview";
+import { canAdminSuggestAnotherTime } from "@/domain/request-actionability";
 import {
   addDays,
   dayCapacity,
@@ -87,9 +87,8 @@ function statusLabel(t: Dict, status: RequestStatus) {
 }
 
 /**
- * One booking request card. The header toggles the body; a pending exact-slot
- * request shows the requested time with confirm/decline up front and hides the
- * "propose another time" controls in a collapsible that starts closed.
+ * One booking request card. The header only toggles genuine supplementary
+ * details; decisions, a day preview, and the alternate-time action stay visible.
  */
 export function ProposalComposer({
   appointments,
@@ -114,14 +113,14 @@ export function ProposalComposer({
   const surcharge = surchargeDetailsForRequest(request, pricingSettings);
   const tone = statusTone[request.status];
   const label = statusLabel(t, request.status);
-  const canPropose = requiresAdminRequestAction(request.status);
+  const canPropose = canAdminSuggestAnotherTime(request.status);
   // The client picked an exact slot (new flow) and it's awaiting confirmation.
-  const hasChosenSlot = Boolean(request.requestedDate && request.requestedTime);
-  const hasDetails =
-    Boolean(request.note) ||
-    request.preferences.length > 0 ||
-    canPropose ||
-    (!hasChosenSlot && request.status === "proposed");
+  const openSlot = request.status === "pending" && request.requestedDate && request.requestedTime
+    ? { date: request.requestedDate, time: request.requestedTime, kind: "pending" as const }
+    : request.status === "proposed" && activeProposal?.status === "sent"
+      ? { date: activeProposal.date, time: activeProposal.time, kind: "proposed" as const }
+      : null;
+  const hasDetails = request.note.trim().length > 0 || request.preferences.length > 0;
   // Reliability signal at decision time: how many times this client no-showed.
   const clientNoShows = client
     ? appointments.filter((a) => a.clientId === client.id && a.outcome === "no_show").length
@@ -148,12 +147,17 @@ export function ProposalComposer({
   );
 
   function firstFreeTime(targetDate: string) {
+    if (openSlot && targetDate === openSlot.date) {
+      return nearestAlternativeTime(workingHours, openSlot.time, (hour) => takenAt(targetDate, hour));
+    }
     return workingHours.find((hour) => !takenAt(targetDate, hour)) ?? workingHours[0];
   }
 
   const [open, setOpen] = useState(hasDetails && request.status !== "pending");
   const [proposalControlsOpen, setProposalControlsOpen] = useState(false);
-  const initialDate = request.preferences[0]?.date ?? addDays(1);
+  const showBody = open || (canPropose && proposalControlsOpen);
+  const initialDate = request.preferences[0]?.date ??
+    (openSlot && openSlot.date >= todayIso() ? openSlot.date : addDays(1));
   const [date, setDate] = useState(initialDate);
   const [windowFilter, setWindowFilter] = useState<DayWindow | "all">(
     request.preferences[0]?.window ?? "all",
@@ -165,6 +169,10 @@ export function ProposalComposer({
   const [declineOpen, setDeclineOpen] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
   const bodyId = `request-body-${request.id}`;
+
+  function toggleProposalControls() {
+    setProposalControlsOpen((value) => !value);
+  }
 
   const slots = useMemo(() => {
     const base = windowFilter === "all" ? workingHours : hoursInWindow(windowFilter);
@@ -196,7 +204,10 @@ export function ProposalComposer({
       try {
         const result = await proposeTimeFromAdminAction(request.id, date, time, note);
         setFeedback(result);
-        if (result.ok) setOpen(false);
+        if (result.ok) {
+          setOpen(false);
+          setProposalControlsOpen(false);
+        }
       } catch {
         setFeedback({ ok: false, error: t.common.somethingWentWrong });
       }
@@ -209,7 +220,10 @@ export function ProposalComposer({
       try {
         const result = await confirmRequestAction(request.id);
         setFeedback(result);
-        if (result.ok) setOpen(false);
+        if (result.ok) {
+          setOpen(false);
+          setProposalControlsOpen(false);
+        }
       } catch {
         setFeedback({ ok: false, error: t.common.somethingWentWrong });
       }
@@ -228,6 +242,7 @@ export function ProposalComposer({
         if (result.ok) {
           setDeclineOpen(false);
           setOpen(false);
+          setProposalControlsOpen(false);
         }
       } catch {
         setFeedback({ ok: false, error: t.common.somethingWentWrong });
@@ -268,7 +283,7 @@ export function ProposalComposer({
         <span
           className={cn(
             "mt-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-transform",
-            open ? "rotate-180" : "",
+            showBody ? "rotate-180" : "",
           )}
           aria-hidden
         >
@@ -289,8 +304,15 @@ export function ProposalComposer({
       {hasDetails ? (
         <button
           type="button"
-          onClick={() => setOpen((value) => !value)}
-          aria-expanded={open}
+          onClick={() => {
+            if (showBody) {
+              setOpen(false);
+              setProposalControlsOpen(false);
+            } else {
+              setOpen(true);
+            }
+          }}
+          aria-expanded={showBody}
           aria-controls={bodyId}
           className="flex w-full items-start justify-between gap-3 rounded-t-xl p-4 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
         >
@@ -307,76 +329,118 @@ export function ProposalComposer({
         </SummaryBanner>
       ) : null}
 
-      {/* Proposed summary */}
-      {request.status === "proposed" && activeProposal ? (
+      {/* The decision and alternate-time action stay visible while details are collapsed. */}
+      {openSlot ? (
+        <div className="grid gap-5 border-t px-4 py-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:gap-6">
+          <div className="min-w-0">
+            <div className={cn(
+              "rounded-lg p-3.5",
+              openSlot.kind === "pending" ? "bg-amber-500/10 dark:bg-amber-400/10" : "bg-sky-500/10 dark:bg-sky-400/10",
+            )}>
+              <div className="flex items-start gap-3">
+                <span className={cn(
+                  "flex size-10 shrink-0 items-center justify-center rounded-lg",
+                  openSlot.kind === "pending"
+                    ? "bg-amber-500/15 text-amber-800 dark:text-amber-200"
+                    : "bg-sky-500/15 text-sky-800 dark:text-sky-200",
+                )}>
+                  <Icon icon={openSlot.kind === "pending" ? Calendar03Icon : HourglassIcon} className="size-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className={cn(
+                    "text-xs font-semibold",
+                    openSlot.kind === "pending" ? "text-amber-800 dark:text-amber-200" : "text-sky-800 dark:text-sky-200",
+                  )}>
+                    {openSlot.kind === "pending" ? t.admin.chosenTime : t.admin.statusAwaitingClient}
+                  </p>
+                  <p className="mt-0.5 text-lg font-semibold text-foreground tabular-nums">
+                    {formatDay(openSlot.date, locale)} · {openSlot.time}
+                  </p>
+                  {openSlot.kind === "pending" ? (
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                      {typeof request.priceCents === "number" ? (
+                        <span className="font-semibold text-foreground tabular-nums">
+                          {Math.round(request.priceCents / 100)} €
+                        </span>
+                      ) : null}
+                      {surcharge ? (
+                        <StatusPill tone={surcharge.kind === "vip" ? "info" : "warning"}>
+                          {surcharge.kind === "vip"
+                            ? t.admin.vipSurcharge(surcharge.percent)
+                            : t.admin.gapSurcharge(surcharge.percent)}
+                        </StatusPill>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2">
+                {openSlot.kind === "pending" ? (
+                  <Button type="button" size="lg" onClick={confirm} loading={pending} className="w-full">
+                    {pending ? t.common.working : t.admin.confirmRequest}
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  onClick={toggleProposalControls}
+                  aria-expanded={proposalControlsOpen}
+                  aria-controls={bodyId}
+                  className="w-full"
+                >
+                  {proposalControlsOpen ? t.admin.hideProposalControls : t.admin.orProposeAnother}
+                </Button>
+                <Button
+                  type="button"
+                  variant="dangerOutline"
+                  size="lg"
+                  onClick={() => setDeclineOpen(true)}
+                  disabled={pending}
+                  className="w-full"
+                >
+                  {t.admin.declineRequest}
+                </Button>
+            </div>
+            <Feedback result={feedback} className="mt-3" />
+          </div>
+          <RequestDayPreview
+            appointments={appointments}
+            date={openSlot.date}
+            time={openSlot.time}
+            duration={service.duration}
+            kind={openSlot.kind}
+            services={services}
+            locale={locale}
+            t={t}
+          />
+        </div>
+      ) : canPropose ? (
+        <div className="border-t px-4 py-4">
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            onClick={toggleProposalControls}
+            aria-expanded={proposalControlsOpen}
+            aria-controls={bodyId}
+            className="w-full sm:w-auto"
+          >
+            {proposalControlsOpen ? t.admin.hideProposalControls : t.admin.orProposeAnother}
+          </Button>
+        </div>
+      ) : request.status === "proposed" && activeProposal ? (
         <SummaryBanner tone="info" icon={HourglassIcon}>
           {t.admin.proposedWaiting(formatDay(activeProposal.date, locale), activeProposal.time)}
         </SummaryBanner>
       ) : null}
 
-      {/* Chosen-slot summary + one-click confirm (new exact-slot flow) */}
-      {request.status === "pending" && hasChosenSlot ? (
-        <div className="border-t px-4 py-4">
-          <div className="rounded-xl bg-amber-500/10 p-3.5 dark:bg-amber-400/10">
-            <div className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300">
-                <Icon icon={Calendar03Icon} className="size-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold tracking-wide text-amber-800 uppercase dark:text-amber-300">
-                  {t.admin.chosenTime}
-                </p>
-                <p className="mt-0.5 text-lg font-semibold text-foreground tabular-nums">
-                  {formatDay(request.requestedDate as string, locale)} · {request.requestedTime}
-                </p>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                  {typeof request.priceCents === "number" ? (
-                    <span className="font-semibold text-foreground tabular-nums">
-                      {Math.round(request.priceCents / 100)} €
-                    </span>
-                  ) : null}
-                  {surcharge ? (
-                    <StatusPill tone={surcharge.kind === "vip" ? "info" : "warning"}>
-                      {surcharge.kind === "vip"
-                        ? t.admin.vipSurcharge(surcharge.percent)
-                        : t.admin.gapSurcharge(surcharge.percent)}
-                    </StatusPill>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 grid gap-2 sm:flex sm:justify-end">
-              <Button
-                type="button"
-                variant="dangerOutline"
-                size="lg"
-                onClick={() => setDeclineOpen(true)}
-                disabled={pending}
-                className="w-full sm:w-auto"
-              >
-                {t.admin.declineRequest}
-              </Button>
-              <Button
-                type="button"
-                size="lg"
-                onClick={confirm}
-                loading={pending}
-                className="w-full sm:w-auto"
-              >
-                {pending ? t.common.working : t.admin.confirmRequest}
-              </Button>
-            </div>
-          </div>
-          <Feedback result={feedback} className="mt-3" />
-        </div>
-      ) : null}
-
-      {hasDetails ? (
-        <div id={bodyId} hidden={!open}>
-          {open ? (
+      <div id={bodyId} hidden={!showBody}>
+          {showBody ? (
             <div className="space-y-4 border-t px-4 pt-4 pb-4">
             {/* Client note */}
-            {request.note ? (
+            {open && request.note.trim() ? (
               <div className="flex items-start gap-2.5 rounded-lg bg-muted/60 px-3 py-2.5 text-sm text-foreground/90">
                 <Icon icon={Note01Icon} className="mt-0.5 text-muted-foreground" />
                 <p className="min-w-0 break-words">“{request.note}”</p>
@@ -384,7 +448,7 @@ export function ProposalComposer({
             ) : null}
 
             {/* Legacy 3-window preferences (only old requests have these) */}
-            {request.preferences.length > 0 ? (
+            {open && request.preferences.length > 0 ? (
               <div>
                 <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                   {t.admin.clientPreferences}
@@ -417,30 +481,8 @@ export function ProposalComposer({
               </div>
             ) : null}
 
-            {canPropose ? (
-              <Collapsible
-                open={hasChosenSlot ? proposalControlsOpen : true}
-                onOpenChange={setProposalControlsOpen}
-              >
-                {hasChosenSlot ? (
-                  <CollapsibleTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="lg"
-                      className="w-full justify-between sm:w-auto sm:justify-center"
-                    >
-                      <Icon icon={CalendarAdd01Icon} />
-                      {t.admin.orProposeAnother}
-                      <Icon
-                        icon={ArrowDown01Icon}
-                        className={cn("transition-transform", proposalControlsOpen && "rotate-180")}
-                      />
-                    </Button>
-                  </CollapsibleTrigger>
-                ) : null}
-
-                <CollapsibleContent className={cn(hasChosenSlot && "pt-4")}>
+            {canPropose && proposalControlsOpen ? (
+                <div>
                   <div className="grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
                     <AvailabilityCalendar
                       t={t}
@@ -540,11 +582,10 @@ export function ProposalComposer({
                   >
                     {pending ? t.common.sending : t.admin.proposeAt(formatDay(date, locale), time)}
                   </Button>
-                </CollapsibleContent>
-              </Collapsible>
+                </div>
             ) : null}
 
-            {!hasChosenSlot && (request.status === "pending" || request.status === "proposed") ? (
+            {!openSlot && (request.status === "pending" || request.status === "proposed") ? (
               <Button
                 type="button"
                 variant="dangerOutline"
@@ -558,8 +599,7 @@ export function ProposalComposer({
             ) : null}
             </div>
           ) : null}
-        </div>
-      ) : null}
+      </div>
 
       <ConfirmDialog
         open={declineOpen}
