@@ -210,7 +210,8 @@ const en = {
     detailService: "Service",
     detailDuration: "Duration",
     detailPrice: "Price",
-    detailSurchargeNote: "Includes a 10% gap surcharge.",
+    detailGapSurchargeNote: (percent: number) => `Includes a ${percent}% gap surcharge.`,
+    detailVipSurchargeNote: (percent: number) => `Includes a ${percent}% VIP surcharge.`,
     detailLocation: "Location",
     detailOpenMap: "Open in Maps",
     detailContact: "Contact",
@@ -498,7 +499,8 @@ const en = {
     confirm: "Confirm",
     confirmRequest: "Confirm this time",
     chosenTime: "Requested time",
-    surcharge: "+10% (gap)",
+    gapSurcharge: (percent: number) => `+${percent}% (gap)`,
+    vipSurcharge: (percent: number) => `VIP +${percent}%`,
     orProposeAnother: "Or propose different time",
     rescheduleNotePlaceholder:
       "Sorry, I need to move this — does the new time work?",
@@ -561,7 +563,7 @@ const en = {
     noAppointmentsYet: "No appointments yet",
     searchClientsLabel: "Search clients",
     searchClientsPlaceholder: "Search by name, email, or phone",
-    allClientsBack: "← All clients",
+    allClientsBack: "All clients",
     // Misc admin labels
     alreadyBooked: "Already booked",
     bookedOfCapacity: (booked: number, capacity: number) => `${booked}/${capacity} booked`,
@@ -684,6 +686,7 @@ const en = {
     requestDeclinedBody: "Choose another time and send a new request.",
     pickValidNewDateTime: "Pick a valid new date and time.",
     appointmentNotFound: "Appointment not found.",
+    appointmentAlreadyEnded: "Completed appointments can no longer be moved or cancelled.",
     appointmentNotEnded: "This appointment has not ended yet.",
     walkInNoReschedule:
       "Walk-in bookings can't be rescheduled — cancel and add a new one.",
@@ -1119,7 +1122,8 @@ const sk: Dict = {
     detailService: "Služba",
     detailDuration: "Trvanie",
     detailPrice: "Cena",
-    detailSurchargeNote: "Zahŕňa 10% príplatok za medzeru.",
+    detailGapSurchargeNote: (percent: number) => `Zahŕňa ${percent} % príplatok za medzeru.`,
+    detailVipSurchargeNote: (percent: number) => `Zahŕňa ${percent} % VIP príplatok.`,
     detailLocation: "Miesto",
     detailOpenMap: "Otvoriť v mapách",
     detailContact: "Kontakt",
@@ -1399,7 +1403,8 @@ const sk: Dict = {
     confirm: "Potvrdiť",
     confirmRequest: "Potvrdiť tento čas",
     chosenTime: "Požadovaný čas",
-    surcharge: "+10 % (medzera)",
+    gapSurcharge: (percent: number) => `+${percent} % (medzera)`,
+    vipSurcharge: (percent: number) => `VIP +${percent} %`,
     orProposeAnother: "Alebo navrhnúť iný čas",
     rescheduleNotePlaceholder:
       "Prepáčte, potrebujem to presunúť — vyhovuje vám nový čas?",
@@ -1459,7 +1464,7 @@ const sk: Dict = {
     noAppointmentsYet: "Zatiaľ žiadne termíny",
     searchClientsLabel: "Vyhľadať klientov",
     searchClientsPlaceholder: "Hľadať podľa mena, e-mailu alebo telefónu",
-    allClientsBack: "← Všetci klienti",
+    allClientsBack: "Všetci klienti",
     // Rôzne admin texty
     alreadyBooked: "Už obsadené",
     bookedOfCapacity: (booked: number, capacity: number) => `${booked}/${capacity} obsadených`,
@@ -1580,6 +1585,7 @@ const sk: Dict = {
     requestDeclinedBody: "Vyberte si iný termín a odošlite novú žiadosť.",
     pickValidNewDateTime: "Vyberte platný nový dátum a čas.",
     appointmentNotFound: "Termín sa nenašiel.",
+    appointmentAlreadyEnded: "Dokončené termíny už nie je možné presunúť ani zrušiť.",
     appointmentNotEnded: "Tento termín sa ešte neskončil.",
     walkInNoReschedule:
       "Rezervácie náhodných zákazníkov sa nedajú presunúť — zrušte a pridajte novú.",

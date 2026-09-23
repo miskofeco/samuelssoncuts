@@ -1,4 +1,5 @@
 import type {
+  BookingRequest,
   BusinessHoursDay,
   DayWindow,
   PricingSettings,
@@ -474,8 +475,33 @@ export type SlotPricingOptions = Partial<PricingSettings> & {
 
 export type SlotPriceKind = "base" | "gap" | "vip";
 
+export type SurchargeDetails = {
+  kind: Exclude<SlotPriceKind, "base">;
+  percent: number;
+};
+
 export function isVipStart(time: string): boolean {
   return minutesOf(time) >= VIP_START_MINUTES;
+}
+
+/**
+ * Explains a price captured on a booking request. New VIP requests can be
+ * identified from their original requested start; legacy surcharged rows did
+ * not store a kind and therefore retain the historical gap classification.
+ */
+export function surchargeDetailsForRequest(
+  request: Pick<BookingRequest, "surcharge" | "requestedTime">,
+  pricingSettings: PricingSettings,
+): SurchargeDetails | null {
+  if (!request.surcharge) return null;
+  const kind = request.requestedTime && isVipStart(request.requestedTime) ? "vip" : "gap";
+  return {
+    kind,
+    percent:
+      kind === "vip"
+        ? pricingSettings.vipSurchargePercent
+        : pricingSettings.gapSurchargePercent,
+  };
 }
 
 export function priceKindForSlot(preferred: boolean, options: SlotPricingOptions = {}): SlotPriceKind {

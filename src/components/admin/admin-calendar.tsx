@@ -36,6 +36,7 @@ import {
   serviceById,
   shiftMonth,
   shiftWeek,
+  surchargeDetailsForRequest,
   timeOfMinutes,
   todayIso,
   weekLabel,
@@ -47,6 +48,7 @@ import type {
   Appointment,
   BookingRequest,
   ClientProfile,
+  PricingSettings,
   Proposal,
   Service,
 } from "@/domain/types";
@@ -71,6 +73,8 @@ export type CalendarItem = {
   servicePrice: number;
   finalPriceCents: number;
   surcharge?: boolean;
+  surchargeKind?: "gap" | "vip";
+  surchargePercent?: number;
   time: string;
   date: string;
   durationMinutes: number;
@@ -116,6 +120,7 @@ export function AdminCalendar({
   requests,
   clients,
   services,
+  pricingSettings,
   blockedDates,
   feedUrl,
 }: {
@@ -124,6 +129,7 @@ export function AdminCalendar({
   requests: BookingRequest[];
   clients: ClientProfile[];
   services: Service[];
+  pricingSettings: PricingSettings;
   blockedDates: Set<string>;
   feedUrl?: string;
 }) {
@@ -188,6 +194,8 @@ export function AdminCalendar({
     for (const appointment of appointments) {
       const service = serviceById(appointment.serviceId, services);
       const client = appointment.clientId ? clientsById.get(appointment.clientId) : undefined;
+      const request = appointment.requestId ? requestsById.get(appointment.requestId) : undefined;
+      const surcharge = request ? surchargeDetailsForRequest(request, pricingSettings) : null;
       const bookedPriceCents = appointment.requestId
         ? requestsById.get(appointment.requestId)?.priceCents ?? Math.round(service.price * 100)
         : Math.round(service.price * 100);
@@ -197,7 +205,9 @@ export function AdminCalendar({
         service: service.name,
         servicePrice: service.price,
         finalPriceCents: bookedPriceCents,
-        surcharge: appointment.requestId ? requestsById.get(appointment.requestId)?.surcharge : undefined,
+        surcharge: request?.surcharge,
+        surchargeKind: surcharge?.kind,
+        surchargePercent: surcharge?.percent,
         time: appointment.time,
         date: appointment.date,
         durationMinutes: service.duration,
@@ -216,6 +226,7 @@ export function AdminCalendar({
       const request = requestsById.get(proposal.requestId);
       const client = request?.clientId ? clientsById.get(request.clientId) : undefined;
       const service = request ? serviceById(request.serviceId, services) : undefined;
+      const surcharge = request ? surchargeDetailsForRequest(request, pricingSettings) : null;
       const bookedPriceCents = request?.priceCents ?? Math.round((service?.price ?? 0) * 100);
       push(proposal.date, {
         id: proposal.id,
@@ -224,6 +235,8 @@ export function AdminCalendar({
         servicePrice: service?.price ?? 0,
         finalPriceCents: bookedPriceCents,
         surcharge: request?.surcharge,
+        surchargeKind: surcharge?.kind,
+        surchargePercent: surcharge?.percent,
         time: proposal.time,
         date: proposal.date,
         durationMinutes: service?.duration ?? 30,
@@ -241,7 +254,7 @@ export function AdminCalendar({
       list.sort((a, b) => a.time.localeCompare(b.time));
     }
     return map;
-  }, [appointments, proposals, requests, clients, services, t]);
+  }, [appointments, proposals, requests, clients, services, pricingSettings, t]);
 
   // Confirmed bookings per date (proposals don't block — they're concurrent
   // until confirmed), threaded into the modals to disable overlapping slots.

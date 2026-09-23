@@ -196,6 +196,7 @@ Admin booking and calendar changes:
 
 - `createAdminBookingAction` can book an existing client or a walk-in under the designated barber, regardless of which approved admin performs the action. Availability, pricing, blocked-time management, the operational calendar, analytics, and the admin calendar feed also use the designated barber. Migration `0035` moves still-future bookings and sent proposals from older admin owners to Samuel after checking appointment and blocked-time conflicts; past appointments stay with their original owner.
 - Reschedules and cancellations go through server actions that re-run conflict guards, update appointments, create notifications/email, and audit the action.
+- Historical appointments are immutable: the admin UI removes move/cancel controls after an appointment ends or receives an outcome, the reschedule server action re-checks that state, and migration `0041` enforces the same rule inside the transactional reschedule RPC.
 - Confirmed appointment overlap protection exists both in app guards and in the database exclusion constraint/RPCs.
 
 ## Notifications, Email, And Push

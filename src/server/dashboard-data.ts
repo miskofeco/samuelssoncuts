@@ -1,6 +1,13 @@
 import { analyticsPeriodStart } from "@/domain/analytics";
 import { adminCalendarWindowDates } from "@/domain/calendar-window";
-import { DEFAULT_PRICING_SETTINGS, addDays, eachDate, latestClientBookingDate, todayIso } from "@/domain/schedule";
+import {
+  DEFAULT_PRICING_SETTINGS,
+  addDays,
+  eachDate,
+  latestClientBookingDate,
+  surchargeDetailsForRequest,
+  todayIso,
+} from "@/domain/schedule";
 import type {
   Appointment,
   BookingRequest,
@@ -451,6 +458,8 @@ export type ClientAppointmentDetail = {
   outcome: string | null;
   priceCents: number | null;
   surcharge: boolean;
+  surchargeKind: "gap" | "vip" | null;
+  surchargePercent: number | null;
   canModify: boolean;
 };
 
@@ -468,16 +477,26 @@ export async function loadClientAppointmentDetail(
 
   if (error || !appt || appt.client_id !== profile.id) return null;
 
-  const [{ data: service }, requestResult] = await Promise.all([
+  const [{ data: service }, requestResult, pricingSettings] = await Promise.all([
     supabase.from("services").select("name, duration_minutes").eq("id", appt.service_id).single(),
     appt.request_id
       ? supabase
           .from("booking_requests")
-          .select("price_cents, surcharge")
+          .select("price_cents, surcharge, requested_start")
           .eq("id", appt.request_id)
           .single()
       : Promise.resolve({ data: null }),
+    loadPricingSettings(),
   ]);
+  const surcharge = surchargeDetailsForRequest(
+    {
+      surcharge: requestResult.data?.surcharge ?? false,
+      requestedTime: requestResult.data?.requested_start
+        ? timeFromIso(requestResult.data.requested_start)
+        : undefined,
+    },
+    pricingSettings,
+  );
 
   return {
     id: appt.id,
@@ -492,6 +511,8 @@ export async function loadClientAppointmentDetail(
     outcome: appt.outcome,
     priceCents: requestResult.data?.price_cents ?? null,
     surcharge: requestResult.data?.surcharge ?? false,
+    surchargeKind: surcharge?.kind ?? null,
+    surchargePercent: surcharge?.percent ?? null,
     canModify:
       appt.status === "confirmed" &&
       new Date(appt.starts_at).getTime() > Date.now() + 24 * 60 * 60 * 1000,
@@ -650,10 +671,11 @@ export async function loadAdminCalendar(window: { fromIso: string; toIso: string
   requests: BookingRequest[];
   clients: ClientProfile[];
   services: Service[];
+  pricingSettings: PricingSettings;
   blockedDates: Set<string>;
 }> {
   const supabase = await createClient();
-  const [servicesResult, profilesResult, requestsResult, appointmentsResult, blocked] =
+  const [servicesResult, profilesResult, requestsResult, appointmentsResult, blocked, pricingSettings] =
     await Promise.all([
       supabase.from("services").select("*"),
       supabase.from("profiles").select(PROFILE_SELECT),
@@ -671,6 +693,7 @@ export async function loadAdminCalendar(window: { fromIso: string; toIso: string
         .lt("starts_at", window.toIso)
         .order("starts_at"),
       loadBlockedDays(window),
+      loadPricingSettings(),
     ]);
 
   fail("services", servicesResult.error);
@@ -685,6 +708,7 @@ export async function loadAdminCalendar(window: { fromIso: string; toIso: string
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
     appointments: confirmedOnly(appointmentsResult.data).map(mapAppointmentRow),
+    pricingSettings,
     blockedDates: blocked.dates,
   };
 }
@@ -715,12 +739,13 @@ export async function loadRequestQueue(): Promise<{
   proposals: Proposal[];
   appointments: Appointment[];
   services: Service[];
+  pricingSettings: PricingSettings;
   blockedDates: Set<string>;
 }> {
   const supabase = await createClient();
   const floor = analyticsFloorIso();
   const recentIso = shopDayRangeUtc(addDays(-90)).startIso;
-  const [servicesResult, profilesResult, requestsResult, appointmentsResult, blocked] =
+  const [servicesResult, profilesResult, requestsResult, appointmentsResult, blocked, pricingSettings] =
     await Promise.all([
       supabase.from("services").select("*"),
       supabase.from("profiles").select(PROFILE_SELECT),
@@ -735,6 +760,7 @@ export async function loadRequestQueue(): Promise<{
       supabase.from("appointments").select(APPOINTMENT_SELECT)
         .eq("barber_id", await getShopBarberId()).gte("starts_at", floor).order("starts_at"),
       loadBlockedDays(),
+      loadPricingSettings(),
     ]);
 
   fail("services", servicesResult.error);
@@ -749,6 +775,7 @@ export async function loadRequestQueue(): Promise<{
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
     appointments: confirmedOnly(appointmentsResult.data).map(mapAppointmentRow),
+    pricingSettings,
     blockedDates: blocked.dates,
   };
 }

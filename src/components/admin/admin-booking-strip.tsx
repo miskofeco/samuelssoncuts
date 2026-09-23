@@ -1,5 +1,5 @@
 import { Card, SectionHeader } from "@/components/shared/card";
-import { formatFullDay, isVipStart, serviceById } from "@/domain/schedule";
+import { formatFullDay, serviceById, surchargeDetailsForRequest } from "@/domain/schedule";
 import type {
   PricingSettings,
   Appointment,
@@ -60,6 +60,10 @@ function buildBookingCards({
     .map((appointment): BookingCard => {
       const service = serviceById(appointment.serviceId, services);
       const client = appointment.clientId ? clientsById.get(appointment.clientId) : undefined;
+      const request = appointment.requestId ? requestsById.get(appointment.requestId) : undefined;
+      const surcharge = request
+        ? surchargeDetailsForRequest(request, { gapSurchargePercent, vipSurchargePercent })
+        : null;
       const startsAt = dateTimeOf(appointment);
       const endsAt = new Date(startsAt.getTime() + service.duration * 60_000);
       const servicePriceCents = Math.round(service.price * 100);
@@ -76,24 +80,17 @@ function buildBookingCards({
         priceCents: bookedPriceCents,
         startsAt,
         endsAt,
-        surcharge: appointment.requestId
-          ? requestsById.get(appointment.requestId)?.surcharge
-          : undefined,
-        surchargePercent:
-          appointment.requestId && requestsById.get(appointment.requestId)?.surcharge
-            ? isVipStart(appointment.time)
-              ? vipSurchargePercent
-              : gapSurchargePercent
-            : undefined,
+        surcharge: request?.surcharge,
+        surchargePercent: surcharge?.percent,
         calendarItem: {
           id: appointment.id,
           title: client?.name ?? appointment.clientName ?? clientFallback,
           service: service.name,
           servicePrice: service.price,
           finalPriceCents: bookedPriceCents,
-          surcharge: appointment.requestId
-            ? requestsById.get(appointment.requestId)?.surcharge
-            : undefined,
+          surcharge: request?.surcharge,
+          surchargeKind: surcharge?.kind,
+          surchargePercent: surcharge?.percent,
           time: appointment.time,
           date: appointment.date,
           durationMinutes: service.duration,

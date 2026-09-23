@@ -27,6 +27,7 @@ export default async function AdminCalendarPage({
         requests={data.requests}
         clients={data.clients}
         services={data.services}
+        pricingSettings={data.pricingSettings}
         blockedDates={data.blockedDates}
         feedUrl={feedUrl}
       />

@@ -58,7 +58,7 @@ export type BookingRequest = {
   createdAt: string;
   proposalId?: string;
   // Exact slot the client picked (new flow). yyyy-mm-dd + HH:MM, plus the price
-  // computed at booking time and whether the +10% gap surcharge applied.
+  // computed at booking time and whether a gap or VIP surcharge applied.
   requestedDate?: string;
   requestedTime?: string;
   priceCents?: number;

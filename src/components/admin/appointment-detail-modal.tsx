@@ -89,6 +89,7 @@ function DetailBody({
   const isConfirmed = item.type !== "Proposed";
   const endTime = addMinutesToTime(item.time, item.durationMinutes);
   const hasEnded = shopDateTimeToEpochMs(item.date, endTime) <= openedAt;
+  const canManage = !hasEnded && !item.outcome;
   const finalPrice = Math.round(item.finalPriceCents / 100);
 
   const timeOptions = useMemo(
@@ -233,8 +234,16 @@ function DetailBody({
             {t.admin.finalPrice}
           </p>
           {item.surcharge ? (
-            <p className="mt-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-              {t.admin.surcharge}
+            <p
+              className={
+                item.surchargeKind === "vip"
+                  ? "mt-0.5 text-xs font-medium text-sky-700 dark:text-sky-300"
+                  : "mt-0.5 text-xs font-medium text-amber-700 dark:text-amber-300"
+              }
+            >
+              {item.surchargeKind === "vip"
+                ? t.admin.vipSurcharge(item.surchargePercent ?? 0)
+                : t.admin.gapSurcharge(item.surchargePercent ?? 0)}
             </p>
           ) : null}
         </div>
@@ -269,26 +278,28 @@ function DetailBody({
             </div>
           ) : null}
 
-          <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:justify-end">
-            {isWalkIn && isConfirmed ? (
-              <p className="text-xs text-muted-foreground sm:mr-auto sm:self-center">
-                {t.admin.walkInNoReschedule}
-              </p>
-            ) : (
-              <Button type="button" variant="outline" size="lg" onClick={() => setMode("reschedule")}>
-                {t.admin.reschedule}
+          {canManage ? (
+            <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+              {isWalkIn && isConfirmed ? (
+                <p className="text-xs text-muted-foreground sm:mr-auto sm:self-center">
+                  {t.admin.walkInNoReschedule}
+                </p>
+              ) : (
+                <Button type="button" variant="outline" size="lg" onClick={() => setMode("reschedule")}>
+                  {t.admin.reschedule}
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="destructive-outline"
+                size="lg"
+                disabled={pending}
+                onClick={() => setCancelOpen(true)}
+              >
+                {t.admin.cancelAppointment}
               </Button>
-            )}
-            <Button
-              type="button"
-              variant="destructive-outline"
-              size="lg"
-              disabled={pending}
-              onClick={() => setCancelOpen(true)}
-            >
-              {t.admin.cancelAppointment}
-            </Button>
-          </div>
+            </div>
+          ) : null}
         </>
       ) : (
         <div className="space-y-4 border-t pt-4">

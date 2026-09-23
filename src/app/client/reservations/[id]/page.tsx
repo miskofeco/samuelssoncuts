@@ -11,7 +11,6 @@ import {
   Scissor01Icon,
   Time01Icon,
 } from "@hugeicons/core-free-icons";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { buildCalendarLinks } from "@/emails/calendar-links";
@@ -64,13 +63,14 @@ export default async function AppointmentDetailPage({
 
   return (
     <div className="space-y-6">
-      <Link
+      <ButtonLink
         href="/client/reservations"
-        className="inline-flex min-h-10 items-center gap-1.5 rounded-lg text-sm font-semibold text-muted-foreground outline-none transition hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+        variant="ghost"
+        className="-ml-3 text-muted-foreground hover:text-foreground"
       >
         <Icon icon={ArrowLeft01Icon} className="size-4" strokeWidth={2} />
         {t.client.detailBack}
-      </Link>
+      </ButtonLink>
 
       <Card className="rounded-2xl">
         {/* Header: service + status */}
@@ -116,8 +116,17 @@ export default async function AppointmentDetailPage({
             <Row icon={EuroIcon} label={t.client.detailPrice}>
               <span className="tabular-nums">{Math.round(appt.priceCents / 100)} €</span>
               {appt.surcharge ? (
-                <span className="mt-0.5 block text-xs font-normal text-amber-700 dark:text-amber-400">
-                  {t.client.detailSurchargeNote}
+                <span
+                  className={cn(
+                    "mt-0.5 block text-xs font-normal",
+                    appt.surchargeKind === "vip"
+                      ? "text-sky-700 dark:text-sky-300"
+                      : "text-amber-700 dark:text-amber-400",
+                  )}
+                >
+                  {appt.surchargeKind === "vip"
+                    ? t.client.detailVipSurchargeNote(appt.surchargePercent ?? 0)
+                    : t.client.detailGapSurchargeNote(appt.surchargePercent ?? 0)}
                 </span>
               ) : null}
             </Row>

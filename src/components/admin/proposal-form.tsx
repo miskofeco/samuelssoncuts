@@ -41,6 +41,7 @@ import {
   overlaps,
   serviceById,
   shiftMonth,
+  surchargeDetailsForRequest,
   todayIso,
   windowForTime,
   workingHours,
@@ -52,6 +53,7 @@ import type {
   ClientProfile,
   DayWindow,
   Preference,
+  PricingSettings,
   Proposal,
   RequestStatus,
   Service,
@@ -94,6 +96,7 @@ export function ProposalComposer({
   client,
   request,
   services,
+  pricingSettings,
   activeProposal,
   blockedDates,
 }: {
@@ -101,12 +104,14 @@ export function ProposalComposer({
   client?: ClientProfile;
   request: BookingRequest;
   services: Service[];
+  pricingSettings: PricingSettings;
   activeProposal?: Proposal;
   blockedDates: ReadonlySet<string>;
 }) {
   const t = useT();
   const locale = localeFor(useLang());
   const service = serviceById(request.serviceId, services);
+  const surcharge = surchargeDetailsForRequest(request, pricingSettings);
   const tone = statusTone[request.status];
   const label = statusLabel(t, request.status);
   const canPropose = requiresAdminRequestAction(request.status);
@@ -330,7 +335,13 @@ export function ProposalComposer({
                       {Math.round(request.priceCents / 100)} €
                     </span>
                   ) : null}
-                  {request.surcharge ? <StatusPill tone="warning">{t.admin.surcharge}</StatusPill> : null}
+                  {surcharge ? (
+                    <StatusPill tone={surcharge.kind === "vip" ? "info" : "warning"}>
+                      {surcharge.kind === "vip"
+                        ? t.admin.vipSurcharge(surcharge.percent)
+                        : t.admin.gapSurcharge(surcharge.percent)}
+                    </StatusPill>
+                  ) : null}
                 </div>
               </div>
             </div>

@@ -1449,7 +1449,7 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
 
   const { data: appointment, error: appointmentError } = await supabase
     .from("appointments")
-    .select("id, request_id, client_id, service_id, status")
+    .select("id, request_id, client_id, service_id, status, ends_at, outcome")
     .eq("id", parsed.data.appointmentId)
     .single();
 
@@ -1465,6 +1465,9 @@ export async function rescheduleAppointmentAction(input: unknown): Promise<Actio
   }
   if (appointment.status !== "confirmed") {
     return { ok: false, error: t.feedback.appointmentNotFound };
+  }
+  if (appointment.outcome || new Date(appointment.ends_at).getTime() <= Date.now()) {
+    return { ok: false, error: t.feedback.appointmentAlreadyEnded };
   }
 
   const start = startsAt(parsed.data.date, parsed.data.time);

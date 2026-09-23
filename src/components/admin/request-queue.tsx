@@ -14,6 +14,7 @@ import type {
   Appointment,
   BookingRequest,
   ClientProfile,
+  PricingSettings,
   Proposal,
   RequestStatus,
   Service,
@@ -50,6 +51,7 @@ export function RequestQueue({
   appointments,
   clients,
   services,
+  pricingSettings,
   blockedDates,
 }: {
   requests: BookingRequest[];
@@ -57,6 +59,7 @@ export function RequestQueue({
   appointments: Appointment[];
   clients: ClientProfile[];
   services: Service[];
+  pricingSettings: PricingSettings;
   blockedDates: ReadonlySet<string>;
 }) {
   const t = useT();
@@ -151,6 +154,7 @@ export function RequestQueue({
               appointments={appointments}
               request={request}
               services={services}
+              pricingSettings={pricingSettings}
               activeProposal={request.proposalId ? proposalsById.get(request.proposalId) : undefined}
               blockedDates={blockedDates}
             />

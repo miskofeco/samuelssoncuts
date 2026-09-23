@@ -17,7 +17,12 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { localeFor } from "@/i18n/config";
 import { getDict, getLang } from "@/i18n/server";
 import { isReadyForApproval } from "@/domain/approval";
-import { formatFullDay, serviceById, todayIso } from "@/domain/schedule";
+import {
+  formatFullDay,
+  serviceById,
+  surchargeDetailsForRequest,
+  todayIso,
+} from "@/domain/schedule";
 import {
   adminOverviewMetricTrends,
   revenueLookups,
@@ -27,6 +32,7 @@ import type {
   Appointment,
   BookingRequest,
   ClientProfile,
+  PricingSettings,
   Service,
 } from "@/domain/types";
 import { cn } from "@/lib/classnames";
@@ -39,11 +45,13 @@ export async function AdminOverview({
   requests,
   appointments,
   services,
+  pricingSettings,
 }: {
   clients: ClientProfile[];
   requests: BookingRequest[];
   appointments: Appointment[];
   services: Service[];
+  pricingSettings: PricingSettings;
 }) {
   const t = await getDict();
   const locale = localeFor(await getLang());
@@ -84,6 +92,7 @@ export async function AdminOverview({
     const client = clients.find((c) => c.id === appointment.clientId);
     const service = serviceById(appointment.serviceId, services);
     const request = appointment.requestId ? requestsById.get(appointment.requestId) : undefined;
+    const surcharge = request ? surchargeDetailsForRequest(request, pricingSettings) : null;
     const servicePriceCents = Math.round(service.price * 100);
     const bookedPriceCents = appointment.requestId
       ? request?.priceCents ?? servicePriceCents
@@ -103,6 +112,8 @@ export async function AdminOverview({
         servicePrice: service.price,
         finalPriceCents: bookedPriceCents,
         surcharge: request?.surcharge,
+        surchargeKind: surcharge?.kind,
+        surchargePercent: surcharge?.percent,
         time: appointment.time,
         date: appointment.date,
         durationMinutes: service.duration,
