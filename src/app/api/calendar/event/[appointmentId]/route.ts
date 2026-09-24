@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { appointmentUid, buildIcs, type IcsEvent } from "@/lib/ics";
+import { loadBookingContactSettings } from "@/server/dashboard-data";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/server/auth";
 import { z } from "zod";
@@ -49,12 +50,14 @@ export async function GET(
 
   const customer = client?.full_name ?? appointment.customer_name ?? "Client";
   const serviceName = service?.name ?? "Appointment";
+  const { address } = await loadBookingContactSettings();
   const event: IcsEvent = {
     uid: appointmentUid(appointment.id),
     start: new Date(appointment.starts_at),
     end: new Date(appointment.ends_at),
     summary: `Samuelsson Cuts - ${serviceName}`,
     description: `${customer} - ${serviceName}`,
+    location: address,
   };
   const ics = buildIcs([event], { calName: "Samuelsson Cuts" });
 

@@ -280,7 +280,7 @@ export function RequestForm({
       <section>
         <StepHeader step={1} eyebrow={t.client.newAppointment} title={t.client.chooseService} />
         {orderedServices.length > 0 ? (
-          <div role="radiogroup" aria-label={t.client.chooseService} className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div role="radiogroup" aria-label={t.client.chooseService} className="mt-3 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {orderedServices.map((service) => {
               const selected = service.id === serviceId;
               const imageSrc = defaultServiceImage(service);
@@ -295,16 +295,16 @@ export function RequestForm({
                     setSlot(null);
                   }}
                   className={cn(
-                    "relative flex min-h-20 items-center gap-3.5 rounded-xl border bg-card p-3 text-left shadow-xs transition outline-none active:scale-[0.99] hover:border-foreground/40 focus-visible:ring-3 focus-visible:ring-ring/50",
+                    "relative grid min-h-20 min-w-0 grid-cols-[3rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 rounded-xl border bg-card p-3 text-left shadow-xs transition outline-none active:scale-[0.99] hover:border-foreground/40 focus-visible:ring-3 focus-visible:ring-ring/50 xl:flex xl:gap-3.5",
                     selected && "border-primary bg-primary/5 ring-2 ring-primary/25 hover:border-primary",
                   )}
                 >
-                  <span className="relative block size-14 shrink-0 overflow-hidden rounded-lg">
+                  <span className="relative row-span-2 block size-12 shrink-0 self-start overflow-hidden rounded-lg xl:size-14 xl:self-center">
                     <Image
                       src={imageSrc}
                       alt=""
                       fill
-                      sizes="56px"
+                      sizes="(min-width: 1280px) 56px, 48px"
                       className="object-cover"
                     />
                   </span>
@@ -319,7 +319,7 @@ export function RequestForm({
                       <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">{service.description}</span>
                     ) : null}
                   </span>
-                  <Badge variant={selected ? "default" : "secondary"} className="shrink-0 tabular-nums">
+                  <Badge variant={selected ? "default" : "secondary"} className="col-start-2 w-fit shrink-0 tabular-nums">
                     {service.duration} {t.admin.minutesShort} · {service.price} €
                   </Badge>
                 </button>

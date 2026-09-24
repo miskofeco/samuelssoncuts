@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { appointmentUid, buildIcs, type IcsEvent } from "@/lib/ics";
 import { addDaysToDate, dateInShopTimeZone, shopDayRangeUtc } from "@/lib/time-zone";
 import { getCurrentProfile } from "@/server/auth";
-import { loadExportAppointments } from "@/server/dashboard-data";
+import { loadBookingContactSettings, loadExportAppointments } from "@/server/dashboard-data";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +28,10 @@ export async function GET(request: NextRequest) {
   const { startIso } = shopDayRangeUtc(today);
   const { startIso: endIso } = shopDayRangeUtc(addDaysToDate(today, range === "month" ? 31 : 7));
 
-  const appointments = await loadExportAppointments(startIso, endIso, clientId);
+  const [appointments, contact] = await Promise.all([
+    loadExportAppointments(startIso, endIso, clientId),
+    loadBookingContactSettings(),
+  ]);
 
   const events: IcsEvent[] = appointments.map((a) => ({
     uid: appointmentUid(a.id),
@@ -36,6 +39,7 @@ export async function GET(request: NextRequest) {
     end: a.end,
     summary: a.serviceName ? `${a.customer} — ${a.serviceName}` : a.customer,
     description: a.serviceName,
+    location: contact.address,
   }));
 
   const ics = buildIcs(events, { calName: "Samuelsson Cuts" });

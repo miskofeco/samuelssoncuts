@@ -1,6 +1,6 @@
 "use client";
 
-import { CookieIcon, Logout03Icon, MoreHorizontalIcon } from "@hugeicons/core-free-icons";
+import { CookieIcon, Logout03Icon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -241,12 +241,11 @@ function AccountMenu({ profile, collapsed }: { profile: AuthProfile; collapsed: 
                 <span className="block truncate text-sm font-semibold text-foreground">{profile.full_name}</span>
                 <span className="block truncate text-xs text-muted-foreground">{profile.email}</span>
               </span>
-              <Icon icon={MoreHorizontalIcon} className="text-muted-foreground" />
             </>
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-64">
+      <DropdownMenuContent side="top" align="start" sideOffset={8}>
         <DropdownMenuLabel className="flex items-center gap-3 py-2">
           <Avatar name={profile.full_name} src={profile.avatar_url} size="md" />
           <span className="min-w-0 flex-1">

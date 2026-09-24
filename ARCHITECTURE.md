@@ -70,7 +70,7 @@ Client routes:
 - `/client`: overview of requests, proposals, upcoming appointments, availability notices.
 - `/client/book`: exact-slot booking using services, business hours, blocked times, and pricing.
 - `/client/reservations`: reservation list.
-- `/client/reservations/[id]`: appointment detail and self-service actions.
+- `/client/reservations/[id]`: appointment detail and self-service actions; the displayed booking address/phone come from the designated barber's booking-contact settings.
 - `/client/notifications`: notification inbox and Web Push opt-in.
 - `/client/profile`: profile, avatar, calendar export, privacy/data actions.
 
@@ -83,7 +83,7 @@ Admin routes:
 - `/admin/clients` and `/admin/clients/[clientId]`: directory and client history.
 - `/admin/availability`: business hours and blocked time management.
 - `/admin/audit`: admin action audit log.
-- `/admin/settings`: services, service images, pricing settings, push opt-in.
+- `/admin/settings`: services, service images, pricing settings, booking location/phone, push opt-in.
 
 Authenticated page segments colocate a `loading.tsx` boundary with each route. These boundaries render
 route-specific skeletons from `src/components/admin/admin-loading-skeletons.tsx` and
@@ -264,7 +264,7 @@ Admin booking and calendar changes:
 - Auth rate limits are keyed per IP and, more generously, per email so a stranger cannot lock a victim out of sign-in, reset or resend by hammering their address.
 - Calendar/push API routes require `approval_status = 'approved'`; GDPR export and erasure (`exportMyDataAction`, `deleteMyAccountAction`) deliberately do not, and are offered on `/pending` as well as the account page.
 - `NEXT_PUBLIC_SHOP_TIME_ZONE` controls booking and display conversion. Default is `Europe/Bratislava`, but production should set it explicitly.
-- SQL availability guards in migrations `0043`/`0044` use `Europe/Bratislava` directly; any change to the shop timezone must update both the runtime setting and the database guards. `NEXT_PUBLIC_SHOP_PHONE` and `NEXT_PUBLIC_SHOP_ADDRESS` can override the user's public shop details embedded as defaults in `src/lib/env.ts`; the phone is shown on legal pages. `SEND_EMAIL_HOOK_SECRET` is needed for the Supabase auth-email hook.
+- SQL availability guards in migrations `0043`/`0044` use `Europe/Bratislava` directly; any change to the shop timezone must update both the runtime setting and the database guards. `NEXT_PUBLIC_SHOP_PHONE` and `NEXT_PUBLIC_SHOP_ADDRESS` override legal-page contact defaults in `src/lib/env.ts`. Migration `0047` adds barber-owned `booking_contact_settings` with authenticated customer read and barber-only write policies. The admin profile settings action validates the phone and updates this row; appointment details, Google/ICS calendar events, and confirmation links use its address, falling back to the Vranov booking location until saved. `SEND_EMAIL_HOOK_SECRET` is needed for the Supabase auth-email hook.
 - Keep `src/lib/database.types.ts` in sync with migrations after schema changes.
 
 ## Testing And Verification

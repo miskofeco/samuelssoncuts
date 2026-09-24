@@ -43,6 +43,7 @@ import { dashboardPathFor, getCurrentProfile, requireAdmin, requireApprovedClien
 import { isReadyForApproval } from "@/domain/approval";
 import type { AuthFormState } from "@/domain/auth-form";
 import { parsePhone } from "@/domain/phone";
+import type { BookingContact } from "@/domain/shop-contact";
 import {
   accountApprovedPush,
   accountBlockedPush,
@@ -61,7 +62,7 @@ import {
 } from "@/domain/push-copy";
 import { authErrorPath, authNoticePath } from "@/i18n/auth-notices";
 import { recordAdminAction } from "@/server/audit";
-import { notificationOrFilter } from "@/server/dashboard-data";
+import { loadBookingContactSettings, notificationOrFilter } from "@/server/dashboard-data";
 import { quoteAdminSlot, quoteClientSlot } from "@/server/booking-pricing";
 import { getShopBarberEmail, getShopBarberId } from "@/server/shop-barber";
 import { enforceRateLimit } from "@/server/rate-limit";
@@ -161,6 +162,11 @@ const serviceSchema = z.object({
 const pricingSettingsSchema = z.object({
   gapSurchargePercent: z.number().int().min(0).max(500),
   vipSurchargePercent: z.number().int().min(0).max(500),
+});
+
+const bookingContactSchema = z.object({
+  address: z.string().trim().min(5).max(240),
+  phone: z.string().trim().min(7).max(40),
 });
 
 const blockDateSchema = z.object({
@@ -1306,6 +1312,14 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
       .neq("id", request.id),
   ]);
 
+  // Resolve the calendar location before the booking mutation, so a failed
+  // settings read cannot report failure after an appointment was confirmed.
+  let bookingAddress: string;
+  try {
+    bookingAddress = (await loadBookingContactSettings()).address;
+  } catch {
+    return { ok: false, error: t.common.somethingWentWrong };
+  }
   const { data: appointmentId, error: confirmError } = await supabase.rpc("confirm_booking_request", {
     p_request_id: request.id,
     p_barber_id: await getShopBarberId(),
@@ -1367,6 +1381,7 @@ export async function confirmRequestAction(requestId: string): Promise<ActionRes
         appointmentId,
         startIso: request.requested_start,
         endIso: request.requested_end,
+        location: bookingAddress,
       }),
     });
   }
@@ -1685,6 +1700,12 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
     return { ok: false, error: t.feedback.slotTaken };
   }
 
+  let bookingAddress: string;
+  try {
+    bookingAddress = (await loadBookingContactSettings()).address;
+  } catch {
+    return { ok: false, error: t.common.somethingWentWrong };
+  }
   const { data: appointmentId, error: insertError } = await getSupabaseAdminClient().rpc("admin_create_booking_priced", {
     p_client_id: parsed.data.clientId ?? null,
     p_customer_name: parsed.data.customerName ?? null,
@@ -1721,6 +1742,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
           appointmentId,
           startIso: start,
           endIso: end,
+          location: bookingAddress,
         }),
       });
     }
@@ -2204,6 +2226,37 @@ export async function savePricingSettingsAction(input: {
   revalidatePath("/admin", "layout");
   revalidatePath("/client", "layout");
   return { ok: true, message: t.feedback.pricingSettingsSaved };
+}
+
+export async function saveBookingContactAction(input: BookingContact): Promise<ActionResult> {
+  const profile = await requireAdmin();
+  const t = await getDict();
+  const parsed = bookingContactSchema.safeParse(input);
+  const phone = parsed.success ? parsePhone(parsed.data.phone) : null;
+  if (!parsed.success || !phone) {
+    return { ok: false, error: t.feedback.checkBookingContact };
+  }
+
+  const barberId = await getShopBarberId();
+  if (profile.id !== barberId) {
+    return { ok: false, error: t.feedback.bookingContactBarberOnly };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("booking_contact_settings").upsert({
+    barber_id: barberId,
+    address: parsed.data.address,
+    phone,
+  }, { onConflict: "barber_id" });
+  if (error) return { ok: false, error: t.common.somethingWentWrong };
+
+  await recordAdminAction("booking_contact_settings.update", {
+    targetType: "booking_contact_settings",
+    targetId: barberId,
+  });
+  revalidatePath("/admin/settings");
+  revalidatePath("/client/reservations/[id]", "page");
+  return { ok: true, message: t.feedback.bookingContactSaved };
 }
 
 export async function toggleServiceActiveAction(

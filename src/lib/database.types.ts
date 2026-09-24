@@ -103,6 +103,24 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["pricing_settings"]["Insert"]>;
         Relationships: [];
       };
+      booking_contact_settings: {
+        Row: {
+          barber_id: string;
+          address: string;
+          phone: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          barber_id: string;
+          address: string;
+          phone: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["booking_contact_settings"]["Insert"]>;
+        Relationships: [];
+      };
       blocked_times: {
         Row: {
           id: string;

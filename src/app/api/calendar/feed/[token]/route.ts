@@ -6,6 +6,9 @@ import { appointmentUid, buildIcs, type IcsEvent } from "@/lib/ics";
 import { reportError } from "@/lib/observability";
 import { createClient } from "@/lib/supabase/server";
 import { enforceRateLimit } from "@/server/rate-limit";
+import { DEFAULT_BOOKING_CONTACT } from "@/domain/shop-contact";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getShopBarberId } from "@/server/shop-barber";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +70,16 @@ export async function GET(
   }
 
   const rows: FeedRow[] = data as FeedRow[];
+  const { data: contact, error: contactError } = await getSupabaseAdminClient()
+    .from("booking_contact_settings")
+    .select("address")
+    .eq("barber_id", await getShopBarberId())
+    .maybeSingle();
+  if (contactError) {
+    await reportError("calendar-feed-contact", contactError);
+    return new NextResponse("Calendar temporarily unavailable", { status: 503 });
+  }
+  const address = contact?.address ?? DEFAULT_BOOKING_CONTACT.address;
 
   const events: IcsEvent[] = rows.map((row) => ({
     uid: appointmentUid(row.id),
@@ -74,6 +87,7 @@ export async function GET(
     end: new Date(row.ends_at),
     summary: row.service_name ? `${row.customer} — ${row.service_name}` : row.customer,
     description: row.service_name,
+    location: address,
   }));
 
   const ics = buildIcs(events, { calName: "Samuelsson Cuts" });

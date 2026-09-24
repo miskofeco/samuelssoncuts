@@ -12,6 +12,7 @@ export function AppointmentConfirmedEmail({
   appointmentId,
   startIso,
   endIso,
+  location,
 }: {
   clientName: string;
   service: string;
@@ -20,6 +21,7 @@ export function AppointmentConfirmedEmail({
   appointmentId: string;
   startIso: string;
   endIso: string;
+  location?: string;
 }) {
   const formattedDate = formatEmailDate(date);
   const calendarLinks = buildCalendarLinks({
@@ -27,6 +29,7 @@ export function AppointmentConfirmedEmail({
     service,
     startIso,
     endIso,
+    location,
   });
 
   return (

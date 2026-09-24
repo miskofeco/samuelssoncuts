@@ -10,11 +10,13 @@ export function buildCalendarLinks({
   service,
   startIso,
   endIso,
+  location,
 }: {
   appointmentId: string;
   service: string;
   startIso: string;
   endIso: string;
+  location?: string;
 }) {
   const siteUrl = getSiteUrl();
   const title = service ? `Samuelsson Cuts - ${service}` : "Samuelsson Cuts termín";
@@ -25,6 +27,7 @@ export function buildCalendarLinks({
     dates: `${googleCalendarDate(startIso)}/${googleCalendarDate(endIso)}`,
     details,
   });
+  if (location) params.set("location", location);
 
   return {
     google: `https://calendar.google.com/calendar/render?${params.toString()}`,

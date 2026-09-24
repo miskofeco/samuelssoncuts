@@ -5,12 +5,12 @@ import {
   Calendar03Icon,
   Call02Icon,
   EuroIcon,
-  GoogleIcon,
   InformationCircleIcon,
   Location01Icon,
   Scissor01Icon,
   Time01Icon,
 } from "@hugeicons/core-free-icons";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 
 import { buildCalendarLinks } from "@/emails/calendar-links";
@@ -22,10 +22,10 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { DEFAULT_PRICING_SETTINGS, formatFullDay } from "@/domain/schedule";
 import { localeFor } from "@/i18n/config";
 import { getDict, getLang } from "@/i18n/server";
-import { getShopAddress, getShopMapUrl, getShopPhone } from "@/lib/env";
+import { bookingMapUrl } from "@/domain/shop-contact";
 import { cn } from "@/lib/classnames";
 import { requireApprovedClient } from "@/server/auth";
-import { loadBookingData, loadClientAppointmentDetail } from "@/server/dashboard-data";
+import { loadBookingContactSettings, loadBookingData, loadClientAppointmentDetail } from "@/server/dashboard-data";
 
 export const dynamic = "force-dynamic";
 
@@ -44,14 +44,14 @@ export default async function AppointmentDetailPage({
 
   const t = await getDict();
   const locale = localeFor(await getLang());
-  const address = getShopAddress();
-  const mapUrl = getShopMapUrl();
-  const phone = getShopPhone();
+  const { address, phone } = await loadBookingContactSettings();
+  const mapUrl = bookingMapUrl(address);
   const calendar = buildCalendarLinks({
     appointmentId: appt.id,
     service: appt.serviceName,
     startIso: appt.startIso,
     endIso: appt.endIso,
+    location: address,
   });
   const service = bookingData?.services.find((item) => item.id === appt.serviceId) ?? {
     id: appt.serviceId,
@@ -134,18 +134,18 @@ export default async function AppointmentDetailPage({
           ) : null}
           {address ? (
             <Row icon={Location01Icon} label={t.client.detailLocation}>
-              {address}
-              {mapUrl ? (
+              <div className="flex flex-col items-end gap-1.5">
+                <span>{address}</span>
                 <a
                   href={mapUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-0.5 inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-sky-700 underline underline-offset-4 dark:text-sky-400"
+                  className="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-sky-700 underline underline-offset-4 dark:text-sky-400"
                 >
                   {t.client.detailOpenMap}
                   <Icon icon={ArrowUpRight01Icon} className="size-3.5" strokeWidth={2} />
                 </a>
-              ) : null}
+              </div>
             </Row>
           ) : null}
           {phone ? (
@@ -165,13 +165,17 @@ export default async function AppointmentDetailPage({
             <p className="text-[0.7rem] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
               {t.client.detailAddToCalendar}
             </p>
-            <div className="mt-2 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-              <ButtonLink href={calendar.google} variant="secondary" target="_blank" rel="noreferrer">
-                <Icon icon={GoogleIcon} className="size-4" strokeWidth={2} />
+            <div className="mt-2 grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 sm:flex sm:flex-wrap">
+              <ButtonLink href={calendar.google} variant="secondary" target="_blank" rel="noreferrer" className="w-full min-w-0 sm:w-auto">
+                <Image src="/email-icons/google.png" alt="" width={18} height={18} className="size-[18px]" />
                 {t.client.detailGoogleCal}
               </ButtonLink>
-              <ButtonLink href={calendar.apple} variant="secondary">
-                <Icon icon={AppleIcon} className="size-4" strokeWidth={2} />
+              <ButtonLink
+                href={calendar.apple}
+                variant="secondary"
+                className="w-full min-w-0 border-black bg-black text-white hover:bg-black/90 hover:text-white sm:w-auto dark:border-white dark:bg-white dark:text-black dark:hover:bg-white/90 dark:hover:text-black"
+              >
+                <Icon icon={AppleIcon} className="size-[18px] [&_path]:fill-current" />
                 {t.client.detailAppleCal}
               </ButtonLink>
             </div>

@@ -1,4 +1,5 @@
 import { analyticsPeriodStart } from "@/domain/analytics";
+import { DEFAULT_BOOKING_CONTACT, type BookingContact } from "@/domain/shop-contact";
 import { unstable_cache } from "next/cache";
 import { adminCalendarWindowDates } from "@/domain/calendar-window";
 import {
@@ -333,6 +334,19 @@ export async function loadPricingSettings(barberId?: string): Promise<PricingSet
   if (!data || data.length === 0) return DEFAULT_PRICING_SETTINGS;
 
   return mapPricingSettingsRow(data[0]);
+}
+
+/** Customer-facing booking address and phone, managed by the shop barber. */
+export async function loadBookingContactSettings(): Promise<BookingContact> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("booking_contact_settings")
+    .select("address, phone")
+    .eq("barber_id", await getShopBarberId())
+    .maybeSingle();
+
+  fail("booking_contact_settings", error);
+  return data ? { address: data.address, phone: data.phone } : DEFAULT_BOOKING_CONTACT;
 }
 
 /** Blocked calendar days expanded from blocked_times ranges. */

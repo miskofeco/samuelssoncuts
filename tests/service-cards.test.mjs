@@ -19,10 +19,11 @@ test("client booking uses service cards with public image defaults", () => {
   assert.match(requestForm, /orderClientServices\(services\)/);
   assert.match(requestForm, /defaultClientServiceId\(services\)/);
   assert.match(requestForm, /title=\{t\.client\.chooseService\}/);
-  // Compact radio-style chooser: 48px thumbnail, one-line description, price badge.
+  // Narrow cards stack the price under the copy; wide cards align it beside the copy.
   assert.match(requestForm, /role="radiogroup"/);
   assert.match(requestForm, /aria-checked=\{selected\}/);
-  assert.match(requestForm, /size-14 shrink-0 overflow-hidden rounded-lg/);
+  assert.match(requestForm, /grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3/);
+  assert.match(requestForm, /row-span-2 block size-12 shrink-0 self-start overflow-hidden rounded-lg xl:size-14/);
   assert.match(requestForm, /service\.description/);
   assert.match(requestForm, /line-clamp-2/);
   assert.match(requestForm, /<Badge variant=\{selected \? "default" : "secondary"\}/);

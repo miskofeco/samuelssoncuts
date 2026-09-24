@@ -1,3 +1,4 @@
+import { BookingContactForm } from "@/components/admin/booking-contact-form";
 import { PricingSettingsForm } from "@/components/admin/pricing-settings-form";
 import { ServiceManager } from "@/components/admin/service-manager";
 import { OpenPreferencesCard } from "@/components/consent/open-preferences-button";
@@ -6,17 +7,20 @@ import { PushNotificationCard } from "@/components/shared/push-notification-card
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getDict } from "@/i18n/server";
 import { requireAdmin } from "@/server/auth";
-import { loadAllServices, loadPricingSettings } from "@/server/dashboard-data";
+import { loadAllServices, loadBookingContactSettings, loadPricingSettings } from "@/server/dashboard-data";
+import { getShopBarberId } from "@/server/shop-barber";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminSettingsPage() {
   const profile = await requireAdmin();
-  const [services, pricingSettings] = await Promise.all([
+  const [services, pricingSettings, bookingContact] = await Promise.all([
     loadAllServices(),
     loadPricingSettings(),
+    loadBookingContactSettings(),
   ]);
   const t = await getDict();
+  const isShopBarber = profile.id === await getShopBarberId();
   // A real catalogue price makes the surcharge preview concrete.
   const exampleBasePrice = (services.find((service) => service.active) ?? services[0])?.price;
 
@@ -52,6 +56,7 @@ export default async function AdminSettingsPage() {
               email={profile.email}
               avatarUrl={profile.avatar_url}
             />
+            {isShopBarber ? <BookingContactForm initialContact={bookingContact} /> : null}
           </div>
         </TabsContent>
 

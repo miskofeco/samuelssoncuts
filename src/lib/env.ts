@@ -108,8 +108,9 @@ export function getShopTimeZone() {
   return process.env.NEXT_PUBLIC_SHOP_TIME_ZONE ?? "Europe/Bratislava";
 }
 
-// ─── Shop contact (shown on the appointment detail view) ───────────────────────
-// Public so both server and client components can read them.
+// ─── Legal contact defaults ───────────────────────────────────────────────────
+// The booking location and phone are barber-managed in booking_contact_settings.
+// These values remain the legal-page defaults supplied for the shop.
 
 export function getShopAddress(): string | null {
   return process.env.NEXT_PUBLIC_SHOP_ADDRESS || "Skrabske 107, 094 33";
@@ -117,14 +118,6 @@ export function getShopAddress(): string | null {
 
 export function getShopPhone(): string | null {
   return process.env.NEXT_PUBLIC_SHOP_PHONE || "+421918531257";
-}
-
-/** Google Maps search link for the configured address (null when unset). */
-export function getShopMapUrl(): string | null {
-  const address = getShopAddress();
-  return address
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
-    : null;
 }
 
 export function getErrorReportWebhookUrl(): string | null {
