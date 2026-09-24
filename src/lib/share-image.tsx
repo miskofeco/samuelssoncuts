@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { ImageResponse } from "next/og";
 
-export const shareImageAlt = "Samuelsson Cuts Scheduler";
+export const shareImageAlt = "Samuelsson Cuts – online rezervácie v barbershope";
 
 export const shareImageSize = {
   width: 1200,
@@ -12,13 +12,111 @@ export const shareImageSize = {
 
 export const shareImageContentType = "image/png";
 
-async function getLogoDataUrl() {
-  const logo = await readFile(join(process.cwd(), "public/logo-dark.png"));
-  return `data:image/png;base64,${logo.toString("base64")}`;
+// Greyscale only: the app's dark stone palette. The reserved slot and its dial
+// arc stand out by contrast (inverted like the dark-theme primary button).
+const INK = "#0c0a09"; // stone-950, --background (dark)
+const TEXT = "#fafaf9"; // stone-50, --foreground (dark)
+const MUTED = "#a8a29e"; // stone-400, --muted-foreground (dark)
+
+const EYEBROW = "BARBERSHOP";
+const HEADLINE = ["Váš strih.", "Váš čas."];
+const SUBLINE = "Rezervujte si termín online. Potvrdenie príde priamo do mobilu.";
+const SLOTS = [
+  { time: "09:00", booked: false },
+  { time: "10:30", booked: false },
+  { time: "13:15", booked: true },
+  { time: "16:45", booked: false },
+];
+const BOOKED_LABEL = "Rezervované";
+
+// Clock dial geometry (px). The emblem sits at native resolution in the centre.
+const DIAL = { cx: 902, cy: 315, outer: 238, inner: 196, emblem: 252 };
+
+async function publicDataUrl(file: string) {
+  const data = await readFile(join(process.cwd(), "public", file));
+  return `data:image/png;base64,${data.toString("base64")}`;
+}
+
+/**
+ * Geist in the weights the card uses, subset to its text. ImageResponse only
+ * bundles Geist Regular, and font binaries stay out of the repository, so the
+ * weights come from Google Fonts at render time (TTF, which Satori reads). Any
+ * failure falls back to the bundled regular weight instead of failing the image.
+ */
+async function loadGeist(weight: 500 | 700, text: string) {
+  try {
+    const cssUrl = `https://fonts.googleapis.com/css2?family=Geist:wght@${weight}&text=${encodeURIComponent(text)}`;
+    const css = await (await fetch(cssUrl, { signal: AbortSignal.timeout(5000) })).text();
+    const fontUrl = css.match(/src: url\((.+?)\) format\('(?:opentype|truetype)'\)/)?.[1];
+    if (!fontUrl) return null;
+    const font = await fetch(fontUrl, { signal: AbortSignal.timeout(5000) });
+    return font.ok ? { name: "Geist", data: await font.arrayBuffer(), weight, style: "normal" as const } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 60 minute ticks on the dial; every fifth is a longer hour mark. */
+function DialTicks() {
+  return (
+    <>
+      {Array.from({ length: 60 }, (_, index) => {
+        const hour = index % 5 === 0;
+        const length = hour ? 20 : 9;
+        const width = hour ? 3 : 2;
+        const angle = index * 6;
+        const radius = DIAL.outer - length / 2;
+        const radians = (angle * Math.PI) / 180;
+        return (
+          <div
+            key={index}
+            style={{
+              position: "absolute",
+              left: DIAL.cx + radius * Math.sin(radians) - width / 2,
+              top: DIAL.cy - radius * Math.cos(radians) - length / 2,
+              width,
+              height: length,
+              borderRadius: width,
+              background: hour ? "rgba(250,250,249,0.55)" : "rgba(250,250,249,0.18)",
+              transform: `rotate(${angle}deg)`,
+            }}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function Ring({ radius, color, width = 1 }: { radius: number; color: string; width?: number }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: DIAL.cx - radius,
+        top: DIAL.cy - radius,
+        width: radius * 2,
+        height: radius * 2,
+        borderRadius: radius * 2,
+        border: `${width}px solid ${color}`,
+      }}
+    />
+  );
 }
 
 export async function createShareImageResponse() {
-  const logoSrc = await getLogoDataUrl();
+  const glyphs = [EYEBROW, ...HEADLINE, SUBLINE, BOOKED_LABEL, ...SLOTS.map((slot) => slot.time)].join("");
+  const [logoSrc, emblemSrc, medium, bold] = await Promise.all([
+    publicDataUrl("logo-dark.png"),
+    publicDataUrl("icon-dark.png"),
+    loadGeist(500, glyphs),
+    loadGeist(700, glyphs),
+  ]);
+  const fonts = [medium, bold].filter((font) => font !== null);
+
+  // Light arc on the inner ring: a quarter of the ring's top border, turned to
+  // sit around "two o'clock" like a booked slot on the dial.
+  const arcRadius = DIAL.inner;
+  const arcEnd = ((60 + 45) * Math.PI) / 180;
 
   return new ImageResponse(
     (
@@ -29,183 +127,164 @@ export async function createShareImageResponse() {
           width: "100%",
           height: "100%",
           overflow: "hidden",
-          background: "#050505",
-          color: "#fafaf9",
-          fontFamily:
-            "Geist, Geist Fallback, ui-sans-serif, system-ui, sans-serif",
+          background: INK,
+          color: TEXT,
+          fontFamily: "Geist",
         }}
       >
+        {/* Soft light behind the dial, fading into the canvas. */}
         <div
           style={{
             position: "absolute",
             inset: 0,
             display: "flex",
-            background:
-              "radial-gradient(circle at 74% 20%, rgba(250,250,249,0.12), transparent 25%), radial-gradient(circle at 18% 86%, rgba(168,162,158,0.11), transparent 32%), linear-gradient(135deg, #050505 0%, #0c0a09 48%, #161312 100%)",
+            background: `radial-gradient(circle at ${DIAL.cx}px ${DIAL.cy}px, rgba(250,250,249,0.09) 0%, rgba(250,250,249,0.03) 32%, transparent 58%)`,
           }}
         />
+
+        {/* Comb teeth along the bottom edge, echoing the comb in the mark. */}
         <div
           style={{
             position: "absolute",
-            inset: 0,
-            display: "flex",
-            opacity: 0.24,
-            background:
-              "repeating-linear-gradient(135deg, transparent 0px, transparent 30px, rgba(250,250,249,0.12) 30px, rgba(250,250,249,0.12) 31px, transparent 31px, transparent 62px)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            opacity: 0.12,
-            background:
-              "linear-gradient(rgba(250,250,249,0.16) 1px, transparent 1px), linear-gradient(90deg, rgba(250,250,249,0.14) 1px, transparent 1px)",
-            backgroundSize: "96px 96px",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
+            left: 0,
             right: 0,
-            top: 0,
             bottom: 0,
-            width: 420,
+            height: 14,
             display: "flex",
-            opacity: 0.44,
             background:
-              "repeating-linear-gradient(135deg, rgba(250,250,249,0.12) 0px, rgba(250,250,249,0.12) 8px, transparent 8px, transparent 30px)",
+              "repeating-linear-gradient(90deg, rgba(250,250,249,0.14) 0px, rgba(250,250,249,0.14) 2px, transparent 2px, transparent 8px)",
+          }}
+        />
+
+        {/* Dial */}
+        <Ring radius={DIAL.outer + 18} color="rgba(250,250,249,0.06)" />
+        <Ring radius={DIAL.outer} color="rgba(250,250,249,0.10)" />
+        <Ring radius={DIAL.inner} color="rgba(250,250,249,0.07)" />
+        <DialTicks />
+        <div
+          style={{
+            position: "absolute",
+            left: DIAL.cx - arcRadius,
+            top: DIAL.cy - arcRadius,
+            width: arcRadius * 2,
+            height: arcRadius * 2,
+            borderRadius: arcRadius * 2,
+            border: "5px solid transparent",
+            borderTopColor: TEXT,
+            transform: "rotate(60deg)",
           }}
         />
         <div
           style={{
             position: "absolute",
-            right: 72,
-            top: 64,
-            display: "flex",
-            gap: 10,
+            left: DIAL.cx + arcRadius * Math.sin(arcEnd) - 7,
+            top: DIAL.cy - arcRadius * Math.cos(arcEnd) - 7,
+            width: 14,
+            height: 14,
+            borderRadius: 14,
+            background: TEXT,
+            border: `3px solid ${INK}`,
           }}
-        >
-          {["BOOK", "CONFIRM", "CUT"].map((label) => (
-            <div
-              key={label}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                height: 34,
-                padding: "0 14px",
-                border: "1px solid rgba(250,250,249,0.16)",
-                borderRadius: 999,
-                color: "#d6d3d1",
-                fontSize: 15,
-                fontWeight: 600,
-                letterSpacing: 0,
-              }}
-            >
-              {label}
-            </div>
-          ))}
-        </div>
+        />
+        {/* ImageResponse renders plain HTML, so the real PNG marks are embedded directly. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          alt=""
+          src={emblemSrc}
+          width={DIAL.emblem}
+          height={DIAL.emblem}
+          style={{
+            position: "absolute",
+            left: DIAL.cx - DIAL.emblem / 2,
+            top: DIAL.cy - DIAL.emblem / 2,
+          }}
+        />
+
+        {/* Copy column */}
         <div
           style={{
             position: "relative",
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
-            width: "100%",
+            width: 640,
             height: "100%",
-            padding: "62px 78px 66px",
+            padding: "60px 0 66px 80px",
           }}
         >
-          {/* ImageResponse renders plain HTML, so the real PNG wordmark is embedded directly. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            alt="Samuelsson Cuts"
-            src={logoSrc}
-            style={{
-              width: 620,
-              height: 177,
-              objectFit: "contain",
-            }}
-          />
+          <img alt="Samuelsson Cuts" src={logoSrc} width={246} height={70} />
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
             <div
               style={{
                 display: "flex",
-                alignItems: "center",
-                gap: 14,
-                color: "#a8a29e",
-                fontSize: 22,
+                color: MUTED,
+                fontSize: 17,
                 fontWeight: 500,
+                letterSpacing: 3,
               }}
             >
-              <div
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 999,
-                  background: "#fafaf9",
-                }}
-              />
-              Private barbershop scheduling
+              {EYEBROW}
             </div>
             <div
               style={{
                 display: "flex",
-                maxWidth: 820,
-                color: "#fafaf9",
-                fontSize: 92,
-                fontWeight: 680,
-                lineHeight: 0.9,
-                letterSpacing: 0,
+                flexDirection: "column",
+                marginTop: 20,
+                fontSize: 88,
+                fontWeight: 700,
+                lineHeight: 1,
+                letterSpacing: -3,
               }}
             >
-              Book your cut.
+              <span style={{ color: TEXT }}>{HEADLINE[0]}</span>
+              <span style={{ color: MUTED }}>{HEADLINE[1]}</span>
             </div>
             <div
               style={{
                 display: "flex",
-                maxWidth: 600,
-                color: "#a8a29e",
-                fontSize: 26,
+                marginTop: 24,
+                maxWidth: 470,
+                color: MUTED,
+                fontSize: 24,
                 fontWeight: 500,
-                lineHeight: 1.28,
-                letterSpacing: 0,
+                lineHeight: 1.4,
               }}
             >
-              Request a time, confirm the appointment, and keep every visit in
-              one clean schedule.
+              {SUBLINE}
             </div>
           </div>
-        </div>
 
-        <div
-          style={{
-            position: "absolute",
-            right: 78,
-            bottom: 66,
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            color: "#a8a29e",
-            fontSize: 20,
-            fontWeight: 500,
-          }}
-        >
-          <div
-            style={{
-              width: 44,
-              height: 1,
-              background: "rgba(250,250,249,0.36)",
-            }}
-          />
-          samuelsson-cuts
+          {/* Time slots, like the booking picker, with the chosen one filled. */}
+          <div style={{ display: "flex", gap: 12 }}>
+            {SLOTS.map((slot) => (
+              <div
+                key={slot.time}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  height: 50,
+                  padding: "0 20px",
+                  borderRadius: 999,
+                  border: slot.booked ? `1px solid ${TEXT}` : "1px solid rgba(250,250,249,0.16)",
+                  background: slot.booked ? TEXT : "rgba(250,250,249,0.03)",
+                  color: slot.booked ? INK : TEXT,
+                  fontSize: 21,
+                  fontWeight: slot.booked ? 700 : 500,
+                }}
+              >
+                {slot.time}
+                {slot.booked ? (
+                  <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: 0.5 }}>{BOOKED_LABEL}</span>
+                ) : null}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     ),
-    shareImageSize,
+    { ...shareImageSize, fonts },
   );
 }
