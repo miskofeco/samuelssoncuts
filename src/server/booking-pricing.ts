@@ -2,7 +2,8 @@ import {
   clientSlotsForService,
   isPreferredClientStart,
   minutesOf,
-  priceForSlot,
+  priceCentsForSlot,
+  priceKindForSlot,
   type SlotAppt,
 } from "@/domain/schedule";
 import type { createClient } from "@/lib/supabase/server";
@@ -54,14 +55,13 @@ async function confirmedSlotsForDay(
     }));
 }
 
-// Single source of truth for what a client pays for a slot. Both a fresh
-// booking and a client-initiated reschedule must go through here, so the price
-// is never trusted from the client and cannot be frozen across a move into a
-// VIP or gap-surcharge slot. Also rejects times the slot picker would never
-// offer (outside the generated grid for the day).
-export async function quoteClientSlot(
+// Both client bookings and the suggested manual price use the same confirmed
+// slots, shop hours, and barber pricing settings. Only client requests must
+// belong to the generated client grid; admins can place 15-minute-grid slots.
+async function quoteSlot(
   supabase: SupabaseClient,
   input: SlotQuoteInput,
+  requireClientGrid: boolean,
 ): Promise<SlotQuote> {
   const [confirmedForDay, businessHours, pricingSettings] = await Promise.all([
     confirmedSlotsForDay(supabase, input.date, input.excludeStartsAt),
@@ -69,14 +69,16 @@ export async function quoteClientSlot(
     loadPricingSettings(),
   ]);
 
-  const generated = clientSlotsForService(
-    input.date,
-    input.durationMinutes,
-    confirmedForDay,
-    businessHours,
-  );
-  if (!generated.includes(input.time)) {
-    return { ok: false, reason: "not-generated-slot" };
+  if (requireClientGrid) {
+    const generated = clientSlotsForService(
+      input.date,
+      input.durationMinutes,
+      confirmedForDay,
+      businessHours,
+    );
+    if (!generated.includes(input.time)) {
+      return { ok: false, reason: "not-generated-slot" };
+    }
   }
 
   const preferred = isPreferredClientStart(
@@ -86,11 +88,31 @@ export async function quoteClientSlot(
     confirmedForDay,
     businessHours,
   );
-  const basePrice = Math.round(input.basePriceCents / 100);
-  const priceCents = priceForSlot(basePrice, preferred, {
+  const priceCents = priceCentsForSlot(input.basePriceCents, preferred, {
     startsAt: input.time,
     ...pricingSettings,
-  }) * 100;
+  });
 
-  return { ok: true, preferred, priceCents, surcharge: !preferred };
+  return {
+    ok: true,
+    preferred,
+    priceCents,
+    surcharge: priceKindForSlot(preferred, { startsAt: input.time }) !== "base",
+  };
+}
+
+/** Server-authoritative client price for new requests and reschedules. */
+export async function quoteClientSlot(
+  supabase: SupabaseClient,
+  input: SlotQuoteInput,
+): Promise<SlotQuote> {
+  return quoteSlot(supabase, input, true);
+}
+
+/** Suggested manual-booking price for the admin grid, including off-client-grid starts. */
+export async function quoteAdminSlot(
+  supabase: SupabaseClient,
+  input: SlotQuoteInput,
+): Promise<SlotQuote> {
+  return quoteSlot(supabase, input, false);
 }

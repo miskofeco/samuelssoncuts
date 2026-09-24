@@ -19,6 +19,7 @@ const serviceWorker = read("public/sw.js");
 const appShell = read("src/components/layout/app-shell.tsx");
 const badgeSync = read("src/components/shared/push-badge-sync.tsx");
 const pushCard = read("src/components/shared/push-notification-card.tsx");
+const pushClient = read("src/lib/push-client.ts");
 const publicKeyRoute = read("src/app/api/push/public-key/route.ts");
 const subscriptionsRoute = read("src/app/api/push/subscriptions/route.ts");
 const notifications = read("src/server/notifications.ts");
@@ -56,6 +57,8 @@ test("push API routes require auth and same-origin subscription changes", () => 
   assert.match(subscriptionsRoute, /status:\s*401/);
   assert.doesNotMatch(subscriptionsRoute, /redirect\(/);
   assert.match(subscriptionsRoute, /subscriptionSchema\.safeParse/);
+  assert.match(subscriptionsRoute, /isAllowedPushEndpoint\(parsed\.data\.endpoint\)/);
+  assert.match(subscriptionsRoute, /enforceRateLimit\("push-subscription"/);
   // Ownership reassignment happens inside the SECURITY DEFINER RPC (0032).
   assert.match(subscriptionsRoute, /rpc\("upsert_push_subscription"/);
   assert.doesNotMatch(subscriptionsRoute, /error\.message/);
@@ -90,7 +93,10 @@ test("account areas expose explicit opt-in controls", () => {
   assert.match(clientNotifications, /PushNotificationCard/);
   assert.match(pushCard, /Notification\.requestPermission\(\)/);
   assert.match(pushCard, /pushManager\.subscribe/);
-  assert.match(pushCard, /\/api\/push\/subscriptions/);
+  assert.match(pushClient, /\/api\/push\/subscriptions/);
+  assert.match(pushCard, /persistPushSubscription\(subscription\)/);
+  assert.match(badgeSync, /persistPushSubscription\(subscription\)/);
+  assert.match(badgeSync, /visibilitychange/);
   assert.match(pushCard, /pushManager\.getSubscription/);
 });
 
@@ -100,6 +106,8 @@ test("notification creation is centralized and sends push non-fatally", () => {
   assert.match(notifications, /sendPushToUser/);
   assert.match(notifications, /reportError\("push-notification"/);
   assert.match(notifications, /derivePushNotification/);
+  assert.match(notifications, /isAllowedPushEndpoint\(subscription\.endpoint\)/);
+  assert.match(notifications, /timeout: 5_000/);
   assert.doesNotMatch(actions, /\.from\("notifications"\)\.insert/);
   assert.doesNotMatch(cron, /\.from\("notifications"\)\.insert/);
 });

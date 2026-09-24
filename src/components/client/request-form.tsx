@@ -31,6 +31,7 @@ import {
 import type {
   ActionResult,
   Appointment,
+  BlockedInterval,
   BookingRequest,
   BusinessHoursDay,
   PricingSettings,
@@ -77,6 +78,7 @@ export function RequestForm({
   appointments,
   pendingRequests,
   blockedDates,
+  blockedIntervals,
   businessHours,
   initialServiceId,
 }: {
@@ -85,6 +87,7 @@ export function RequestForm({
   appointments: Appointment[];
   pendingRequests: BookingRequest[];
   blockedDates: ReadonlySet<string>;
+  blockedIntervals: BlockedInterval[];
   businessHours: BusinessHoursDay[];
   /** Preselected service for one-tap rebooking (?service=<id>). */
   initialServiceId?: string;
@@ -95,9 +98,10 @@ export function RequestForm({
     appointments,
     pendingRequests,
     blockedDates: [...blockedDates],
+    blockedIntervals,
     businessHours,
     pricingSettings,
-  }), [appointments, pendingRequests, blockedDates, businessHours, pricingSettings]);
+  }), [appointments, pendingRequests, blockedDates, blockedIntervals, businessHours, pricingSettings]);
   const { data: availability, refresh: refreshAvailability } = useLiveSnapshot(
     initialAvailability,
     "/api/client/booking-availability",
@@ -346,6 +350,7 @@ export function RequestForm({
           appointments={availability.appointments}
           pendingRequests={availability.pendingRequests}
           blockedDates={liveBlockedDates}
+          blockedIntervals={availability.blockedIntervals}
           businessHours={availability.businessHours}
           steps={{ date: 2, time: 3 }}
           aside={

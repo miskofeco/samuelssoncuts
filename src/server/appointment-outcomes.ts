@@ -59,6 +59,17 @@ export async function expireStaleBookingState(
     throw proposals.error;
   }
 
+  const expiredProposalIds = (proposals.data ?? []).map((proposal) => proposal.id);
+  if (expiredProposalIds.length) {
+    const parents = await supabase
+      .from("booking_requests")
+      .update({ status: "declined", selected_proposal_id: null }, { count: "exact" })
+      .eq("status", "proposed")
+      .in("selected_proposal_id", expiredProposalIds)
+      .select("id");
+    if (parents.error) throw parents.error;
+  }
+
   return {
     declinedRequests: requests.count ?? 0,
     expiredProposals: proposals.count ?? 0,

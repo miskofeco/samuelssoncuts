@@ -122,10 +122,9 @@ export function percentageTrend(current: number, previous: number): PercentageTr
 }
 
 // ---------------------------------------------------------------------------
-// Revenue — money is never stored on `appointments`. It lives on the
-// originating booking_requests.price_cents (which already bakes in the +10%
-// gap surcharge). Walk-ins have no request, so fall back to the service's list
-// price. `outcome` of cancelled/no_show earns nothing. This helper is the
+// Revenue prefers the booking-time appointment price snapshot. Legacy rows
+// without one use the request's captured price, then current service price.
+// `outcome` of cancelled/no_show earns nothing. This helper is the
 // single source of truth for every money figure in the admin UI.
 // ---------------------------------------------------------------------------
 
@@ -137,8 +136,8 @@ function serviceListCents(serviceId: string, servicesById: Map<string, Service>)
 
 /**
  * Realised revenue for one appointment, in cents. Cancelled/no-show → 0.
- * Prefers the linked request's captured price (includes surcharge); otherwise
- * the current service list price (covers walk-ins and legacy rows).
+ * Prefers the appointment's captured price, then its linked request price.
+ * The current service list price is only a legacy fallback.
  */
 export function appointmentRevenueCents(
   appointment: Appointment,
@@ -147,6 +146,9 @@ export function appointmentRevenueCents(
 ): number {
   if (appointment.outcome === "cancelled" || appointment.outcome === "no_show") {
     return 0;
+  }
+  if (typeof appointment.priceCents === "number") {
+    return appointment.priceCents;
   }
   const request = appointment.requestId
     ? requestsById.get(appointment.requestId)
@@ -244,7 +246,7 @@ export function adminOverviewMetricTrends({
 }
 
 /**
- * Revenue (in euros, rounded) for the last `months` months, bucketed per week
+ * Revenue (in euros, cent-accurate) for the last `months` months, bucketed per week
  * for the 3-month view and per month otherwise (see `trendGranularity`).
  */
 export function revenueTrend(
@@ -267,7 +269,7 @@ export function revenueTrend(
     }
   }
 
-  return buckets.map(({ label, revenue }) => ({ label, revenue: Math.round(revenue / 100) }));
+  return buckets.map(({ label, revenue }) => ({ label, revenue: revenue / 100 }));
 }
 
 /** Revenue (euros) grouped by service, highest first — drops zero-revenue services. */
@@ -286,7 +288,7 @@ export function revenueByService(
   return [...totals.entries()]
     .map(([serviceId, cents]) => ({
       label: servicesById.get(serviceId)?.name ?? "—",
-      revenue: Math.round(cents / 100),
+      revenue: cents / 100,
     }))
     .sort((a, b) => b.revenue - a.revenue);
 }

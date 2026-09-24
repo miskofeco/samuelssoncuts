@@ -15,8 +15,17 @@ import { Field, SelectField } from "@/components/shared/form";
 import { Icon } from "@/components/shared/icon";
 import { Modal } from "@/components/shared/modal";
 import { SegmentedControl } from "@/components/shared/segmented-control";
-import { addMinutesToTime, adminSlotOptions, todayIso } from "@/domain/schedule";
-import type { ActionResult, ClientProfile, Service } from "@/domain/types";
+import {
+  addMinutesToTime,
+  adminSlotOptions,
+  isPreferredClientStart,
+  minutesOf,
+  parseEuroCents,
+  priceCentsForSlot,
+  priceKindForSlot,
+  todayIso,
+} from "@/domain/schedule";
+import type { ActionResult, BlockedInterval, BusinessHoursDay, ClientProfile, PricingSettings, Service } from "@/domain/types";
 import { useT } from "@/i18n/provider";
 
 type CustomerMode = "client" | "walkin";
@@ -30,6 +39,9 @@ export function AddBookingModal({
   initialDate,
   initialTime,
   bookedByDate,
+  businessHours,
+  blockedIntervals,
+  pricingSettings,
 }: {
   open: boolean;
   onClose: () => void;
@@ -39,6 +51,9 @@ export function AddBookingModal({
   initialDate?: string;
   initialTime?: string;
   bookedByDate: Map<string, BookedSlot[]>;
+  businessHours: BusinessHoursDay[];
+  blockedIntervals: BlockedInterval[];
+  pricingSettings: PricingSettings;
 }) {
   const t = useT();
   return (
@@ -57,6 +72,9 @@ export function AddBookingModal({
         initialDate={initialDate}
         initialTime={initialTime}
         bookedByDate={bookedByDate}
+        businessHours={businessHours}
+        blockedIntervals={blockedIntervals}
+        pricingSettings={pricingSettings}
         onClose={onClose}
         onCreated={onCreated}
       />
@@ -70,6 +88,9 @@ function BookingForm({
   initialDate,
   initialTime,
   bookedByDate,
+  businessHours,
+  blockedIntervals,
+  pricingSettings,
   onClose,
   onCreated,
 }: {
@@ -78,12 +99,18 @@ function BookingForm({
   initialDate?: string;
   initialTime?: string;
   bookedByDate: Map<string, BookedSlot[]>;
+  businessHours: BusinessHoursDay[];
+  blockedIntervals: BlockedInterval[];
+  pricingSettings: PricingSettings;
   onClose: () => void;
   onCreated: () => void;
 }) {
   const t = useT();
-  // Only real, non-admin clients can be booked from the dropdown.
-  const bookableClients = clients.filter((client) => client.role !== "admin");
+  // Match the server's approved-client gate so the picker never offers a
+  // customer the booking action must reject.
+  const bookableClients = clients.filter(
+    (client) => client.role === "client" && client.status === "approved",
+  );
 
   const [mode, setMode] = useState<CustomerMode>("client");
   const [clientId, setClientId] = useState(bookableClients[0]?.id ?? "");
@@ -91,6 +118,7 @@ function BookingForm({
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const [date, setDate] = useState(initialDate ?? "");
   const [note, setNote] = useState("");
+  const [priceInput, setPriceInput] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
   const today = todayIso();
@@ -103,6 +131,8 @@ function BookingForm({
         durationMinutes: duration,
         bookedToday: date ? bookedByDate.get(date) ?? [] : [],
         date,
+        businessHours,
+        blockedIntervals,
       }).map((option) => ({
         ...option,
         disabled: option.disabledReason !== null,
@@ -111,9 +141,11 @@ function BookingForm({
             ? t.feedback.chooseFutureTime
             : option.disabledReason === "conflict"
               ? t.admin.slotTakenHint
+              : option.disabledReason === "closed" || option.disabledReason === "blocked"
+                ? t.admin.off
               : undefined,
       })),
-    [duration, date, bookedByDate, t],
+    [duration, date, bookedByDate, businessHours, blockedIntervals, t],
   );
   const [time, setTime] = useState(initialTime ?? options[0]?.value ?? "");
 
@@ -122,9 +154,37 @@ function BookingForm({
   const timeInvalid = !selected || selected.disabled;
   const dateInvalid = Boolean(date && date < today);
   const allTaken = options.length > 0 && options.every((option) => option.disabled);
+  const preferred = date && time && service
+    ? isPreferredClientStart(
+      date,
+      minutesOf(time),
+      duration,
+      (bookedByDate.get(date) ?? []).map((slot) => ({
+        date,
+        time: slot.time,
+        durationMinutes: slot.durationMinutes,
+      })),
+      businessHours,
+    )
+    : false;
+  const priceKind = time ? priceKindForSlot(preferred, { startsAt: time }) : null;
+  const suggestedPriceCents = service && date && time && !timeInvalid && !dateInvalid
+    ? priceCentsForSlot(Math.round(service.price * 100), preferred, {
+      startsAt: time,
+      ...pricingSettings,
+    })
+    : null;
+  const suggestedPriceLabel = priceKind === "vip"
+    ? t.client.vipPrice(pricingSettings.vipSurchargePercent)
+    : priceKind === "gap"
+      ? t.client.extraPrice(pricingSettings.gapSurchargePercent)
+      : t.client.bestPrice;
+  const priceValue = priceInput ?? (suggestedPriceCents === null ? "" : (suggestedPriceCents / 100).toFixed(2));
+  const enteredPriceCents = parseEuroCents(priceValue);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (enteredPriceCents === null) return;
     setFeedback(null);
     startTransition(async () => {
       try {
@@ -134,6 +194,7 @@ function BookingForm({
           serviceId,
           date,
           time,
+          priceCents: enteredPriceCents,
           note: note.trim() || undefined,
         });
         setFeedback(result);
@@ -154,6 +215,7 @@ function BookingForm({
     !date ||
     dateInvalid ||
     timeInvalid ||
+    enteredPriceCents === null ||
     (mode === "client" ? !clientId : customerName.trim().length === 0);
 
   const slotHint = dateInvalid
@@ -210,7 +272,10 @@ function BookingForm({
       <SelectField
         label={t.client.service}
         value={serviceId}
-        onChange={(event) => setServiceId(event.target.value)}
+        onChange={(event) => {
+          setServiceId(event.target.value);
+          setPriceInput(null);
+        }}
       >
         {services.map((option) => (
           <option key={option.id} value={option.id}>
@@ -220,12 +285,18 @@ function BookingForm({
       </SelectField>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <DateField label={t.admin.date} value={date} min={today} onChange={setDate} />
+        <DateField label={t.admin.date} value={date} min={today} onChange={(value) => {
+          setDate(value);
+          setPriceInput(null);
+        }} />
         <Combobox
           label={t.admin.time}
           placeholder={t.admin.typeTime}
           value={time}
-          onChange={setTime}
+          onChange={(value) => {
+            setTime(value);
+            setPriceInput(null);
+          }}
           options={options}
           searchable={false}
         />
@@ -234,8 +305,27 @@ function BookingForm({
         <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{slotHint}</p>
       ) : time && !timeInvalid && service ? (
         <p className="text-xs text-muted-foreground tabular-nums">
-          {time}–{addMinutesToTime(time, duration)} · {service.name} · {service.price} €
+          {time}–{addMinutesToTime(time, duration)} · {service.name}
         </p>
+      ) : null}
+
+      <Field
+        label={t.admin.bookingPrice}
+        value={priceValue}
+        onChange={(event) => setPriceInput(event.target.value)}
+        inputMode="decimal"
+        autoComplete="off"
+        maxLength={10}
+        required
+        hint={suggestedPriceCents === null
+          ? undefined
+          : `${t.admin.suggestedPrice}: ${(suggestedPriceCents / 100).toFixed(2)} € · ${suggestedPriceLabel}`}
+        error={priceInput !== null && enteredPriceCents === null ? t.admin.invalidBookingPrice : undefined}
+      />
+      {priceInput !== null && suggestedPriceCents !== null ? (
+        <Button type="button" variant="ghost" size="sm" onClick={() => setPriceInput(null)}>
+          {t.admin.useSuggestedPrice}
+        </Button>
       ) : null}
 
       <Field

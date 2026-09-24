@@ -52,9 +52,21 @@ export async function GET(
 
   if (error) {
     await reportError("calendar-feed", error);
+    return new NextResponse("Calendar temporarily unavailable", {
+      status: 503,
+      headers: { "Cache-Control": "no-store", "Retry-After": "300" },
+    });
   }
 
-  const rows: FeedRow[] = error || !Array.isArray(data) ? [] : (data as FeedRow[]);
+  if (!Array.isArray(data)) {
+    await reportError("calendar-feed", new Error("Unexpected calendar-feed response"));
+    return new NextResponse("Calendar temporarily unavailable", {
+      status: 503,
+      headers: { "Cache-Control": "no-store", "Retry-After": "300" },
+    });
+  }
+
+  const rows: FeedRow[] = data as FeedRow[];
 
   const events: IcsEvent[] = rows.map((row) => ({
     uid: appointmentUid(row.id),

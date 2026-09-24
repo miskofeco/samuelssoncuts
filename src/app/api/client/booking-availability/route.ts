@@ -17,6 +17,7 @@ export async function GET() {
     appointments: data.appointments,
     pendingRequests: data.pendingRequests,
     blockedDates: [...data.blockedDates],
+    blockedIntervals: data.blockedIntervals,
     businessHours: data.businessHours,
     pricingSettings: data.pricingSettings,
   }, { headers: { "Cache-Control": "private, no-store" } });

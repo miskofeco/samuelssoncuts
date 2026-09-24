@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 
 import { registerAction } from "@/app/actions";
 import { Feedback } from "@/components/shared/feedback";
@@ -65,6 +66,15 @@ export function RegisterForm({ initialEmail }: { initialEmail?: string }) {
       <SubmitButton size="lg" className="w-full" pendingLabel={t.common.sending}>
         {t.auth.createAccount}
       </SubmitButton>
+      <p className="text-center text-xs leading-5 text-muted-foreground">
+        <Link className="underline underline-offset-4 hover:text-foreground" href="/terms">
+          {t.consent.banner.termsLink}
+        </Link>
+        {" · "}
+        <Link className="underline underline-offset-4 hover:text-foreground" href="/privacy">
+          {t.consent.banner.privacyLink}
+        </Link>
+      </p>
     </form>
   );
 }

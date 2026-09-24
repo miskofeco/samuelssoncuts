@@ -5,15 +5,19 @@ import {
   DEFAULT_PRICING_SETTINGS,
   addDays,
   eachDate,
+  isShopDayFullyBlocked,
   latestClientBookingDate,
   surchargeDetailsForRequest,
   todayIso,
 } from "@/domain/schedule";
 import type {
   Appointment,
+  BlockedInterval,
+  BlockedRange,
   BookingRequest,
   BusinessHoursDay,
   ClientAppointment,
+  ConfirmedRequestSlot,
   ClientProfile,
   Notification,
   PricingSettings,
@@ -26,6 +30,7 @@ import type { Database } from "@/lib/database.types";
 import { addDaysToDate, dateInShopTimeZone, formatInShopTimeZone, shopDayRangeUtc, timeInShopTimeZone } from "@/lib/time-zone";
 import { requireAdmin, type AuthProfile } from "@/server/auth";
 import { getShopBarberId } from "@/server/shop-barber";
+import { readAllPages } from "@/server/paginated-read";
 
 type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -43,6 +48,8 @@ type AppointmentRow = Pick<
   | "service_id"
   | "starts_at"
   | "ends_at"
+  | "price_cents"
+  | "note"
   | "status"
   | "outcome"
 >;
@@ -69,7 +76,7 @@ const REQUEST_SELECT =
 const REQUEST_SUMMARY_SELECT =
   "id, client_id, service_id, status, created_at, selected_proposal_id, requested_start, price_cents, surcharge";
 const APPOINTMENT_SELECT =
-  "id, request_id, client_id, customer_name, service_id, starts_at, ends_at, status, outcome";
+  "id, request_id, client_id, customer_name, service_id, starts_at, ends_at, price_cents, note, status, outcome";
 const PROFILE_SELECT =
   "id, full_name, email, phone, role, approval_status, email_confirmed_at, created_at, avatar_url";
 
@@ -118,6 +125,9 @@ function mapBusySlotRow(row: BusySlotRow): Appointment {
     serviceId: row.service_id,
     date: dateFromIso(row.starts_at),
     time: timeFromIso(row.starts_at),
+    durationMinutes: Math.round(
+      (Date.parse(row.ends_at) - Date.parse(row.starts_at)) / 60_000,
+    ),
     status: "confirmed",
   };
 }
@@ -128,9 +138,29 @@ export function mapServiceRow(row: ServiceRow): Service {
     name: row.name,
     description: row.description,
     duration: row.duration_minutes,
-    price: Math.round(row.price_cents / 100),
+    price: row.price_cents / 100,
+    active: row.active,
     imageUrl: row.image_url,
   };
+}
+
+/** Include only hidden services referenced by this client's own RLS-scoped rows. */
+async function includeBookedServices(
+  visibleRows: ServiceRow[],
+  bookedServiceIds: Iterable<string>,
+): Promise<Service[]> {
+  const knownIds = new Set(visibleRows.map((row) => row.id));
+  const missingIds = [...new Set(bookedServiceIds)].filter((id) => !knownIds.has(id));
+  if (missingIds.length === 0) return visibleRows.map(mapServiceRow);
+
+  // The caller supplies IDs exclusively from the signed-in client's requests
+  // and appointments. Keep this service-role read scoped to those IDs.
+  const { data, error } = await getSupabaseAdminClient()
+    .from("services")
+    .select("*")
+    .in("id", missingIds);
+  fail("historical_services", error);
+  return [...visibleRows, ...(data ?? [])].map(mapServiceRow);
 }
 
 function mapPricingSettingsRow(row: PricingSettingsRow): PricingSettings {
@@ -201,6 +231,11 @@ export function mapAppointmentRow(row: AppointmentRow): Appointment {
     serviceId: row.service_id,
     date: dateFromIso(row.starts_at),
     time: timeFromIso(row.starts_at),
+    durationMinutes: Math.round(
+      (Date.parse(row.ends_at) - Date.parse(row.starts_at)) / 60_000,
+    ),
+    priceCents: row.price_cents,
+    note: row.note,
     status: row.status,
     outcome: row.outcome,
   };
@@ -303,41 +338,50 @@ export async function loadPricingSettings(barberId?: string): Promise<PricingSet
 /** Blocked calendar days expanded from blocked_times ranges. */
 export async function loadBlockedDays(window?: { fromIso: string; toIso: string }): Promise<{
   dates: Set<string>;
-  ranges: Array<{ id: string; start: string; end: string; reason: string | null }>;
+  intervals: BlockedInterval[];
+  ranges: BlockedRange[];
 }> {
   const supabase = await createClient();
   const barberId = await getShopBarberId();
-  let query = supabase
-    .from("blocked_times")
-    .select("id, starts_at, ends_at, reason")
-    .eq("barber_id", barberId);
-  if (window) {
-    query = query.lt("starts_at", window.toIso).gt("ends_at", window.fromIso);
-  }
-  const { data, error } = await query.order("starts_at");
+  const rows = await readAllPages("blocked_times", (from, to) => {
+    let query = supabase
+      .from("blocked_times")
+      .select("id, starts_at, ends_at, reason")
+      .eq("barber_id", barberId);
+    if (window) query = query.lt("starts_at", window.toIso).gt("ends_at", window.fromIso);
+    return query.order("starts_at").order("id").range(from, to);
+  });
 
-  fail("blocked_times", error);
-
-  const dates = new Set<string>();
-  const ranges = (data ?? []).map((row) => {
+  const intervals = rows.map((row) => ({ start: row.starts_at, end: row.ends_at }));
+  const candidateDates = new Set<string>();
+  const ranges = rows.map((row) => {
+    const rangeStartIso = window && row.starts_at < window.fromIso ? window.fromIso : row.starts_at;
+    const rangeEndIso = window && row.ends_at > window.toIso ? window.toIso : row.ends_at;
     // Whole-day blocks end at the NEXT shop day's midnight (exclusive), so the
     // last covered day comes from eachDate rather than the raw end instant.
-    const days = eachDate(
-      window && row.starts_at < window.fromIso ? window.fromIso : row.starts_at,
-      window && row.ends_at > window.toIso ? window.toIso : row.ends_at,
-    );
+    const days = eachDate(rangeStartIso, rangeEndIso);
+    const firstDay = days[0] ?? dateFromIso(rangeStartIso);
+    const lastDay = days[days.length - 1] ?? dateFromIso(rangeEndIso);
     for (const day of days) {
-      dates.add(day);
+      candidateDates.add(day);
     }
     return {
       id: row.id,
-      start: days[0] ?? dateFromIso(row.starts_at),
-      end: days[days.length - 1] ?? dateFromIso(row.ends_at),
+      start: firstDay,
+      end: lastDay,
+      startTime: rangeStartIso === shopDayRangeUtc(firstDay).startIso
+        ? null : timeFromIso(rangeStartIso),
+      endTime: rangeEndIso === shopDayRangeUtc(addDaysToDate(lastDay, 1)).startIso
+        ? null : timeFromIso(rangeEndIso),
       reason: row.reason,
     };
   });
 
-  return { dates, ranges };
+  const dates = new Set(
+    [...candidateDates].filter((day) => isShopDayFullyBlocked(day, intervals)),
+  );
+
+  return { dates, intervals, ranges };
 }
 
 // A PostgREST `.or()` filter is a comma/paren-delimited string, so an email
@@ -413,32 +457,36 @@ export async function loadClientReservations(profile: AuthProfile): Promise<{
   proposals: Proposal[];
   services: Service[];
   upcomingAppointments: ClientAppointment[];
+  confirmedRequestSlots: ConfirmedRequestSlot[];
 }> {
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
-  const [requestsResult, servicesResult, appointmentsResult] = await Promise.all([
-    supabase
+  const [requestRows, servicesResult, appointmentRows] = await Promise.all([
+    readAllPages("booking_requests", (from, to) => supabase
       .from("booking_requests")
       .select(REQUEST_SELECT)
       .eq("client_id", profile.id)
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false }).order("id").range(from, to)),
     supabase.from("services").select("*"),
-    supabase
+    readAllPages("appointments", (from, to) => supabase
       .from("appointments")
-      .select("id, service_id, starts_at, status")
+      .select("id, request_id, service_id, starts_at, status")
       .eq("client_id", profile.id)
       .eq("status", "confirmed")
-      .gte("starts_at", nowIso)
-      .order("starts_at"),
+      .order("starts_at", { ascending: false }).order("id").range(from, to)),
   ]);
 
-  fail("booking_requests", requestsResult.error);
   fail("services", servicesResult.error);
-  fail("appointments", appointmentsResult.error);
 
-  const rows = asRequestRows(requestsResult.data);
+  const rows = asRequestRows(requestRows);
+  const services = await includeBookedServices(
+    servicesResult.data ?? [],
+    [...rows.map((row) => row.service_id), ...appointmentRows.map((row) => row.service_id)],
+  );
   const cutoff = Date.now() + 24 * 60 * 60 * 1000;
-  const upcomingAppointments: ClientAppointment[] = (appointmentsResult.data ?? []).map(
+  const upcomingAppointments: ClientAppointment[] = appointmentRows
+    .filter((a) => a.starts_at >= nowIso)
+    .map(
     (a) => ({
       id: a.id,
       serviceId: a.service_id,
@@ -447,12 +495,20 @@ export async function loadClientReservations(profile: AuthProfile): Promise<{
       canModify: new Date(a.starts_at).getTime() > cutoff,
     }),
   );
+  const confirmedRequestSlots: ConfirmedRequestSlot[] = appointmentRows
+    .filter((a): a is typeof a & { request_id: string } => Boolean(a.request_id))
+    .map((a) => ({
+      requestId: a.request_id,
+      date: dateFromIso(a.starts_at),
+      time: timeFromIso(a.starts_at),
+    }));
 
   return {
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
-    services: (servicesResult.data ?? []).map(mapServiceRow),
+    services,
     upcomingAppointments,
+    confirmedRequestSlots,
   };
 }
 
@@ -460,6 +516,7 @@ export type ClientAppointmentDetail = {
   id: string;
   serviceId: string;
   serviceName: string;
+  serviceActive: boolean;
   serviceDuration: number;
   date: string;
   time: string;
@@ -482,14 +539,14 @@ export async function loadClientAppointmentDetail(
   const supabase = await createClient();
   const { data: appt, error } = await supabase
     .from("appointments")
-    .select("id, request_id, service_id, starts_at, ends_at, status, outcome, client_id")
+    .select("id, request_id, service_id, starts_at, ends_at, price_cents, status, outcome, client_id")
     .eq("id", appointmentId)
     .single();
 
   if (error || !appt || appt.client_id !== profile.id) return null;
 
-  const [{ data: service }, requestResult, pricingSettings] = await Promise.all([
-    supabase.from("services").select("name, duration_minutes").eq("id", appt.service_id).single(),
+  const [{ data: visibleService }, requestResult, pricingSettings] = await Promise.all([
+    supabase.from("services").select("name, duration_minutes, active").eq("id", appt.service_id).maybeSingle(),
     appt.request_id
       ? supabase
           .from("booking_requests")
@@ -499,6 +556,15 @@ export async function loadClientAppointmentDetail(
       : Promise.resolve({ data: null }),
     loadPricingSettings(),
   ]);
+  const hiddenServiceResult = visibleService
+    ? null
+    : await getSupabaseAdminClient()
+        .from("services")
+        .select("name, duration_minutes, active")
+        .eq("id", appt.service_id)
+        .maybeSingle();
+  if (hiddenServiceResult) fail("historical_service", hiddenServiceResult.error);
+  const service = visibleService ?? hiddenServiceResult?.data;
   const surcharge = surchargeDetailsForRequest(
     {
       surcharge: requestResult.data?.surcharge ?? false,
@@ -513,14 +579,15 @@ export async function loadClientAppointmentDetail(
     id: appt.id,
     serviceId: appt.service_id,
     serviceName: service?.name ?? "",
-    serviceDuration: service?.duration_minutes ?? 0,
+    serviceActive: service?.active ?? false,
+    serviceDuration: Math.round((Date.parse(appt.ends_at) - Date.parse(appt.starts_at)) / 60_000),
     date: dateFromIso(appt.starts_at),
     time: timeFromIso(appt.starts_at),
     startIso: appt.starts_at,
     endIso: appt.ends_at,
     status: appt.status,
     outcome: appt.outcome,
-    priceCents: requestResult.data?.price_cents ?? null,
+    priceCents: appt.price_cents ?? requestResult.data?.price_cents ?? null,
     surcharge: requestResult.data?.surcharge ?? false,
     surchargeKind: surcharge?.kind ?? null,
     surchargePercent: surcharge?.percent ?? null,
@@ -536,39 +603,41 @@ export async function loadClientOverview(profile: AuthProfile): Promise<{
   proposals: Proposal[];
   appointments: Appointment[];
   services: Service[];
-  blockedRanges: Array<{ id: string; start: string; end: string; reason: string | null }>;
+  blockedRanges: BlockedRange[];
 }> {
   const supabase = await createClient();
   const blockedWindow = {
     fromIso: shopDayRangeUtc(todayIso()).startIso,
     toIso: shopDayRangeUtc(addDaysToDate(latestClientBookingDate(), 1)).startIso,
   };
-  const [requestsResult, appointmentsResult, servicesResult, blocked] = await Promise.all([
-    supabase
+  const [requestRows, appointmentRows, servicesResult, blocked] = await Promise.all([
+    readAllPages("booking_requests", (from, to) => supabase
       .from("booking_requests")
       .select(REQUEST_SELECT)
       .eq("client_id", profile.id)
-      .order("created_at", { ascending: false }),
-    supabase
+      .order("created_at", { ascending: false }).order("id").range(from, to)),
+    readAllPages("appointments", (from, to) => supabase
       .from("appointments")
       .select(APPOINTMENT_SELECT)
       .eq("client_id", profile.id)
       .eq("status", "confirmed")
-      .order("starts_at"),
+      .order("starts_at").order("id").range(from, to)),
     supabase.from("services").select("*"),
     loadBlockedDays(blockedWindow),
   ]);
 
-  fail("booking_requests", requestsResult.error);
-  fail("appointments", appointmentsResult.error);
   fail("services", servicesResult.error);
 
-  const rows = asRequestRows(requestsResult.data);
+  const rows = asRequestRows(requestRows);
+  const services = await includeBookedServices(
+    servicesResult.data ?? [],
+    [...rows.map((row) => row.service_id), ...appointmentRows.map((row) => row.service_id)],
+  );
   return {
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
-    appointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
-    services: (servicesResult.data ?? []).map(mapServiceRow),
+    appointments: appointmentRows.map(mapAppointmentRow),
+    services,
     blockedRanges: blocked.ranges,
   };
 }
@@ -579,6 +648,7 @@ export async function loadBookingData(options: { includeServices?: boolean } = {
   pricingSettings: PricingSettings;
   businessHours: BusinessHoursDay[];
   blockedDates: Set<string>;
+  blockedIntervals: BlockedInterval[];
   appointments: Appointment[];
   // Pending exact-slot requests visible to the caller — shown as a soft
   // "Requested" badge in the picker (still selectable, don't block).
@@ -588,35 +658,35 @@ export async function loadBookingData(options: { includeServices?: boolean } = {
   const nowIso = new Date().toISOString();
   const fromIso = shopDayRangeUtc(todayIso()).startIso;
   const toIso = shopDayRangeUtc(addDaysToDate(latestClientBookingDate(), 1)).startIso;
-  const [services, appointmentsResult, requestsResult, blocked, pricingSettings, businessHours] =
+  const [services, appointmentRows, requestRows, blocked, pricingSettings, businessHours] =
     await Promise.all([
       options.includeServices === false
         ? Promise.resolve([] as Service[])
         : loadCachedServices(true),
-      supabase.rpc("confirmed_appointment_slots_window", { p_from: fromIso, p_to: toIso }),
-      supabase
+      readAllPages("confirmed_appointment_slots_window", (from, to) => supabase
+        .rpc("confirmed_appointment_slots_window", { p_from: fromIso, p_to: toIso })
+        .order("starts_at").order("id").range(from, to)),
+      readAllPages("booking_requests", (from, to) => supabase
         .from("booking_requests")
         .select(REQUEST_SUMMARY_SELECT)
         .eq("status", "pending")
         .gte("requested_start", nowIso)
         .lt("requested_start", toIso)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false }).order("id").range(from, to)),
       loadBlockedDays({ fromIso, toIso }),
       loadPricingSettings(),
       loadBusinessHours(),
     ]);
 
-  fail("appointments", appointmentsResult.error);
-  fail("booking_requests", requestsResult.error);
-
-  const rows = asRequestRows(requestsResult.data);
+  const rows = asRequestRows(requestRows);
   const requests = rows.map(mapRequestRow);
   return {
     services,
     pricingSettings,
     businessHours,
     blockedDates: blocked.dates,
-    appointments: (appointmentsResult.data ?? []).map(mapBusySlotRow),
+    blockedIntervals: blocked.intervals,
+    appointments: appointmentRows.map(mapBusySlotRow),
     pendingRequests: requests.filter(
       (r) => Boolean(r.requestedDate),
     ),
@@ -635,36 +705,41 @@ export async function loadAdminOverview(): Promise<{
   appointments: Appointment[];
   analyticsAppointments: Appointment[];
   pricingSettings: PricingSettings;
+  businessHours: BusinessHoursDay[];
+  blockedIntervals: BlockedInterval[];
 }> {
   const supabase = await createClient();
   const floor = analyticsFloorIso();
-  const [servicesResult, profilesResult, requestsResult, appointmentsResult, pricingSettings] =
+  const barberId = await getShopBarberId();
+  const [servicesResult, profileRows, requestRows, appointmentRows, pricingSettings, businessHours, blocked] =
     await Promise.all([
       supabase.from("services").select("*"),
-      supabase.from("profiles").select(PROFILE_SELECT).order("created_at", { ascending: false }),
-      supabase
+      readAllPages("profiles", (from, to) => supabase.from("profiles")
+        .select(PROFILE_SELECT).order("created_at", { ascending: false }).order("id").range(from, to)),
+      readAllPages("booking_requests", (from, to) => supabase
         .from("booking_requests")
         .select(REQUEST_SUMMARY_SELECT)
         .gte("created_at", floor)
-        .order("created_at", { ascending: false }),
-      supabase.from("appointments").select(APPOINTMENT_SELECT)
-        .eq("barber_id", await getShopBarberId()).gte("starts_at", floor).order("starts_at"),
+        .order("created_at", { ascending: false }).order("id").range(from, to)),
+      readAllPages("appointments", (from, to) => supabase.from("appointments").select(APPOINTMENT_SELECT)
+        .eq("barber_id", barberId).gte("starts_at", floor)
+        .order("starts_at").order("id").range(from, to)),
       loadPricingSettings(),
+      loadBusinessHours(),
+      loadBlockedDays(),
     ]);
 
   fail("services", servicesResult.error);
-  fail("profiles", profilesResult.error);
-  fail("booking_requests", requestsResult.error);
-  fail("appointments", appointmentsResult.error);
-
-  const rows = asRequestRows(requestsResult.data);
+  const rows = asRequestRows(requestRows);
   return {
     services: (servicesResult.data ?? []).map(mapServiceRow),
-    clients: (profilesResult.data ?? []).map(mapClientRow),
+    clients: profileRows.map(mapClientRow),
     requests: rows.map(mapRequestRow),
-    appointments: confirmedOnly(appointmentsResult.data).map(mapAppointmentRow),
-    analyticsAppointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
+    appointments: confirmedOnly(appointmentRows).map(mapAppointmentRow),
+    analyticsAppointments: appointmentRows.map(mapAppointmentRow),
     pricingSettings,
+    businessHours,
+    blockedIntervals: blocked.intervals,
   };
 }
 
@@ -690,42 +765,45 @@ export async function loadAdminCalendar(window: { fromIso: string; toIso: string
   services: Service[];
   pricingSettings: PricingSettings;
   blockedDates: Set<string>;
+  blockedIntervals: BlockedInterval[];
+  businessHours: BusinessHoursDay[];
 }> {
   const supabase = await createClient();
-  const [services, profilesResult, requestsResult, appointmentsResult, blocked, pricingSettings] =
+  const barberId = await getShopBarberId();
+  const [services, profileRows, requestRows, appointmentRows, blocked, pricingSettings, businessHours] =
     await Promise.all([
       loadCachedServices(false),
-      supabase.from("profiles").select(PROFILE_SELECT),
+      readAllPages("profiles", (from, to) => supabase.from("profiles")
+        .select(PROFILE_SELECT).order("id").range(from, to)),
       // Only open requests can still render as proposals on the calendar.
-      supabase
+      readAllPages("booking_requests", (from, to) => supabase
         .from("booking_requests")
         .select(REQUEST_SELECT)
         .in("status", ["pending", "proposed"])
-        .order("created_at", { ascending: false }),
-      getShopBarberId().then((barberId) => supabase
+        .order("created_at", { ascending: false }).order("id").range(from, to)),
+      readAllPages("appointments", (from, to) => supabase
         .from("appointments")
         .select(APPOINTMENT_SELECT)
         .eq("barber_id", barberId)
         .gte("starts_at", window.fromIso)
         .lt("starts_at", window.toIso)
-        .order("starts_at")),
+        .order("starts_at").order("id").range(from, to)),
       loadBlockedDays(window),
       loadPricingSettings(),
+      loadBusinessHours(),
     ]);
 
-  fail("profiles", profilesResult.error);
-  fail("booking_requests", requestsResult.error);
-  fail("appointments", appointmentsResult.error);
-
-  const rows = asRequestRows(requestsResult.data);
+  const rows = asRequestRows(requestRows);
   return {
     services,
-    clients: (profilesResult.data ?? []).map(mapClientRow),
+    clients: profileRows.map(mapClientRow),
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
-    appointments: confirmedOnly(appointmentsResult.data).map(mapAppointmentRow),
+    appointments: confirmedOnly(appointmentRows).map(mapAppointmentRow),
     pricingSettings,
     blockedDates: blocked.dates,
+    blockedIntervals: blocked.intervals,
+    businessHours,
   };
 }
 
@@ -734,17 +812,15 @@ export async function loadApprovals(): Promise<{
   clients: ClientProfile[];
 }> {
   const supabase = await createClient();
-  const profilesResult = await supabase
+  const rows = await readAllPages("profiles", (from, to) => supabase
     .from("profiles")
     .select(PROFILE_SELECT)
     .eq("role", "client")
     .eq("approval_status", "pending")
-    .order("created_at", { ascending: false });
-
-  fail("profiles", profilesResult.error);
+    .order("created_at", { ascending: false }).order("id").range(from, to));
 
   return {
-    clients: (profilesResult.data ?? []).map(mapClientRow),
+    clients: rows.map(mapClientRow),
   };
 }
 
@@ -761,36 +837,35 @@ export async function loadRequestQueue(): Promise<{
   const supabase = await createClient();
   const floor = analyticsFloorIso();
   const recentIso = shopDayRangeUtc(addDays(-90)).startIso;
-  const [servicesResult, profilesResult, requestsResult, appointmentsResult, blocked, pricingSettings] =
+  const barberId = await getShopBarberId();
+  const [servicesResult, profileRows, requestRows, appointmentRows, blocked, pricingSettings] =
     await Promise.all([
       supabase.from("services").select("*"),
-      supabase.from("profiles").select(PROFILE_SELECT),
+      readAllPages("profiles", (from, to) => supabase.from("profiles")
+        .select(PROFILE_SELECT).order("id").range(from, to)),
       // Every open request, plus the last 90 days of closed ones for the
       // history tabs; older declined/cancelled rows are not worth the payload.
-      supabase
+      readAllPages("booking_requests", (from, to) => supabase
         .from("booking_requests")
         .select(REQUEST_SELECT)
         .or(`status.in.(pending,proposed),created_at.gte.${recentIso}`)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false }).order("id").range(from, to)),
       // Trailing year: enough for same-day conflict checks and no-show counts.
-      supabase.from("appointments").select(APPOINTMENT_SELECT)
-        .eq("barber_id", await getShopBarberId()).gte("starts_at", floor).order("starts_at"),
+      readAllPages("appointments", (from, to) => supabase.from("appointments").select(APPOINTMENT_SELECT)
+        .eq("barber_id", barberId).gte("starts_at", floor)
+        .order("starts_at").order("id").range(from, to)),
       loadBlockedDays(),
       loadPricingSettings(),
     ]);
 
   fail("services", servicesResult.error);
-  fail("profiles", profilesResult.error);
-  fail("booking_requests", requestsResult.error);
-  fail("appointments", appointmentsResult.error);
-
-  const rows = asRequestRows(requestsResult.data);
+  const rows = asRequestRows(requestRows);
   return {
     services: (servicesResult.data ?? []).map(mapServiceRow),
-    clients: (profilesResult.data ?? []).map(mapClientRow),
+    clients: profileRows.map(mapClientRow),
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
-    appointments: confirmedOnly(appointmentsResult.data).map(mapAppointmentRow),
+    appointments: confirmedOnly(appointmentRows).map(mapAppointmentRow),
     pricingSettings,
     blockedDates: blocked.dates,
   };
@@ -799,13 +874,11 @@ export async function loadRequestQueue(): Promise<{
 /** Directory of all clients. */
 export async function loadClients(): Promise<ClientProfile[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const rows = await readAllPages("profiles", (from, to) => supabase
     .from("profiles")
     .select(PROFILE_SELECT)
-    .order("created_at", { ascending: false });
-
-  fail("profiles", error);
-  return (data ?? []).map(mapClientRow);
+    .order("created_at", { ascending: false }).order("id").range(from, to));
+  return rows.map(mapClientRow);
 }
 
 /** One client's full history for the admin detail page. */
@@ -817,36 +890,34 @@ export async function loadClientHistory(clientId: string): Promise<{
   services: Service[];
 }> {
   const supabase = await createClient();
-  const [profileResult, requestsResult, appointmentsResult, servicesResult] =
+  const [profileResult, requestRows, appointmentRows, servicesResult] =
     await Promise.all([
       supabase.from("profiles").select(PROFILE_SELECT).eq("id", clientId).maybeSingle(),
-      supabase
+      readAllPages("booking_requests", (from, to) => supabase
         .from("booking_requests")
         .select(REQUEST_SELECT)
         .eq("client_id", clientId)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false }).order("id").range(from, to)),
       // Reschedules retain cancelled rows for audit/analytics; the profile
       // lists actual bookings, not each historical version.
-      supabase
+      readAllPages("appointments", (from, to) => supabase
         .from("appointments")
         .select(APPOINTMENT_SELECT)
         .eq("client_id", clientId)
         .eq("status", "confirmed")
-        .order("starts_at"),
+        .order("starts_at").order("id").range(from, to)),
       supabase.from("services").select("*"),
     ]);
 
   fail("profiles", profileResult.error);
-  fail("booking_requests", requestsResult.error);
-  fail("appointments", appointmentsResult.error);
   fail("services", servicesResult.error);
 
-  const rows = asRequestRows(requestsResult.data);
+  const rows = asRequestRows(requestRows);
   return {
     client: profileResult.data ? mapClientRow(profileResult.data) : null,
     requests: rows.map(mapRequestRow),
     proposals: proposalsFromRequests(rows),
-    appointments: (appointmentsResult.data ?? []).map(mapAppointmentRow),
+    appointments: appointmentRows.map(mapAppointmentRow),
     services: (servicesResult.data ?? []).map(mapServiceRow),
   };
 }
@@ -877,37 +948,29 @@ export async function loadExportAppointments(
   clientId?: string,
 ): Promise<ExportEvent[]> {
   const supabase = await createClient();
-  let appointmentsQuery = supabase
-    .from("appointments")
-    .select(APPOINTMENT_SELECT)
-    .eq("status", "confirmed")
-    .gte("starts_at", fromIso)
-    .lt("starts_at", toIso)
-    .order("starts_at");
-  if (clientId) {
-    appointmentsQuery = appointmentsQuery.eq("client_id", clientId);
-  } else {
-    appointmentsQuery = appointmentsQuery.eq("barber_id", await getShopBarberId());
-  }
-
-  const [appointmentsResult, servicesResult, profilesResult] = await Promise.all([
-    appointmentsQuery,
+  const barberId = clientId ? null : await getShopBarberId();
+  const [appointmentRows, servicesResult, profileRows] = await Promise.all([
+    readAllPages("appointments", (from, to) => {
+      let query = supabase.from("appointments").select(APPOINTMENT_SELECT)
+        .eq("status", "confirmed").gte("starts_at", fromIso).lt("starts_at", toIso);
+      query = clientId ? query.eq("client_id", clientId) : query.eq("barber_id", barberId!);
+      return query.order("starts_at").order("id").range(from, to);
+    }),
     supabase.from("services").select("id, name"),
-    supabase.from("profiles").select("id, full_name"),
+    readAllPages("profiles", (from, to) => supabase.from("profiles")
+      .select("id, full_name").order("id").range(from, to)),
   ]);
 
-  fail("appointments", appointmentsResult.error);
   fail("services", servicesResult.error);
-  fail("profiles", profilesResult.error);
 
   const serviceName = new Map(
     (servicesResult.data ?? []).map((s) => [s.id, s.name]),
   );
   const clientName = new Map(
-    (profilesResult.data ?? []).map((p) => [p.id, p.full_name]),
+    profileRows.map((p) => [p.id, p.full_name]),
   );
 
-  return (appointmentsResult.data ?? []).map((row) => ({
+  return appointmentRows.map((row) => ({
     id: row.id,
     start: new Date(row.starts_at),
     end: new Date(row.ends_at),

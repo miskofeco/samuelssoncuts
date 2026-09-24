@@ -1,16 +1,22 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ATTENTION_COUNTS_EVENT } from "@/hooks/use-live-attention";
 
 // Tables whose changes affect the admin sidebar "needs attention" badges.
-const WATCHED_TABLES = ["booking_requests", "profiles"] as const;
+// Profiles are deliberately absent from the Realtime publication; verification
+// and approval changes are picked up by the lightweight visible-page poll.
+const WATCHED_TABLES = ["booking_requests"] as const;
+const ATTENTION_POLL_MS = 30_000;
 
 // Background changes update just the navigation counts. Refreshing the whole
 // route here would re-run expensive calendar/analytics loaders and disturb an
 // admin mid-edit. Server actions still revalidate their affected pages.
 export function useAttentionRefresh() {
+  const pathname = usePathname();
+  const router = useRouter();
   const channelId = useId();
   const channelName = `admin-attention-${channelId.replaceAll(":", "")}`;
   const lastRefresh = useRef(0);
@@ -20,6 +26,7 @@ export function useAttentionRefresh() {
     const supabase = createClient();
     const MIN_INTERVAL_MS = 1500;
     let controller: AbortController | null = null;
+    let previousCounts: string | null = null;
 
     async function refreshCounts() {
       controller?.abort();
@@ -31,6 +38,12 @@ export function useAttentionRefresh() {
         });
         if (!response.ok) return;
         const counts = await response.json();
+        const nextCounts = JSON.stringify(counts);
+        if (previousCounts !== null && previousCounts !== nextCounts &&
+          (pathname === "/admin/approvals" || pathname === "/admin/requests")) {
+          router.refresh();
+        }
+        previousCounts = nextCounts;
         window.dispatchEvent(new CustomEvent(ATTENTION_COUNTS_EVENT, { detail: counts }));
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
@@ -59,7 +72,10 @@ export function useAttentionRefresh() {
       channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table },
-        scheduleRefresh,
+        () => {
+          scheduleRefresh();
+          if (pathname === "/admin/requests") router.refresh();
+        },
       );
     }
     channel.subscribe();
@@ -69,13 +85,18 @@ export function useAttentionRefresh() {
     }
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("online", scheduleRefresh);
+    const poll = setInterval(() => {
+      if (document.visibilityState === "visible" && navigator.onLine) scheduleRefresh();
+    }, ATTENTION_POLL_MS);
+    scheduleRefresh();
 
     return () => {
+      clearInterval(poll);
       if (pending.current) clearTimeout(pending.current);
       controller?.abort();
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("online", scheduleRefresh);
       supabase.removeChannel(channel);
     };
-  }, [channelName]);
+  }, [channelName, pathname, router]);
 }

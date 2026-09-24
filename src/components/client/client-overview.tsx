@@ -19,9 +19,10 @@ import { Icon, type IconSource } from "@/components/shared/icon";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusPill } from "@/components/shared/status-pill";
 import { ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
-import { formatDay, formatFullDay, serviceById, todayIso } from "@/domain/schedule";
+import { formatBlockedRange, formatDay, formatFullDay, serviceById, todayIso } from "@/domain/schedule";
 import type {
   Appointment,
+  BlockedRange,
   BookingRequest,
   Proposal,
   RequestStatus,
@@ -58,7 +59,7 @@ export async function ClientOverview({
   proposals: Proposal[];
   appointments: Appointment[];
   services: Service[];
-  blockedRanges: Array<{ id: string; start: string; end: string; reason: string | null }>;
+  blockedRanges: BlockedRange[];
 }) {
   const t = await getDict();
   const locale = localeFor(await getLang());
@@ -121,10 +122,7 @@ export async function ClientOverview({
           </div>
           <ul className="mt-4 grid gap-2 sm:grid-cols-2">
             {plannedBlocked.map((range) => {
-              const label =
-                range.start === range.end
-                  ? formatFullDay(range.start, locale)
-                  : `${formatFullDay(range.start, locale)} - ${formatFullDay(range.end, locale)}`;
+              const label = formatBlockedRange(range, locale);
 
               return (
                 <li

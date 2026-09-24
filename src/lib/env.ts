@@ -112,11 +112,11 @@ export function getShopTimeZone() {
 // Public so both server and client components can read them.
 
 export function getShopAddress(): string | null {
-  return process.env.NEXT_PUBLIC_SHOP_ADDRESS ?? null;
+  return process.env.NEXT_PUBLIC_SHOP_ADDRESS || "Skrabske 107, 094 33";
 }
 
 export function getShopPhone(): string | null {
-  return process.env.NEXT_PUBLIC_SHOP_PHONE ?? null;
+  return process.env.NEXT_PUBLIC_SHOP_PHONE || "+421918531257";
 }
 
 /** Google Maps search link for the configured address (null when unset). */

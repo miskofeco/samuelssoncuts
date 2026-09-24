@@ -16,15 +16,15 @@ test("VIP pricing starts at 17:00, defaults to 20 percent, and overrides gap pri
   assert.match(schedule, /isVipStart\(options\.startsAt\)/);
   assert.match(schedule, /vipSurchargePercent/);
   assert.match(schedule, /gapSurchargePercent/);
-  assert.match(schedule, /return Math\.round\(basePrice \* \(1 \+ surchargePercent \/ 100\)\)/);
+  assert.match(schedule, /return Math\.round\(basePriceCents \* \(1 \+ surchargePercent \/ 100\)\)/);
   assert.match(actions, /quoteClientSlot/);
-  assert.match(bookingPricing, /priceForSlot\(basePrice, preferred,[\s\S]*startsAt: input\.time/);
+  assert.match(bookingPricing, /priceCentsForSlot\(input\.basePriceCents, preferred,[\s\S]*startsAt: input\.time/);
 });
 
-test("best-price starts stay base price even when they are after VIP start", () => {
+test("VIP starts override best-price connecting slots in the client and server quotes", () => {
   assert.match(schedule, /export function priceKindForSlot/);
-  assert.match(schedule, /if \(preferred\) return "base"/);
-  assert.match(schedule, /if \(options\.startsAt && isVipStart\(options\.startsAt\)\) return "vip"/);
+  assert.match(schedule, /if \(options\.startsAt && isVipStart\(options\.startsAt\)\) return "vip";\s*if \(preferred\) return "base"/);
+  assert.match(bookingPricing, /priceKindForSlot\(preferred, \{ startsAt: input\.time \}\) !== "base"/);
 });
 
 test("barber can manage pricing surcharges from admin settings", () => {

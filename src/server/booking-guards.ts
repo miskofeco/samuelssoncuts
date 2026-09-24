@@ -7,14 +7,16 @@ export type { BusinessHoursWindow, TimeRangeRow } from "@/domain/booking-guards"
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
-const DEFAULT_BUSINESS_HOURS: BusinessHoursWindow = {
-  closed: false,
-  opensAt: "07:00",
-  closesAt: "21:00",
-};
-
 function weekdayForDate(date: string) {
   return new Date(`${date}T12:00:00`).getDay();
+}
+
+function defaultBusinessHours(date: string): BusinessHoursWindow {
+  return {
+    closed: weekdayForDate(date) === 0,
+    opensAt: "07:00",
+    closesAt: "21:00",
+  };
 }
 
 
@@ -37,7 +39,7 @@ async function loadBusinessHoursWindow(
   if (error) return null;
 
   const row = data?.[0];
-  if (!row) return DEFAULT_BUSINESS_HOURS;
+  if (!row) return defaultBusinessHours(date);
 
   return {
     closed: Boolean(row.closed),

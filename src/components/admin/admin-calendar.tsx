@@ -48,7 +48,9 @@ import { addDaysToDate, nowMinutesInShopTimeZone } from "@/lib/time-zone";
 
 import type {
   Appointment,
+  BlockedInterval,
   BookingRequest,
+  BusinessHoursDay,
   ClientProfile,
   PricingSettings,
   Proposal,
@@ -127,6 +129,8 @@ export function AdminCalendar({
   services: initialServices,
   pricingSettings: initialPricingSettings,
   blockedDates: initialBlockedDates,
+  blockedIntervals: initialBlockedIntervals,
+  businessHours: initialBusinessHours,
   calendarWindow,
   feedUrl,
 }: {
@@ -137,6 +141,8 @@ export function AdminCalendar({
   services: Service[];
   pricingSettings: PricingSettings;
   blockedDates: Set<string>;
+  blockedIntervals: BlockedInterval[];
+  businessHours: BusinessHoursDay[];
   calendarWindow: { anchorDate: string; fromDate: string; toDate: string };
   feedUrl?: string;
 }) {
@@ -173,14 +179,16 @@ export function AdminCalendar({
     services: initialServices,
     pricingSettings: initialPricingSettings,
     blockedDates: [...initialBlockedDates],
+    blockedIntervals: initialBlockedIntervals,
+    businessHours: initialBusinessHours,
   }), [initialAppointments, initialProposals, initialRequests, initialClients, initialServices,
-    initialPricingSettings, initialBlockedDates]);
+    initialPricingSettings, initialBlockedDates, initialBlockedIntervals, initialBusinessHours]);
   const { data: liveCalendar, refresh: refreshCalendar } = useLiveSnapshot(
     initialCalendar,
     `/api/admin/calendar?date=${encodeURIComponent(calendarWindow.anchorDate)}`,
     20000,
   );
-  const { appointments, proposals, requests, clients, services, pricingSettings } = liveCalendar;
+  const { appointments, proposals, requests, clients, services, pricingSettings, blockedIntervals, businessHours } = liveCalendar;
   const blockedDates = useMemo(() => new Set(liveCalendar.blockedDates), [liveCalendar.blockedDates]);
   const channelId = useId();
   useEffect(() => {
@@ -233,9 +241,7 @@ export function AdminCalendar({
       const client = appointment.clientId ? clientsById.get(appointment.clientId) : undefined;
       const request = appointment.requestId ? requestsById.get(appointment.requestId) : undefined;
       const surcharge = request ? surchargeDetailsForRequest(request, pricingSettings) : null;
-      const bookedPriceCents = appointment.requestId
-        ? requestsById.get(appointment.requestId)?.priceCents ?? Math.round(service.price * 100)
-        : Math.round(service.price * 100);
+      const bookedPriceCents = appointment.priceCents ?? request?.priceCents ?? Math.round(service.price * 100);
       push(appointment.date, {
         id: appointment.id,
         title: client?.name ?? appointment.clientName ?? t.admin.clientFallback,
@@ -247,7 +253,7 @@ export function AdminCalendar({
         surchargePercent: surcharge?.percent,
         time: appointment.time,
         date: appointment.date,
-        durationMinutes: service.duration,
+        durationMinutes: appointment.durationMinutes ?? service.duration,
         type: appointment.requestId ? "Confirmed" : "Barber",
         appointmentId: appointment.id,
         requestId: appointment.requestId,
@@ -255,6 +261,7 @@ export function AdminCalendar({
         clientEmail: client?.email,
         clientPhone: client?.phone,
         clientAvatarUrl: client?.avatarUrl,
+        note: appointment.note ?? undefined,
         outcome: appointment.outcome,
       });
     }
@@ -558,6 +565,9 @@ export function AdminCalendar({
           initialDate={draft?.date}
           initialTime={draft?.time}
           bookedByDate={bookedByDate}
+          businessHours={businessHours}
+          blockedIntervals={blockedIntervals}
+          pricingSettings={pricingSettings}
         />
       ) : null}
 
@@ -566,6 +576,8 @@ export function AdminCalendar({
           item={selectedLive}
           onClose={() => { setSelected(null); refreshCalendar(); }}
           bookedByDate={bookedByDate}
+          businessHours={businessHours}
+          blockedIntervals={blockedIntervals}
         />
       ) : null}
     </div>
@@ -704,7 +716,7 @@ function DayAgenda({
                     </StatusPill>
                   ) : null}
                   <span className="shrink-0 text-sm font-semibold text-foreground tabular-nums">
-                    {Math.round(item.finalPriceCents / 100)} €
+                    {(item.finalPriceCents / 100).toFixed(2)} €
                   </span>
                 </button>
               </li>
@@ -1277,7 +1289,7 @@ function MobileChip({
         </span>
       </span>
       <span className="shrink-0 text-sm font-semibold tabular-nums">
-        {Math.round(item.finalPriceCents / 100)} €
+        {(item.finalPriceCents / 100).toFixed(2)} €
       </span>
     </button>
   );

@@ -10,6 +10,7 @@ import { Icon } from "@/components/shared/icon";
 import type { ActionResult } from "@/domain/types";
 import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
+import { persistPushSubscription } from "@/lib/push-client";
 
 type PushState =
   | "checking"
@@ -86,7 +87,12 @@ export function PushNotificationCard() {
       const registration = await navigator.serviceWorker.getRegistration("/sw.js");
       const subscription = await registration?.pushManager.getSubscription();
       if (cancelled) return;
-      setState(subscription ? "enabled" : "ready");
+      if (!subscription) {
+        setState("ready");
+        return;
+      }
+      const registered = await persistPushSubscription(subscription);
+      if (!cancelled) setState(registered ? "enabled" : "unavailable");
     }
 
     check().catch(() => {
@@ -124,13 +130,7 @@ export function PushNotificationCard() {
           applicationServerKey: applicationServerKey(publicKey),
         });
 
-        const response = await fetch("/api/push/subscriptions", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(subscription),
-        });
-        if (!response.ok) throw new Error("subscribe failed");
+        if (!await persistPushSubscription(subscription)) throw new Error("subscribe failed");
 
         setState("enabled");
         setFeedback({ ok: true, message: t.push.notificationsEnabled });
@@ -146,13 +146,16 @@ export function PushNotificationCard() {
       try {
         const registration = await navigator.serviceWorker.getRegistration("/sw.js");
         const subscription = await registration?.pushManager.getSubscription();
-        const endpoint = subscription?.endpoint;
+        if (!subscription) {
+          setState("ready");
+          return;
+        }
 
         const response = await fetch("/api/push/subscriptions", {
           method: "DELETE",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ endpoint }),
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
         });
         if (!response.ok) throw new Error("unsubscribe failed");
         await subscription?.unsubscribe();

@@ -57,7 +57,8 @@ export default async function AppointmentDetailPage({
     id: appt.serviceId,
     name: appt.serviceName,
     duration: appt.serviceDuration,
-    price: Math.round((appt.priceCents ?? 0) / 100),
+    price: (appt.priceCents ?? 0) / 100,
+    active: appt.serviceActive,
   };
   const confirmed = appt.status === "confirmed";
 
@@ -114,7 +115,7 @@ export default async function AppointmentDetailPage({
           </Row>
           {appt.priceCents != null ? (
             <Row icon={EuroIcon} label={t.client.detailPrice}>
-              <span className="tabular-nums">{Math.round(appt.priceCents / 100)} €</span>
+              <span className="tabular-nums">{(appt.priceCents / 100).toFixed(2)} €</span>
               {appt.surcharge ? (
                 <span
                   className={cn(
@@ -192,6 +193,7 @@ export default async function AppointmentDetailPage({
             bookedSlots={bookingData?.appointments ?? []}
             pendingRequests={bookingData?.pendingRequests ?? []}
             blockedDates={bookingData?.blockedDates ?? new Set<string>()}
+            blockedIntervals={bookingData?.blockedIntervals ?? []}
             businessHours={bookingData?.businessHours ?? []}
           />
         ) : null}

@@ -8,6 +8,7 @@ import { redact } from "../src/lib/redact.ts";
 const migration = readFileSync("supabase/migrations/0032_security_hardening.sql", "utf8");
 const actions = readFileSync("src/app/actions.ts", "utf8");
 const cron = readFileSync("src/app/api/cron/reminders/route.ts", "utf8");
+const reminderClaim = readFileSync("src/server/reminder-claim.ts", "utf8");
 const feed = readFileSync("src/app/api/calendar/feed/[token]/route.ts", "utf8");
 const exportRoute = readFileSync("src/app/api/calendar/export/route.ts", "utf8");
 const ics = readFileSync("src/lib/ics.ts", "utf8");
@@ -66,10 +67,16 @@ test("feed tokens rotate, feeds require approval, storage buckets are capped", (
 
 test("cron claims the reminder stamp before sending and bounds its runtime", () => {
   assert.match(cron, /export const maxDuration = 60/);
-  const claim = cron.indexOf('.is("reminded_at", null)\n        .select("id")');
-  const send = cron.indexOf("await sendEmail({\n        to: profile.email");
+  const claim = cron.indexOf("await claimReminder(supabase, appt, claimAt, windowEnd)");
+  const send = cron.indexOf("const delivered = await sendEmail({");
   assert.ok(claim > -1 && send > claim, "claim must precede the send");
-  assert.match(cron, /update\(\{ reminded_at: null \}\)/);
+  assert.match(reminderClaim, /\.eq\("status", "confirmed"\)/);
+  assert.match(reminderClaim, /\.eq\("starts_at", appointment\.starts_at\)/);
+  assert.match(reminderClaim, /\.gt\("starts_at", claimAtIso\)/);
+  assert.match(reminderClaim, /\.is\("reminded_at", null\)/);
+  assert.match(reminderClaim, /update\(\{ reminded_at: null \}\)/);
+  assert.match(reminderClaim, /\.eq\("reminded_at", claimAtIso\)/);
+  assert.match(cron, /reminderStillCurrent/);
   assert.match(cron, /\.in\("id", clientIds\)/);
   assert.match(cron, /createNotifications\(supabase, notifications\)/);
   assert.match(cron, /from\("rate_limits"\)\s*\.delete/);

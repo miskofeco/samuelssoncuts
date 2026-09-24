@@ -15,6 +15,7 @@ import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
 import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
+import type { BlockedInterval, BusinessHoursDay } from "@/domain/types";
 
 import { AppointmentDetailModal } from "./appointment-detail-modal";
 import type { BookedSlot, CalendarItem } from "./admin-calendar";
@@ -56,10 +57,14 @@ const toneIcon: Record<AdminBookingCarouselItem["tone"], IconSvgElement> = {
 export function AdminBookingCarousel({
   items,
   bookedSlots,
+  businessHours,
+  blockedIntervals,
   positionLabel,
 }: {
   items: AdminBookingCarouselItem[];
   bookedSlots: BookedSlotInput[];
+  businessHours: BusinessHoursDay[];
+  blockedIntervals: BlockedInterval[];
   positionLabel: string;
 }) {
   const t = useT();
@@ -158,6 +163,8 @@ export function AdminBookingCarousel({
         item={selected}
         onClose={() => setSelected(null)}
         bookedByDate={bookedByDate}
+        businessHours={businessHours}
+        blockedIntervals={blockedIntervals}
       />
     </div>
   );
@@ -228,7 +235,7 @@ function BookingSummaryCard({
               </p>
             </div>
             <p className="text-2xl font-semibold tracking-tight text-foreground tabular-nums">
-              {Math.round(booking.priceCents / 100)} €
+              {(booking.priceCents / 100).toFixed(2)} €
             </p>
           </div>
         </div>

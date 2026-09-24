@@ -16,6 +16,7 @@ import {
   clientSlotsForService,
   isDateInClientBookingWindow,
   isDateClosedForBusinessHours,
+  isSlotBlocked,
   isStartInClientBookingWindow,
   isStartInFuture,
   isPreferredClientStart,
@@ -30,6 +31,7 @@ import {
 } from "@/domain/schedule";
 import type {
   Appointment,
+  BlockedInterval,
   BookingRequest,
   BusinessHoursDay,
   PricingSettings,
@@ -47,9 +49,9 @@ export type SlotChoice = {
   priceKind: "base" | "gap" | "vip";
 };
 
-// Confirmed appointments carry only serviceId; resolve duration from services.
+// Stored appointment end times outrank today's mutable service catalog.
 function apptDuration(appt: Appointment, services: Service[]): number {
-  return serviceById(appt.serviceId, services).duration;
+  return appt.durationMinutes ?? serviceById(appt.serviceId, services).duration;
 }
 
 // The browser time zone is an external, never-changing value: read it through
@@ -115,7 +117,10 @@ export function SlotPicker({
   appointments,
   pendingRequests,
   blockedDates,
+  blockedIntervals,
   businessHours,
+  earliestStartMs,
+  excludeAppointment,
   steps,
   aside,
 }: {
@@ -131,7 +136,10 @@ export function SlotPicker({
   appointments: Appointment[];
   pendingRequests: BookingRequest[];
   blockedDates: ReadonlySet<string>;
+  blockedIntervals: readonly BlockedInterval[];
   businessHours: BusinessHoursDay[];
+  earliestStartMs?: number;
+  excludeAppointment?: Pick<Appointment, "date" | "time">;
   /** Step numbers to show next to the date/time panel titles (booking stepper). */
   steps?: { date: number; time: number };
   /**
@@ -144,6 +152,8 @@ export function SlotPicker({
   const locale = localeFor(useLang());
   const today = todayIso();
   const latestDate = latestClientBookingDate();
+  const excludedDate = excludeAppointment?.date;
+  const excludedTime = excludeAppointment?.time;
   const shopTimeZone = process.env.NEXT_PUBLIC_SHOP_TIME_ZONE ?? "Europe/Bratislava";
   const browserTimeZone = useSyncExternalStore(subscribeNoop, readBrowserTimeZone, readServerTimeZone);
 
@@ -156,12 +166,14 @@ export function SlotPicker({
   // Confirmed appointments shaped for the slot helpers (with resolved duration).
   const confirmed = useMemo(
     () =>
-      appointments.map((a) => ({
+      appointments.filter((a) =>
+        !excludedDate || a.date !== excludedDate || a.time !== excludedTime,
+      ).map((a) => ({
         date: a.date,
         time: a.time,
         durationMinutes: apptDuration(a, services),
       })),
-    [appointments, services],
+    [appointments, excludedDate, excludedTime, services],
   );
 
   // Set of "date T HH:MM" that some client has a pending request for.
@@ -198,9 +210,14 @@ export function SlotPicker({
       // Hide slots taken by a confirmed appointment.
       .filter((s) => {
         const start = zonedDateTimeToUtcIso(date, s.time);
-        return s.status !== "taken" && isStartInFuture(start) && isStartInClientBookingWindow(start);
+        return s.status !== "taken" &&
+          isStartInFuture(start) &&
+          isStartInClientBookingWindow(start) &&
+          (!earliestStartMs || Date.parse(start) > earliestStartMs) &&
+          (!excludedDate || date !== excludedDate || s.time !== excludedTime) &&
+          !isSlotBlocked(date, s.time, service.duration, blockedIntervals);
       });
-  }, [businessHours, date, confirmed, pendingStarts, pricingSettings, service.duration, service.price]);
+  }, [blockedIntervals, businessHours, date, confirmed, earliestStartMs, excludedDate, excludedTime, pendingStarts, pricingSettings, service.duration, service.price]);
 
   useEffect(() => {
     if (!selectedTime || !date) return;

@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { isAllowedPushEndpoint } from "@/domain/push-endpoint";
 import { reportError } from "@/lib/observability";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/server/auth";
+import { enforceRateLimit } from "@/server/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const subscriptionSchema = z.object({
   endpoint: z.string().url().max(4096),
-  expirationTime: z.number().nullable().optional(),
+  expirationTime: z.number().finite().nullable().optional(),
   keys: z.object({
     p256dh: z.string().min(16).max(4096),
     auth: z.string().min(8).max(4096),
@@ -18,7 +20,7 @@ const subscriptionSchema = z.object({
 });
 
 const deleteSchema = z.object({
-  endpoint: z.string().url().max(4096).optional(),
+  endpoint: z.string().url().max(4096),
 });
 
 function assertSameOrigin(request: NextRequest) {
@@ -57,6 +59,18 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: "Invalid subscription" }, { status: 400 });
   }
+  if (!isAllowedPushEndpoint(parsed.data.endpoint)) {
+    return NextResponse.json({ ok: false, error: "Invalid subscription" }, { status: 400 });
+  }
+
+  const rate = await enforceRateLimit("push-subscription", {
+    identity: profile.id,
+    limit: 30,
+    windowSeconds: 60 * 60,
+  });
+  if (!rate.ok) {
+    return NextResponse.json({ ok: false, error: rate.error }, { status: 429 });
+  }
 
   // The RPC (0032) rebinds an endpoint previously registered by another user
   // of this browser; a plain upsert failed the owner-only UPDATE policy and
@@ -87,17 +101,17 @@ export async function DELETE(request: NextRequest) {
   if (!profile) {
     return unauthorized();
   }
-  const parsed = deleteSchema.safeParse(await request.json().catch(() => ({})));
+  const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: "Invalid subscription" }, { status: 400 });
   }
 
   const supabase = await createClient();
-  let query = supabase.from("push_subscriptions").delete().eq("user_id", profile.id);
-  if (parsed.data.endpoint) {
-    query = query.eq("endpoint", parsed.data.endpoint);
-  }
-  const { error } = await query;
+  const { error } = await supabase
+    .from("push_subscriptions")
+    .delete()
+    .eq("user_id", profile.id)
+    .eq("endpoint", parsed.data.endpoint);
 
   if (error) {
     await reportError("push-unsubscribe", error, { userId: profile.id });

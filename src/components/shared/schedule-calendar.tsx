@@ -1,6 +1,6 @@
 "use client";
 
-import { enUS, sk } from "date-fns/locale";
+import { enUS, sk } from "react-day-picker/locale";
 import type { ReactNode } from "react";
 import type { DayButtonProps, Matcher, Modifiers } from "react-day-picker";
 

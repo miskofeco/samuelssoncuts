@@ -1,7 +1,7 @@
 "use client";
 
 import { Calendar03Icon } from "@hugeicons/core-free-icons";
-import { enUS, sk } from "date-fns/locale";
+import { enUS, sk } from "react-day-picker/locale";
 import { useId, useState } from "react";
 
 import { Icon } from "@/components/shared/icon";

@@ -42,6 +42,11 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: supabaseImagePattern(),
   },
+  experimental: {
+    // Avatar and service images are capped at 3 MiB in their server actions.
+    // Multipart boundaries and form fields need some room above the file cap.
+    serverActions: { bodySizeLimit: "3200kb" },
+  },
   async headers() {
     return [
       {

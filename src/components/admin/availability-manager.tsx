@@ -20,13 +20,11 @@ import { DAY_PICKER_LOCALES, ScheduleCalendar } from "@/components/shared/schedu
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Calendar } from "@/components/ui/calendar";
-import { addDays, formatFullDay, monthKey } from "@/domain/schedule";
+import { addDays, formatBlockedRange, formatFullDay, monthKey } from "@/domain/schedule";
 import { useIsMobile } from "@/hooks/use-mobile";
-import type { ActionResult } from "@/domain/types";
+import type { ActionResult, BlockedRange } from "@/domain/types";
 import { localeFor } from "@/i18n/config";
 import { useLang, useT } from "@/i18n/provider";
-
-type BlockedRange = { id: string; start: string; end: string; reason: string | null };
 
 export function AvailabilityManager({
   ranges,
@@ -280,9 +278,7 @@ export function AvailabilityManager({
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-foreground">
-                      {range.start === range.end
-                        ? formatFullDay(range.start, locale)
-                        : `${formatFullDay(range.start, locale)} → ${formatFullDay(range.end, locale)}`}
+                      {formatBlockedRange(range, locale)}
                     </p>
                     {range.reason ? (
                       <p className="truncate text-xs text-muted-foreground">{range.reason}</p>

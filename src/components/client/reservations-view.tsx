@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { SegmentedControl } from "@/components/shared/segmented-control";
-import type { BookingRequest, Proposal, Service } from "@/domain/types";
+import type { BookingRequest, ConfirmedRequestSlot, Proposal, Service } from "@/domain/types";
 import { useT } from "@/i18n/provider";
 
 import { ReservationList } from "./reservation-list";
@@ -14,10 +14,12 @@ export function ReservationsView({
   requests,
   proposals,
   services,
+  confirmedRequestSlots,
 }: {
   requests: BookingRequest[];
   proposals: Proposal[];
   services: Service[];
+  confirmedRequestSlots: ConfirmedRequestSlot[];
 }) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("active");
@@ -48,6 +50,7 @@ export function ReservationsView({
         requests={shown}
         proposals={proposals}
         services={services}
+        confirmedRequestSlots={confirmedRequestSlots}
         variant={tab}
       />
     </div>

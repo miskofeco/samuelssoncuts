@@ -34,6 +34,9 @@ test("send-email hook builds a token-hash confirm URL and renders the branded em
   assert.match(route, /token_hash/);
   assert.match(route, /AuthEmail/);
   assert.match(route, /sendEmail/);
+  assert.match(route, /authEmailDeliveries\(payload\)/);
+  assert.match(route, /results\.every\(Boolean\)/);
+  assert.match(route, /status:\s*500/);
 });
 
 test("confirm route verifies the OTP and routes recovery to update-password", () => {

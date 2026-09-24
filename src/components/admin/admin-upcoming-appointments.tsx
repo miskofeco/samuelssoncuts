@@ -10,6 +10,7 @@ import type { CalendarItem } from "./admin-calendar";
 import { AppointmentDetailModal } from "./appointment-detail-modal";
 import type { BookedSlotInput } from "./admin-booking-carousel";
 import type { BookedSlot } from "./admin-calendar";
+import type { BlockedInterval, BusinessHoursDay } from "@/domain/types";
 
 export type AdminUpcomingAppointmentItem = {
   id: string;
@@ -28,11 +29,15 @@ export type AdminUpcomingAppointmentItem = {
 export function AdminUpcomingAppointments({
   items,
   bookedSlots,
+  businessHours,
+  blockedIntervals,
   emptyTitle,
   labels,
 }: {
   items: AdminUpcomingAppointmentItem[];
   bookedSlots: BookedSlotInput[];
+  businessHours: BusinessHoursDay[];
+  blockedIntervals: BlockedInterval[];
   emptyTitle: string;
   labels: {
     name: string;
@@ -103,6 +108,8 @@ export function AdminUpcomingAppointments({
         item={selected}
         onClose={() => setSelected(null)}
         bookedByDate={bookedByDate}
+        businessHours={businessHours}
+        blockedIntervals={blockedIntervals}
       />
     </>
   );

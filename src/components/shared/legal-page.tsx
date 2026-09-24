@@ -88,11 +88,15 @@ export function LegalPage({
   backLabel,
   lastUpdatedLabel,
   lastUpdated,
+  contactPhone,
+  contactAddress,
 }: {
   content: LegalContent;
   backLabel: string;
   lastUpdatedLabel: string;
   lastUpdated: string;
+  contactPhone?: string | null;
+  contactAddress?: string | null;
 }) {
   return (
     <LegalShell
@@ -105,8 +109,20 @@ export function LegalPage({
       }
       intro={content.intro}
     >
-      {content.sections.map((section) => (
-        <LegalSection key={section.heading} title={section.heading} body={section.body} />
+      {content.sections.map((section, index) => (
+        <LegalSection key={section.heading} title={section.heading} body={section.body}>
+          {index === content.sections.length - 1 && (contactPhone || contactAddress) ? (
+            <div className="mt-3 space-y-1 text-sm text-foreground">
+              {contactPhone ? (
+                <a className="block font-medium text-primary underline underline-offset-4"
+                  href={`tel:${contactPhone.replace(/[^+\d]/g, "")}`}>
+                  {contactPhone}
+                </a>
+              ) : null}
+              {contactAddress ? <p>{contactAddress}</p> : null}
+            </div>
+          ) : null}
+        </LegalSection>
       ))}
     </LegalShell>
   );

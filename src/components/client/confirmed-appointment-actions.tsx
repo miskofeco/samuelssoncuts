@@ -2,7 +2,7 @@
 
 import { Cancel01Icon, LockIcon, RepeatIcon } from "@hugeicons/core-free-icons";
 import dynamic from "next/dynamic";
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 
 import {
   cancelConfirmedAppointmentAction,
@@ -14,16 +14,20 @@ import { Feedback } from "@/components/shared/feedback";
 import { Icon } from "@/components/shared/icon";
 import { Modal } from "@/components/shared/modal";
 import { Skeleton } from "@/components/shared/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
+import { formatFullDay } from "@/domain/schedule";
 import type {
   ActionResult,
   Appointment,
+  BlockedInterval,
   BookingRequest,
   BusinessHoursDay,
   ClientAppointment,
   PricingSettings,
   Service,
 } from "@/domain/types";
-import { useT } from "@/i18n/provider";
+import { localeFor } from "@/i18n/config";
+import { useLang, useT } from "@/i18n/provider";
 
 import type { SlotChoice } from "./slot-picker";
 
@@ -40,6 +44,7 @@ type Props = {
   bookedSlots: Appointment[];
   pendingRequests: BookingRequest[];
   blockedDates: ReadonlySet<string>;
+  blockedIntervals: BlockedInterval[];
   businessHours: BusinessHoursDay[];
 };
 
@@ -51,13 +56,18 @@ export function ConfirmedAppointmentActions({
   bookedSlots,
   pendingRequests,
   blockedDates,
+  blockedIntervals,
   businessHours,
 }: Props) {
   const t = useT();
+  const locale = localeFor(useLang());
+  const acknowledgeId = useId();
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
+  const [rescheduleCutoff, setRescheduleCutoff] = useState<number | null>(null);
+  const [acknowledgedRelease, setAcknowledgedRelease] = useState(false);
   const [pickerOpened, setPickerOpened] = useState(false);
   if (rescheduling && !pickerOpened) setPickerOpened(true);
   const [date, setDate] = useState<string | null>(null);
@@ -77,7 +87,7 @@ export function ConfirmedAppointmentActions({
   }
 
   function submitReschedule() {
-    if (!date || !slot) return;
+    if (!date || !slot || !acknowledgedRelease) return;
     setFeedback(null);
     startTransition(async () => {
       try {
@@ -99,18 +109,24 @@ export function ConfirmedAppointmentActions({
       <Feedback result={feedback} className="mt-3" />
 
       {appointment.canModify ? (
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
-          <Button
+        <div className={service.active === false
+          ? "mt-4 grid gap-2 sm:flex sm:justify-end"
+          : "mt-4 grid grid-cols-2 gap-2 sm:flex sm:justify-end"}>
+          {service.active !== false ? <Button
             type="button"
             variant="secondary"
             size="lg"
             disabled={pending}
-            onClick={() => setRescheduling(true)}
+            onClick={() => {
+              setAcknowledgedRelease(false);
+              setRescheduleCutoff(Date.now() + 24 * 60 * 60 * 1000);
+              setRescheduling(true);
+            }}
             className="sm:h-10 sm:text-sm"
           >
             <Icon icon={RepeatIcon} className="size-4" strokeWidth={2} />
             {t.client.rescheduleAppointment}
-          </Button>
+          </Button> : null}
           <Button
             type="button"
             variant="dangerOutline"
@@ -145,7 +161,10 @@ export function ConfirmedAppointmentActions({
 
       <Modal
         open={rescheduling}
-        onClose={() => setRescheduling(false)}
+        onClose={() => {
+          setRescheduling(false);
+          setAcknowledgedRelease(false);
+        }}
         title={t.client.rescheduleTitle}
         description={t.client.rescheduleDescription}
         className="sm:!max-w-4xl"
@@ -164,7 +183,7 @@ export function ConfirmedAppointmentActions({
             <Button
               type="button"
               size="lg"
-              disabled={!date || !slot}
+              disabled={!date || !slot || !acknowledgedRelease}
               loading={pending}
               onClick={submitReschedule}
               className="sm:h-10 sm:text-sm"
@@ -174,6 +193,19 @@ export function ConfirmedAppointmentActions({
           </>
         }
       >
+        <Feedback result={feedback && !feedback.ok ? feedback : null} className="mb-3" />
+        <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-foreground">
+          <p>{t.client.rescheduleReleaseWarning(`${formatFullDay(appointment.date, locale)} · ${appointment.time}`)}</p>
+          <label htmlFor={acknowledgeId} className="mt-3 flex cursor-pointer items-start gap-2 font-medium">
+            <Checkbox
+              id={acknowledgeId}
+              checked={acknowledgedRelease}
+              onCheckedChange={(checked) => setAcknowledgedRelease(checked === true)}
+              className="mt-0.5"
+            />
+            <span>{t.client.rescheduleAcknowledge}</span>
+          </label>
+        </div>
         {pickerOpened ? (
           <SlotPicker
             service={service}
@@ -185,11 +217,16 @@ export function ConfirmedAppointmentActions({
               setSlot(null);
             }}
             selectedTime={slot?.time ?? null}
+            selectedChoice={slot}
             onSelectTime={setSlot}
+            onInvalidSelection={() => setSlot(null)}
             appointments={bookedSlots}
             pendingRequests={pendingRequests}
             blockedDates={blockedDates}
+            blockedIntervals={blockedIntervals}
             businessHours={businessHours}
+            earliestStartMs={rescheduleCutoff ?? undefined}
+            excludeAppointment={appointment}
           />
         ) : null}
       </Modal>

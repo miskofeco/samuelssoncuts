@@ -19,8 +19,8 @@ test("admin booking strip shows current, last, and next booking cards with actua
   assert.match(strip, /currentBooking/);
   assert.match(strip, /lastBooking/);
   assert.match(strip, /nextBooking/);
-  assert.match(strip, /const bookedPriceCents = appointment\.requestId\s*\?\s*requestsById\.get\(appointment\.requestId\)\?\.priceCents\s*\?\?\s*servicePriceCents\s*:\s*servicePriceCents/);
-  assert.match(carousel, /{Math\.round\(booking\.priceCents \/ 100\)} €/);
+  assert.match(strip, /const bookedPriceCents = appointment\.priceCents \?\? request\?\.priceCents \?\? servicePriceCents/);
+  assert.match(carousel, /\{\(booking\.priceCents \/ 100\)\.toFixed\(2\)\} €/);
 });
 
 test("admin booking strip shows one snap card at a time with current booking centered by default", () => {

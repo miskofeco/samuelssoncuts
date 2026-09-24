@@ -19,6 +19,7 @@ export default async function AdminAvailabilityPage() {
 
   return (
     <Tabs defaultValue="hours" className="gap-4 sm:gap-6">
+      <h1 className="sr-only">{t.nav.availability}</h1>
       <TabsList className="w-full sm:w-auto sm:min-w-96">
         <TabsTrigger value="hours" className="text-sm">
           {t.admin.availabilityTabHours}

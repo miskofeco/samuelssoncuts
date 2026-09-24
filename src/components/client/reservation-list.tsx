@@ -18,10 +18,11 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
 import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
-import { formatFullDay, serviceById } from "@/domain/schedule";
+import { bookedSlotForRequest, formatFullDay, serviceById } from "@/domain/schedule";
 import type {
   ActionResult,
   BookingRequest,
+  ConfirmedRequestSlot,
   Proposal,
   Service,
 } from "@/domain/types";
@@ -34,11 +35,13 @@ export function ReservationList({
   requests,
   proposals,
   services,
+  confirmedRequestSlots,
   variant,
 }: {
   requests: BookingRequest[];
   proposals: Proposal[];
   services: Service[];
+  confirmedRequestSlots: ConfirmedRequestSlot[];
   /** "active" shows actionable cards with controls; "history" is read-only. */
   variant: "active" | "history";
 }) {
@@ -65,6 +68,7 @@ export function ReservationList({
           request={request}
           proposal={proposals.find((item) => item.id === request.proposalId)}
           service={serviceById(request.serviceId, services)}
+          confirmedSlot={confirmedRequestSlots.find((item) => item.requestId === request.id)}
           variant={variant}
         />
       ))}
@@ -76,11 +80,13 @@ function ReservationCard({
   request,
   proposal,
   service,
+  confirmedSlot,
   variant,
 }: {
   request: BookingRequest;
   proposal?: Proposal;
   service: Service;
+  confirmedSlot?: ConfirmedRequestSlot;
   variant: "active" | "history";
 }) {
   const t = useT();
@@ -92,8 +98,7 @@ function ReservationCard({
   const liveProposal = proposal && proposal.status === "sent" ? proposal : undefined;
   const pendingExactSlot =
     request.status === "pending" && Boolean(request.requestedDate && request.requestedTime);
-  const confirmedExactSlot =
-    request.status === "confirmed" && Boolean(request.requestedDate && request.requestedTime);
+  const bookedSlot = bookedSlotForRequest(request, proposal, confirmedSlot);
 
   function respond(accepted: boolean) {
     if (!liveProposal) return;
@@ -149,7 +154,7 @@ function ReservationCard({
                 {formatFullDay(request.requestedDate as string, locale)} ·{" "}
                 {request.requestedTime as string}
                 {typeof request.priceCents === "number"
-                  ? ` · ${Math.round(request.priceCents / 100)} €`
+                  ? ` · ${(request.priceCents / 100).toFixed(2)} €`
                   : ""}
               </p>
             </div>
@@ -218,13 +223,13 @@ function ReservationCard({
           </div>
         ) : null}
 
-        {request.status === "confirmed" && (proposal || confirmedExactSlot) ? (
+        {request.status === "confirmed" && bookedSlot ? (
           <p className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-300">
             <Icon icon={CalendarCheckIn01Icon} className="size-4" strokeWidth={2} />
             <span className="tabular-nums">
               {t.client.bookedFor(
-                formatFullDay(proposal ? proposal.date : request.requestedDate as string, locale),
-                proposal ? proposal.time : request.requestedTime as string,
+                formatFullDay(bookedSlot.date, locale),
+                bookedSlot.time,
               )}
             </span>
           </p>

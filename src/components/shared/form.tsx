@@ -103,17 +103,17 @@ export function PasswordField({
           type={visible ? "text" : "password"}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy(id, hint, error)}
-          className="pr-11"
+          className="pr-12"
           {...props}
         />
         {/* The wrapper owns the vertical centring: the button's own press
             transform (active:translate-y-px) would otherwise replace it and
             make the toggle jump on click. */}
-        <span className="absolute inset-y-0 right-1 flex items-center">
+        <span className="absolute inset-y-0 right-0 flex items-center">
           <Button
             type="button"
             variant="ghost"
-            size="icon-sm"
+            size="icon"
             onClick={() => setVisible((v) => !v)}
             aria-label={visible ? t.common.hidePassword : t.common.showPassword}
             aria-pressed={visible}

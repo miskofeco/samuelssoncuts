@@ -24,6 +24,7 @@ export default async function BookPage({
         appointments={data.appointments}
         pendingRequests={data.pendingRequests}
         blockedDates={data.blockedDates}
+        blockedIntervals={data.blockedIntervals}
         businessHours={data.businessHours}
         initialServiceId={initialServiceId}
       />

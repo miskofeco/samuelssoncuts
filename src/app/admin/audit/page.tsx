@@ -25,6 +25,7 @@ export default async function AdminAuditPage() {
 
   return (
     <div className="space-y-6">
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t.nav.auditLog}</h1>
       {entries.length === 0 ? (
         <EmptyState title={t.admin.auditEmpty} icon={<Icon icon={ClipboardIcon} />} />
       ) : (

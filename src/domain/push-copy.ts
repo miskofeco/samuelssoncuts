@@ -108,9 +108,9 @@ export function clientCancelledPush(input: ServiceSlot): PushCopy {
   };
 }
 
-export function clientReminderPush(input: ServiceSlot): PushCopy {
+export function clientReminderPush(input: ServiceSlot & { relativeDay?: "today" | "tomorrow" }): PushCopy {
   return {
-    title: "Zajtra máte termín",
+    title: input.relativeDay === "today" ? "Dnes máte termín" : "Zajtra máte termín",
     body: line(input.service, formatPushWhen(input.date, input.time)),
   };
 }

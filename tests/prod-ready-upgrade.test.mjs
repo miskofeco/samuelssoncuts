@@ -33,8 +33,8 @@ test("baseline security headers are configured", () => {
 test("sidebar badge counts are computed server-side and refresh via revalidatePath", () => {
   // The counts come from loadAttentionCounts() (server) and are passed to the
   // sidebar as props, so they update immediately after an admin action (which
-  // calls revalidatePath) — no manual reload needed. The realtime hook only
-  // fetches only the badge counts for background changes by other users.
+  // calls revalidatePath) — no manual reload needed. The realtime hook fetches
+  // badge counts and refreshes only a mounted request/approval list when needed.
   const dashboardData = readFileSync("src/server/dashboard-data.ts", "utf8");
   const adminLayout = readFileSync("src/app/admin/layout.tsx", "utf8");
   const appShell = readFileSync("src/components/layout/app-shell.tsx", "utf8");
@@ -45,7 +45,8 @@ test("sidebar badge counts are computed server-side and refresh via revalidatePa
   assert.match(appShell, /approvals: attention\?\.approvals \?\? 0/);
   assert.match(badgeHook, /export function useAttentionRefresh/);
   assert.match(badgeHook, /fetch\("\/api\/admin\/attention"/);
-  assert.doesNotMatch(badgeHook, /router\.refresh\(\)/);
+  assert.match(badgeHook, /pathname === "\/admin\/approvals" \|\| pathname === "\/admin\/requests"/);
+  assert.match(badgeHook, /ATTENTION_POLL_MS = 30_000/);
 });
 
 test("service image upload failure keeps the modal open and surfaces the error", () => {

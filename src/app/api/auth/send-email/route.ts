@@ -13,6 +13,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
+import { authEmailDeliveries } from "@/domain/auth-email-deliveries";
 import { AuthEmail } from "@/emails/auth-email";
 import { sendEmail } from "@/lib/email";
 import { getSendEmailHookSecret, getSiteUrl } from "@/lib/env";
@@ -58,9 +59,10 @@ function verifySignature(
 }
 
 type HookPayload = {
-  user?: { email?: string };
+  user?: { email?: string; new_email?: string };
   email_data?: {
     token_hash?: string;
+    token_hash_new?: string;
     email_action_type?: string;
   };
 };
@@ -84,11 +86,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const email = payload.user?.email;
-  const tokenHash = payload.email_data?.token_hash;
+  const deliveries = authEmailDeliveries(payload);
   const actionType = payload.email_data?.email_action_type ?? "email";
 
-  if (!email || !tokenHash) {
+  if (deliveries.length === 0) {
     return NextResponse.json({ error: "Missing email or token" }, { status: 400 });
   }
 
@@ -97,10 +98,6 @@ export async function POST(request: NextRequest) {
   // /auth/confirm decides the destination itself, so it cannot become an open
   // redirect.
   const site = getSiteUrl();
-  const confirmUrl = new URL(`${site}/auth/confirm`);
-  confirmUrl.searchParams.set("token_hash", tokenHash);
-  confirmUrl.searchParams.set("type", actionType);
-
   const subjectByType: Record<string, string> = {
     signup: "Potvrďte email - Samuelsson Cuts",
     recovery: "Obnova hesla - Samuelsson Cuts",
@@ -110,11 +107,19 @@ export async function POST(request: NextRequest) {
   };
 
   try {
-    await sendEmail({
-      to: email,
-      subject: subjectByType[actionType] ?? subjectByType.email,
-      react: AuthEmail({ kind: actionType, confirmUrl: confirmUrl.toString() }),
-    });
+    const results = await Promise.all(deliveries.map(({ to, tokenHash }) => {
+      const confirmUrl = new URL(`${site}/auth/confirm`);
+      confirmUrl.searchParams.set("token_hash", tokenHash);
+      confirmUrl.searchParams.set("type", actionType);
+      return sendEmail({
+        to,
+        subject: subjectByType[actionType] ?? subjectByType.email,
+        react: AuthEmail({ kind: actionType, confirmUrl: confirmUrl.toString() }),
+      });
+    }));
+    if (!results.every(Boolean)) {
+      throw new Error("Auth email delivery was not accepted");
+    }
   } catch (error) {
     // If sending fails, return 500 so Supabase surfaces the failure to the user
     // (an auth email that silently vanishes is worse than a visible error).

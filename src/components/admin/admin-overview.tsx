@@ -33,6 +33,8 @@ import type {
   BookingRequest,
   ClientProfile,
   PricingSettings,
+  BusinessHoursDay,
+  BlockedInterval,
   Service,
 } from "@/domain/types";
 import { cn } from "@/lib/classnames";
@@ -46,12 +48,16 @@ export async function AdminOverview({
   appointments,
   services,
   pricingSettings,
+  businessHours,
+  blockedIntervals,
 }: {
   clients: ClientProfile[];
   requests: BookingRequest[];
   appointments: Appointment[];
   services: Service[];
   pricingSettings: PricingSettings;
+  businessHours: BusinessHoursDay[];
+  blockedIntervals: BlockedInterval[];
 }) {
   const t = await getDict();
   const locale = localeFor(await getLang());
@@ -86,7 +92,7 @@ export async function AdminOverview({
     id: appointment.id,
     date: appointment.date,
     time: appointment.time,
-    durationMinutes: serviceById(appointment.serviceId, services).duration,
+    durationMinutes: appointment.durationMinutes ?? serviceById(appointment.serviceId, services).duration,
   }));
   const upcomingItems: AdminUpcomingAppointmentItem[] = upcoming.slice(0, 6).map((appointment) => {
     const client = clients.find((c) => c.id === appointment.clientId);
@@ -94,9 +100,7 @@ export async function AdminOverview({
     const request = appointment.requestId ? requestsById.get(appointment.requestId) : undefined;
     const surcharge = request ? surchargeDetailsForRequest(request, pricingSettings) : null;
     const servicePriceCents = Math.round(service.price * 100);
-    const bookedPriceCents = appointment.requestId
-      ? request?.priceCents ?? servicePriceCents
-      : servicePriceCents;
+    const bookedPriceCents = appointment.priceCents ?? request?.priceCents ?? servicePriceCents;
     const clientName = client?.name ?? appointment.clientName ?? t.admin.clientFallback;
 
     return {
@@ -116,7 +120,7 @@ export async function AdminOverview({
         surchargePercent: surcharge?.percent,
         time: appointment.time,
         date: appointment.date,
-        durationMinutes: service.duration,
+        durationMinutes: appointment.durationMinutes ?? service.duration,
         type: appointment.requestId ? "Confirmed" : "Barber",
         appointmentId: appointment.id,
         requestId: appointment.requestId,
@@ -124,6 +128,7 @@ export async function AdminOverview({
         clientEmail: client?.email,
         clientPhone: client?.phone,
         clientAvatarUrl: client?.avatarUrl,
+        note: appointment.note ?? undefined,
         outcome: appointment.outcome,
       },
     };
@@ -179,6 +184,8 @@ export async function AdminOverview({
           <AdminUpcomingAppointments
             items={upcomingItems}
             bookedSlots={bookedSlots}
+            businessHours={businessHours}
+            blockedIntervals={blockedIntervals}
             emptyTitle={t.admin.noUpcoming}
             labels={{
               name: t.common.fullName,

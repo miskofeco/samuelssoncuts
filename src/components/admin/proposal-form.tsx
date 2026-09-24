@@ -360,7 +360,7 @@ export function ProposalComposer({
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                       {typeof request.priceCents === "number" ? (
                         <span className="font-semibold text-foreground tabular-nums">
-                          {Math.round(request.priceCents / 100)} €
+                          {(request.priceCents / 100).toFixed(2)} €
                         </span>
                       ) : null}
                       {surcharge ? (

@@ -32,6 +32,8 @@ export type Service = {
   description?: string | null;
   duration: number;
   price: number;
+  /** Hidden services remain readable only when attached to the client's history. */
+  active?: boolean;
   imageUrl?: string | null;
 };
 
@@ -87,12 +89,30 @@ export type Appointment = {
   serviceId: string;
   date: string;
   time: string;
+  /** Duration captured by the appointment's stored start/end instants. */
+  durationMinutes?: number;
+  /** Agreed booking price captured in cents, independent of today's catalog. */
+  priceCents?: number | null;
+  note?: string | null;
   /**
    * `cancelled` rows keep the slot's history (outcome analytics) but must never
    * render as booked. Operational loaders return confirmed rows only.
    */
   status: AppointmentStatus;
   outcome?: AppointmentOutcome | null;
+};
+
+/** Half-open UTC range [start, end) during which the barber is unavailable. */
+export type BlockedInterval = { start: string; end: string };
+
+/** Shop-local dates and optional wall times for a human-readable closure. */
+export type BlockedRange = {
+  id: string;
+  start: string;
+  end: string;
+  startTime: string | null;
+  endTime: string | null;
+  reason: string | null;
 };
 
 export type Notification = {
@@ -116,6 +136,8 @@ export type ClientAppointment = {
   /** True when the appointment starts more than 24h from now. */
   canModify: boolean;
 };
+
+export type ConfirmedRequestSlot = { requestId: string; date: string; time: string };
 
 export type AppState = {
   services: Service[];

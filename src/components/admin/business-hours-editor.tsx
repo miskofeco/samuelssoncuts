@@ -139,6 +139,7 @@ export function BusinessHoursEditor({
                     <Field
                       className="w-full min-w-0 max-w-full"
                       label={t.admin.from}
+                      aria-label={`${name} ${t.admin.from}`}
                       type="time"
                       step={1800}
                       value={day.opensAt}
@@ -150,6 +151,7 @@ export function BusinessHoursEditor({
                     <Field
                       className="w-full min-w-0 max-w-full"
                       label={t.admin.to}
+                      aria-label={`${name} ${t.admin.to}`}
                       type="time"
                       step={1800}
                       value={day.closesAt}

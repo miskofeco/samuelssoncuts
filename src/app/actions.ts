@@ -22,6 +22,7 @@ import { BookingRequestDeclinedEmail } from "@/emails/booking-request-declined";
 import { ClientRespondedEmail } from "@/emails/client-responded";
 import { SlotTakenEmail } from "@/emails/slot-taken";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { deleteClientAccount } from "@/server/account-deletion";
 import { createClient } from "@/lib/supabase/server";
 import {
   addDaysToDate,
@@ -61,7 +62,7 @@ import {
 import { authErrorPath, authNoticePath } from "@/i18n/auth-notices";
 import { recordAdminAction } from "@/server/audit";
 import { notificationOrFilter } from "@/server/dashboard-data";
-import { quoteClientSlot } from "@/server/booking-pricing";
+import { quoteAdminSlot, quoteClientSlot } from "@/server/booking-pricing";
 import { getShopBarberEmail, getShopBarberId } from "@/server/shop-barber";
 import { enforceRateLimit } from "@/server/rate-limit";
 import { createAdminNotification, createNotification, createNotifications } from "@/server/notifications";
@@ -76,6 +77,8 @@ const PASSWORD_MAX = 72;
 const passwordSchema = z.string().min(PASSWORD_MIN).max(PASSWORD_MAX);
 
 const oauthProviderSchema = z.enum(["google", "apple"]);
+const shopDateSchema = z.iso.date();
+const shopTimeSchema = z.iso.time({ precision: -1 });
 
 const consentSchema = z.object({
   functional: z.boolean(),
@@ -88,15 +91,15 @@ const consentSchema = z.object({
 // New flow: the client picks an exact date + time for the chosen service.
 const createRequestSchema = z.object({
   serviceId: z.uuid(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time: z.string().regex(/^\d{2}:\d{2}$/),
+  date: shopDateSchema,
+  time: shopTimeSchema,
   note: z.string().max(1000).optional(),
 });
 
 const proposeSchema = z.object({
   requestId: z.uuid(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time: z.string().regex(/^\d{2}:\d{2}$/),
+  date: shopDateSchema,
+  time: shopTimeSchema,
   note: z.string().max(1000).optional(),
 });
 
@@ -105,8 +108,9 @@ const adminBookingSchema = z
     clientId: z.uuid().optional(),
     customerName: z.string().trim().min(1).max(120).optional(),
     serviceId: z.uuid(),
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    time: z.string().regex(/^\d{2}:\d{2}$/),
+    date: shopDateSchema,
+    time: shopTimeSchema,
+    priceCents: z.number().int().min(0).max(1_000_000),
     note: z.string().max(1000).optional(),
   })
   // Exactly one of clientId / customerName: an existing client or a walk-in.
@@ -117,8 +121,8 @@ const adminBookingSchema = z
 
 const rescheduleSchema = z.object({
   appointmentId: z.uuid(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time: z.string().regex(/^\d{2}:\d{2}$/),
+  date: shopDateSchema,
+  time: shopTimeSchema,
   note: z.string().max(1000).optional(),
 });
 
@@ -132,8 +136,8 @@ const appointmentOutcomeSchema = z.enum(["completed", "no_show"]);
 const toggleServiceSchema = z.object({ serviceId: z.uuid(), active: z.boolean() });
 const clientRescheduleSchema = z.object({
   appointmentId: z.uuid(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time: z.string().regex(/^\d{2}:\d{2}$/),
+    date: shopDateSchema,
+    time: shopTimeSchema,
 });
 const declineRequestSchema = z.object({
   requestId: z.uuid(),
@@ -160,20 +164,20 @@ const pricingSettingsSchema = z.object({
 });
 
 const blockDateSchema = z.object({
-  start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  start: shopDateSchema,
+  end: shopDateSchema,
   reason: z.string().max(200).optional(),
   // Optional time slice on the start date (e.g. a lunch break or a 2–4pm gap).
   // When both are present, only that window on `start` is blocked, not full days.
-  startTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  startTime: shopTimeSchema.optional(),
+  endTime: shopTimeSchema.optional(),
 });
 
 const businessHoursSchema = z.array(
   z.object({
     weekday: z.number().int().min(0).max(6),
-    opensAt: z.string().regex(/^\d{2}:\d{2}$/),
-    closesAt: z.string().regex(/^\d{2}:\d{2}$/),
+    opensAt: shopTimeSchema,
+    closesAt: shopTimeSchema,
     closed: z.boolean(),
   }),
 )
@@ -527,6 +531,18 @@ export async function rotateCalendarTokenAction(): Promise<ActionResult> {
 
 export async function signOutAction() {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    // A browser push endpoint belongs to the device, not the session. The
+    // server cannot identify this browser's endpoint during a form action, so
+    // revoke this account's endpoints before signing out. Other signed-in
+    // devices reconcile their existing opt-in when their shell wakes.
+    const { error } = await getSupabaseAdminClient()
+      .from("push_subscriptions")
+      .delete()
+      .eq("user_id", user.id);
+    if (error) await reportError("auth-sign-out-push", error, { userId: user.id });
+  }
   await supabase.auth.signOut();
   redirect("/login");
 }
@@ -994,76 +1010,7 @@ export async function deleteClientAction(clientId: string): Promise<ActionResult
   }
 
   try {
-    const adminSupabase = getSupabaseAdminClient();
-    const { data: requests, error: requestListError } = await adminSupabase
-      .from("booking_requests")
-      .select("id")
-      .eq("client_id", clientId);
-
-    if (requestListError) {
-      await reportError("delete-client", requestListError, { clientId, phase: "list-requests" });
-      return { ok: false, error: requestListError.message };
-    }
-
-    const requestIds = (requests ?? []).map((request) => request.id);
-
-    const { error: appointmentClientDeleteError } = await adminSupabase
-      .from("appointments")
-      .delete()
-      .eq("client_id", clientId);
-
-    if (appointmentClientDeleteError) {
-      await reportError("delete-client", appointmentClientDeleteError, {
-        clientId,
-        phase: "delete-client-appointments",
-      });
-      return { ok: false, error: appointmentClientDeleteError.message };
-    }
-
-    if (requestIds.length > 0) {
-      const { error: appointmentRequestDeleteError } = await adminSupabase
-        .from("appointments")
-        .delete()
-        .in("request_id", requestIds);
-
-      if (appointmentRequestDeleteError) {
-        await reportError("delete-client", appointmentRequestDeleteError, {
-          clientId,
-          phase: "delete-request-appointments",
-        });
-        return { ok: false, error: appointmentRequestDeleteError.message };
-      }
-    }
-
-    const { error: clearSelectedProposalError } = await adminSupabase
-      .from("booking_requests")
-      .update({ selected_proposal_id: null })
-      .eq("client_id", clientId);
-
-    if (clearSelectedProposalError) {
-      await reportError("delete-client", clearSelectedProposalError, {
-        clientId,
-        phase: "clear-selected-proposal",
-      });
-      return { ok: false, error: clearSelectedProposalError.message };
-    }
-
-    const { error: requestDeleteError } = await adminSupabase
-      .from("booking_requests")
-      .delete()
-      .eq("client_id", clientId);
-
-    if (requestDeleteError) {
-      await reportError("delete-client", requestDeleteError, { clientId, phase: "delete-requests" });
-      return { ok: false, error: requestDeleteError.message };
-    }
-
-    const { error } = await adminSupabase.auth.admin.deleteUser(clientId);
-
-    if (error) {
-      await reportError("delete-client", error, { clientId });
-      return { ok: false, error: error.message };
-    }
+    await deleteClientAccount(clientId);
   } catch (error) {
     await reportError("delete-client", error, { clientId });
     return { ok: false, error: t.feedback.couldNotUpdateClient };
@@ -1099,6 +1046,9 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
 
   if (!isStartInFuture(start)) {
     return { ok: false, error: t.feedback.chooseFutureTime };
+  }
+  if (!isStartInClientBookingWindow(start)) {
+    return { ok: false, error: t.feedback.chooseWithinTwoWeeks };
   }
 
   const { data: request, error: requestError } = await supabase
@@ -1150,33 +1100,16 @@ export async function proposeAppointmentAction(input: unknown): Promise<ActionRe
     return { ok: false, error };
   }
 
-  // Supersede any earlier outstanding proposal so the client only sees the latest.
-  await supabase
-    .from("appointment_proposals")
-    .update({ status: "expired" })
-    .eq("request_id", parsed.data.requestId)
-    .eq("status", "sent");
+  const { data: proposalId, error: proposalError } = await getSupabaseAdminClient()
+    .rpc("admin_replace_proposal", {
+      p_request_id: parsed.data.requestId,
+      p_start: start,
+      p_note: parsed.data.note ?? null,
+    });
 
-  const { data: proposal, error: proposalError } = await supabase
-    .from("appointment_proposals")
-    .insert({
-      request_id: parsed.data.requestId,
-      barber_id: await getShopBarberId(),
-      starts_at: start,
-      ends_at: end,
-      note: parsed.data.note ?? null,
-    })
-    .select("id")
-    .single();
-
-  if (proposalError || !proposal) {
+  if (proposalError || !proposalId) {
     return { ok: false, error: proposalError?.message ?? t.feedback.unableSendProposal };
   }
-
-  await supabase
-    .from("booking_requests")
-    .update({ status: "proposed", selected_proposal_id: proposal.id })
-    .eq("id", parsed.data.requestId);
 
   await createNotification(supabase, {
     user_id: request.client_id,
@@ -1673,7 +1606,7 @@ export async function cancelAppointmentAdminAction(input: unknown): Promise<Acti
 }
 
 export async function createAdminBookingAction(input: unknown): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const t = await getDict();
   const parsed = adminBookingSchema.safeParse(input);
 
@@ -1692,26 +1625,34 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
     return { ok: false, error: t.feedback.chooseFutureTime };
   }
 
-  // An existing client must be a real, non-admin profile.
-  if (parsed.data.clientId) {
-    const { data: clientProfile } = await supabase
-      .from("profiles")
-      .select("id, role")
-      .eq("id", parsed.data.clientId)
-      .maybeSingle();
+  const limit = await enforceRateLimit("booking:admin-create", {
+    identity: admin.id,
+    limit: 120,
+    windowSeconds: 10 * 60,
+  });
+  if (!limit.ok) return { ok: false, error: limit.error };
 
-    if (!clientProfile || clientProfile.role === "admin") {
-      return { ok: false, error: t.feedback.chooseValidClient };
-    }
+  const clientProfileResult = parsed.data.clientId
+    ? await supabase
+      .from("profiles")
+      .select("id, role, approval_status, email, full_name")
+      .eq("id", parsed.data.clientId)
+      .maybeSingle()
+    : null;
+  const clientProfile = clientProfileResult?.data;
+
+  if (parsed.data.clientId &&
+    (!clientProfile || clientProfile.role !== "client" || clientProfile.approval_status !== "approved")) {
+    return { ok: false, error: t.feedback.chooseValidClient };
   }
 
   const { data: service, error: serviceError } = await supabase
     .from("services")
-    .select("duration_minutes")
+    .select("name, duration_minutes, price_cents, active")
     .eq("id", parsed.data.serviceId)
     .single();
 
-  if (serviceError || !service) {
+  if (serviceError || !service || !service.active) {
     return { ok: false, error: serviceError?.message ?? t.feedback.serviceNotFound };
   }
 
@@ -1734,31 +1675,71 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
     return { ok: false, error };
   }
 
-  const { error: insertError } = await supabase.from("appointments").insert({
-    request_id: null,
-    proposal_id: null,
-    client_id: parsed.data.clientId ?? null,
-    customer_name: parsed.data.customerName ?? null,
-    barber_id: await getShopBarberId(),
-    service_id: parsed.data.serviceId,
-    starts_at: start,
-    ends_at: end,
+  const quote = await quoteAdminSlot(supabase, {
+    date: parsed.data.date,
+    time: parsed.data.time,
+    durationMinutes: service.duration_minutes,
+    basePriceCents: service.price_cents,
+  });
+  if (!quote.ok) {
+    return { ok: false, error: t.feedback.slotTaken };
+  }
+
+  const { data: appointmentId, error: insertError } = await getSupabaseAdminClient().rpc("admin_create_booking_priced", {
+    p_client_id: parsed.data.clientId ?? null,
+    p_customer_name: parsed.data.customerName ?? null,
+    p_service_id: parsed.data.serviceId,
+    p_start: start,
+    p_price_cents: parsed.data.priceCents,
+    p_surcharge: quote.priceCents === parsed.data.priceCents && quote.surcharge,
+    p_note: parsed.data.note ?? null,
   });
 
-  if (insertError) {
+  if (insertError || !appointmentId) {
+    if (insertError) await reportError("admin-create-booking", insertError);
     return { ok: false, error: t.feedback.slotTaken };
+  }
+
+  if (clientProfile) {
+    await createNotification(supabase, {
+      user_id: clientProfile.id,
+      channel: "email",
+      recipient: clientProfile.email ?? "client",
+      subject: "Váš termín je potvrdený",
+      push: clientConfirmedPush({ service: service.name, date: parsed.data.date, time: parsed.data.time }),
+      pushUrl: "/client/reservations",
+    });
+    if (clientProfile.email) {
+      await sendEmail({
+        to: clientProfile.email,
+        subject: "Váš termín je potvrdený",
+        react: AppointmentConfirmedEmail({
+          clientName: clientProfile.full_name ?? "klient",
+          service: service.name,
+          date: parsed.data.date,
+          time: parsed.data.time,
+          appointmentId,
+          startIso: start,
+          endIso: end,
+        }),
+      });
+    }
   }
 
   await recordAdminAction("appointment.create", {
     targetType: "appointment",
+    targetId: appointmentId,
     detail: {
       date: parsed.data.date,
       time: parsed.data.time,
       walkIn: !parsed.data.clientId,
+      priceCents: parsed.data.priceCents,
+      customPrice: parsed.data.priceCents !== quote.priceCents,
     },
   });
 
   revalidatePath("/admin", "layout");
+  revalidatePath("/client", "layout");
   return { ok: true, message: t.feedback.bookingAdded };
 }
 
@@ -2374,8 +2355,25 @@ export async function blockDateAction(input: {
     ends = zonedDateTimeToUtcIso(addDaysToDate(parsed.data.end, 1), "00:00");
   }
 
+  const barberId = await getShopBarberId();
+  const { data: affected, error: affectedError } = await supabase
+    .from("appointments")
+    .select("id")
+    .eq("barber_id", barberId)
+    .eq("status", "confirmed")
+    .lt("starts_at", ends)
+    .gt("ends_at", starts)
+    .limit(1);
+  if (affectedError) {
+    await reportError("availability-block-conflicts", affectedError);
+    return { ok: false, error: t.common.somethingWentWrong };
+  }
+  if (affected?.length) {
+    return { ok: false, error: t.feedback.availabilityConflictsWithBookings };
+  }
+
   const { error } = await supabase.from("blocked_times").insert({
-    barber_id: await getShopBarberId(),
+    barber_id: barberId,
     starts_at: starts,
     ends_at: ends,
     reason: parsed.data.reason ?? null,
@@ -2552,6 +2550,35 @@ export async function saveBusinessHoursAction(
   }
 
   const barberId = await getShopBarberId();
+  const supabase = getSupabaseAdminClient();
+  // Refuse hours that would put any still-confirmed appointment outside the
+  // new schedule. Check every page; the Data API can otherwise cap the result.
+  for (let offset = 0; ; offset += 500) {
+    const { data: appointments, error: appointmentsError } = await supabase
+      .from("appointments")
+      .select("starts_at, ends_at")
+      .eq("barber_id", barberId)
+      .eq("status", "confirmed")
+      .gte("ends_at", new Date().toISOString())
+      .order("starts_at")
+      .range(offset, offset + 499);
+    if (appointmentsError) {
+      await reportError("business-hours-conflicts", appointmentsError);
+      return { ok: false, error: t.common.somethingWentWrong };
+    }
+    for (const appointment of appointments ?? []) {
+      const date = dateInShopTimeZone(appointment.starts_at);
+      const endDate = dateInShopTimeZone(appointment.ends_at);
+      const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+      const planned = parsed.data.find((day) => day.weekday === weekday);
+      if (!planned || planned.closed || endDate !== date ||
+        timeFromIso(appointment.starts_at) < planned.opensAt ||
+        timeFromIso(appointment.ends_at) > planned.closesAt) {
+        return { ok: false, error: t.feedback.availabilityConflictsWithBookings };
+      }
+    }
+    if ((appointments ?? []).length < 500) break;
+  }
   const rows = parsed.data.map((d) => ({
     barber_id: barberId,
     weekday: d.weekday,
@@ -2560,7 +2587,7 @@ export async function saveBusinessHoursAction(
     closed: d.closed,
   }));
 
-  const { error } = await getSupabaseAdminClient()
+  const { error } = await supabase
     .from("business_hours")
     .upsert(rows, { onConflict: "barber_id,weekday" });
 
@@ -2889,43 +2916,7 @@ export async function deleteMyAccountAction(): Promise<ActionResult> {
 
   const clientId = profile.id;
   try {
-    const adminSupabase = getSupabaseAdminClient();
-
-    const { data: requests, error: requestListError } = await adminSupabase
-      .from("booking_requests")
-      .select("id")
-      .eq("client_id", clientId);
-    if (requestListError) throw requestListError;
-    const requestIds = (requests ?? []).map((r) => r.id);
-
-    // Every step is checked: a half-finished erasure must surface as a
-    // failure, not silently rely on cascade behaviour.
-    const steps = [
-      adminSupabase.from("appointments").delete().eq("client_id", clientId),
-      ...(requestIds.length > 0
-        ? [adminSupabase.from("appointments").delete().in("request_id", requestIds)]
-        : []),
-    ];
-    for (const step of steps) {
-      const { error: stepError } = await step;
-      if (stepError) throw stepError;
-    }
-    const { error: unlinkError } = await adminSupabase
-      .from("booking_requests")
-      .update({ selected_proposal_id: null })
-      .eq("client_id", clientId);
-    if (unlinkError) throw unlinkError;
-    const { error: requestDeleteError } = await adminSupabase
-      .from("booking_requests")
-      .delete()
-      .eq("client_id", clientId);
-    if (requestDeleteError) throw requestDeleteError;
-
-    const { error } = await adminSupabase.auth.admin.deleteUser(clientId);
-    if (error) {
-      await reportError("self-delete", error, { clientId });
-      return { ok: false, error: t.feedback.couldNotDeleteAccount };
-    }
+    await deleteClientAccount(clientId);
   } catch (error) {
     await reportError("self-delete", error, { clientId });
     return { ok: false, error: t.feedback.couldNotDeleteAccount };

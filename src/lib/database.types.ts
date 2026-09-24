@@ -234,6 +234,8 @@ export type Database = {
           service_id: string;
           starts_at: string;
           ends_at: string;
+          price_cents: number;
+          note: string | null;
           status: "confirmed" | "cancelled";
           reminded_at: string | null;
           outcome: "completed" | "no_show" | "cancelled" | null;
@@ -249,6 +251,8 @@ export type Database = {
           service_id: string;
           starts_at: string;
           ends_at: string;
+          price_cents?: number;
+          note?: string | null;
           status?: "confirmed" | "cancelled";
           reminded_at?: string | null;
           outcome?: "completed" | "no_show" | "cancelled" | null;
@@ -360,6 +364,40 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      delete_client_account: {
+        Args: { p_client_id: string };
+        Returns: undefined;
+      };
+      admin_create_booking: {
+        Args: {
+          p_client_id: string | null;
+          p_customer_name: string | null;
+          p_service_id: string;
+          p_start: string;
+          p_note?: string | null;
+        };
+        Returns: string;
+      };
+      admin_create_booking_priced: {
+        Args: {
+          p_client_id: string | null;
+          p_customer_name: string | null;
+          p_service_id: string;
+          p_start: string;
+          p_price_cents: number;
+          p_surcharge: boolean;
+          p_note?: string | null;
+        };
+        Returns: string;
+      };
+      admin_replace_proposal: {
+        Args: {
+          p_request_id: string;
+          p_start: string;
+          p_note?: string | null;
+        };
+        Returns: string;
+      };
       phone_taken: {
         Args: { p_phone: string };
         Returns: boolean;

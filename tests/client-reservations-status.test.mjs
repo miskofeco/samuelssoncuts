@@ -12,12 +12,8 @@ test("exact-slot awaiting confirmation panel only renders for pending requests",
   assert.match(reservationList, /\{pendingExactSlot \?/);
 });
 
-test("confirmed exact-slot reservations show booked summary instead of awaiting label", () => {
-  assert.match(
-    reservationList,
-    /const confirmedExactSlot =\s*request\.status === "confirmed" && Boolean\(request\.requestedDate && request\.requestedTime\)/,
-  );
-  assert.match(reservationList, /request\.status === "confirmed" && \(proposal \|\| confirmedExactSlot\)/);
-  assert.match(reservationList, /proposal \? proposal\.date : request\.requestedDate as string/);
-  assert.match(reservationList, /proposal \? proposal\.time : request\.requestedTime as string/);
+test("confirmed reservations use the actual appointment before stale proposal history", () => {
+  assert.match(reservationList, /confirmedRequestSlots\.find\(\(item\) => item\.requestId === request\.id\)/);
+  assert.match(reservationList, /bookedSlotForRequest\(request, proposal, confirmedSlot\)/);
+  assert.match(reservationList, /request\.status === "confirmed" && bookedSlot/);
 });

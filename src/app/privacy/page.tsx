@@ -4,6 +4,7 @@ import { LegalPage } from "@/components/shared/legal-page";
 import { localeFor } from "@/i18n/config";
 import { getDict, getLang } from "@/i18n/server";
 import { LEGAL_LAST_UPDATED } from "@/lib/legal";
+import { getShopAddress, getShopPhone } from "@/lib/env";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getDict();
@@ -25,6 +26,8 @@ export default async function PrivacyPage() {
       backLabel={t.legal.backToApp}
       lastUpdatedLabel={t.legal.lastUpdatedLabel}
       lastUpdated={lastUpdated}
+      contactPhone={getShopPhone()}
+      contactAddress={getShopAddress()}
     />
   );
 }

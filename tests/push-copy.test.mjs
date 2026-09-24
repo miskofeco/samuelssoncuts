@@ -55,6 +55,10 @@ test("client pushes omit the client's own name and keep bodies to structured det
 
   const reminder = clientReminderPush({ service: "Signature cut", date: "2026-10-01", time: "15:00" });
   assert.equal(reminder.title, "Zajtra máte termín");
+  const sameDayReminder = clientReminderPush({
+    service: "Signature cut", date: "2026-10-01", time: "15:00", relativeDay: "today",
+  });
+  assert.equal(sameDayReminder.title, "Dnes máte termín");
 });
 
 test("every push-enabled notification passes structured push copy", () => {

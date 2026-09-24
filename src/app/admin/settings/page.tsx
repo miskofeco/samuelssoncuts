@@ -22,6 +22,7 @@ export default async function AdminSettingsPage() {
 
   return (
     <div className="space-y-6">
+      <h1 className="sr-only">{t.nav.settings}</h1>
       {/* Tabs keep each area short on phones; Radix handles roving focus. */}
       <Tabs defaultValue="services" className="gap-4 sm:gap-6">
         <TabsList className="w-full sm:w-auto sm:min-w-96">

@@ -5,6 +5,7 @@ import webpush from "web-push";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/database.types";
+import { isAllowedPushEndpoint } from "@/domain/push-endpoint";
 import { getSiteUrl, getWebPushEnv } from "@/lib/env";
 import { getShopBarberEmail } from "@/server/shop-barber";
 import { reportError } from "@/lib/observability";
@@ -137,6 +138,18 @@ async function markPushFailure(subscription: PushSubscriptionRow, error: unknown
     .eq("id", subscription.id);
 }
 
+async function removeInvalidPushEndpoint(subscription: PushSubscriptionRow) {
+  const supabase = getSupabaseAdminClient();
+  await supabase
+    .from("push_subscriptions")
+    .delete()
+    .eq("id", subscription.id);
+  await reportError("push-notification", new Error("Invalid push endpoint blocked"), {
+    userId: subscription.user_id,
+    phase: "endpoint-validation",
+  });
+}
+
 export async function sendPushToUser(
   userId: string,
   notification: { subject: string; body?: string | null; push?: PushCopy | null },
@@ -149,7 +162,9 @@ export async function sendPushToUser(
     .from("push_subscriptions")
     .select("*")
     .eq("user_id", userId)
-    .eq("enabled", true);
+    .eq("enabled", true)
+    .order("updated_at", { ascending: false })
+    .limit(8);
 
   if (error) {
     await reportError("push-notification", error, { userId, phase: "load-subscriptions" });
@@ -170,6 +185,10 @@ export async function sendPushToUser(
 
   for (let index = 0; index < subscriptions.length; index += 4) {
     await Promise.all(subscriptions.slice(index, index + 4).map(async (subscription) => {
+      if (!isAllowedPushEndpoint(subscription.endpoint)) {
+        await removeInvalidPushEndpoint(subscription);
+        return;
+      }
       try {
         await webpush.sendNotification(
           {
@@ -183,6 +202,7 @@ export async function sendPushToUser(
           {
             TTL: 60 * 60 * 24,
             urgency: "normal",
+            timeout: 5_000,
           },
         );
         await markPushSuccess(subscription);
@@ -190,7 +210,7 @@ export async function sendPushToUser(
         await markPushFailure(subscription, error);
         await reportError("push-notification", error, {
           userId,
-          endpoint: subscription.endpoint.slice(0, 80),
+          subscriptionId: subscription.id,
         });
       }
     }));

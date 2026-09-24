@@ -235,15 +235,18 @@ const en = {
     rescheduleAppointment: "Reschedule",
     rescheduleTitle: "Request a new time",
     rescheduleDescription: "Pick a new slot — the barber will confirm it.",
+    rescheduleReleaseWarning: (oldSlot: string) =>
+      `Requesting a new time immediately cancels your confirmed appointment on ${oldSlot}. The barber may decline the new request, leaving you without a booking.`,
+    rescheduleAcknowledge: "I understand my confirmed appointment will be cancelled now.",
     rescheduleSubmit: "Request this time",
     lockedNotice: "Changes must be made more than 24 hours in advance. Contact the barber for last-minute changes.",
     confirmCancelTitle: "Cancel this appointment?",
     confirmCancelBody: "This frees the slot and lets the barber know. This can't be undone.",
     keepAppointment: "Keep it",
-    blockedNoticeEyebrow: "Upcoming closures",
-    blockedNoticeTitle: "Barber unavailable on these days",
+    blockedNoticeEyebrow: "Planned unavailability",
+    blockedNoticeTitle: "Barber unavailable at these times",
     blockedNoticeDescription:
-      "The shop is blocked on the dates below. Book an available appointment before or after those days.",
+      "See the unavailable periods below. Other times may still be bookable.",
     // Overview stat cards
     openRequests: "Open requests",
     openRequestsHint: "Waiting for a time",
@@ -348,7 +351,7 @@ const en = {
     pricingDescription:
       "Set extra percentage pricing for gap bookings and VIP bookings from 17:00.",
     gapSurchargePercent: "Non-row booking extra (%)",
-    vipSurchargePercent: "VIP after 17:00 extra (%)",
+    vipSurchargePercent: "VIP from 17:00 extra (%)",
     // Overview
     pendingApprovals: "Pending approvals",
     openRequests: "Open requests",
@@ -466,7 +469,7 @@ const en = {
     // Add-booking modal
     addBookingTitle: "Add booking",
     addBookingDescription:
-      "Book an existing client or a walk-in. The slot is reserved immediately.",
+      "Book an existing client or a walk-in. The suggested price can be changed before the slot is reserved.",
     customer: "Customer",
     existingClient: "Existing client",
     walkIn: "Walk-in",
@@ -476,6 +479,10 @@ const en = {
     walkInName: "Walk-in name",
     walkInPlaceholder: "e.g. John (phone booking)",
     time: "Time",
+    bookingPrice: "Booking price (€)",
+    suggestedPrice: "Suggested price",
+    useSuggestedPrice: "Use suggested price",
+    invalidBookingPrice: "Enter an amount from 0 to 10,000 € with at most two decimal places.",
     note: "Note",
     bookingNotePlaceholder: "Anything to remember about this booking?",
     adding: "Adding…",
@@ -722,6 +729,7 @@ const en = {
     pickValidStartEnd: "Pick valid start and end dates.",
     endAfterStart: "End date must be on or after the start date.",
     datesBlocked: "Dates blocked.",
+    availabilityConflictsWithBookings: "Confirmed appointments use this time. Reschedule or cancel them before changing availability.",
     datesReopened: "Dates reopened.",
     businessHoursSaved: "Business hours saved.",
     cannotCancelRequest: "You cannot cancel this request.",
@@ -905,7 +913,7 @@ const en = {
         },
         {
           heading: "Changes, cancellations & no-shows",
-          body: "You may cancel a pending or proposed request from your reservations page. Confirmed appointments are managed by the barbershop — contact them directly to change or cancel a confirmed booking. Please give as much notice as possible. Repeated no-shows or abuse of the booking system may result in your account being blocked.",
+          body: "You may cancel a pending or proposed request from your reservations page. You may cancel a confirmed appointment or ask to reschedule it in the app more than 24 hours before it begins. Asking to reschedule immediately releases your original appointment; the new time is only reserved after the barber confirms it. Within 24 hours, contact the barbershop directly. Please give as much notice as possible. Repeated no-shows or abuse of the booking system may result in your account being blocked.",
         },
         {
           heading: "Acceptable use",
@@ -1160,15 +1168,18 @@ const sk: Dict = {
     rescheduleAppointment: "Presunúť",
     rescheduleTitle: "Požiadať o nový čas",
     rescheduleDescription: "Vyberte nový termín — barber ho potvrdí.",
+    rescheduleReleaseWarning: (oldSlot: string) =>
+      `Požiadaním o nový čas sa váš potvrdený termín ${oldSlot} okamžite zruší. Barber môže novú žiadosť zamietnuť a zostanete bez rezervácie.`,
+    rescheduleAcknowledge: "Rozumiem, že môj potvrdený termín sa teraz zruší.",
     rescheduleSubmit: "Požiadať o tento čas",
     lockedNotice: "Zmeny je potrebné vykonať viac ako 24 hodín vopred. Pre zmeny na poslednú chvíľu kontaktujte barbera.",
     confirmCancelTitle: "Zrušiť tento termín?",
     confirmCancelBody: "Tým sa uvoľní termín a barber bude informovaný. Túto akciu nie je možné vrátiť späť.",
     keepAppointment: "Ponechať",
-    blockedNoticeEyebrow: "Plánované zatvorenie",
-    blockedNoticeTitle: "Barber nebude dostupný v týchto dňoch",
+    blockedNoticeEyebrow: "Plánovaná nedostupnosť",
+    blockedNoticeTitle: "Barber nebude dostupný v týchto termínoch",
     blockedNoticeDescription:
-      "V dátumoch nižšie je prevádzka blokovaná. Rezervujte si dostupný termín pred nimi alebo po nich.",
+      "Nižšie sú uvedené nedostupné termíny. Iné časy môžu byť stále voľné.",
     openRequests: "Otvorené žiadosti",
     openRequestsHint: "Čaká na termín",
     needsReply: "Potrebuje vašu reakciu",
@@ -1270,7 +1281,7 @@ const sk: Dict = {
     pricingDescription:
       "Nastavte percentuálny príplatok pre rezervácie mimo radu a VIP rezervácie od 17:00.",
     gapSurchargePercent: "Príplatok mimo radu (%)",
-    vipSurchargePercent: "VIP príplatok po 17:00 (%)",
+    vipSurchargePercent: "VIP príplatok od 17:00 (%)",
     pendingApprovals: "Čakajúce schválenia",
     openRequests: "Otvorené žiadosti",
     openRequestsHint: "Potrebujú navrhnutý čas",
@@ -1383,7 +1394,7 @@ const sk: Dict = {
     dayFull: "Pre túto službu už v tento deň nie sú voľné termíny.",
     addBookingTitle: "Pridať rezerváciu",
     addBookingDescription:
-      "Rezervujte existujúceho klienta alebo náhodného zákazníka. Termín sa rezervuje okamžite.",
+      "Rezervujte existujúceho klienta alebo náhodného zákazníka. Navrhovanú cenu môžete pred rezerváciou zmeniť.",
     customer: "Zákazník",
     existingClient: "Existujúci klient",
     walkIn: "Náhodný zákazník",
@@ -1394,6 +1405,10 @@ const sk: Dict = {
     walkInName: "Meno zákazníka",
     walkInPlaceholder: "napr. Jano (telefonická rezervácia)",
     time: "Čas",
+    bookingPrice: "Cena rezervácie (€)",
+    suggestedPrice: "Navrhovaná cena",
+    useSuggestedPrice: "Použiť navrhovanú cenu",
+    invalidBookingPrice: "Zadajte sumu od 0 do 10 000 € s najviac dvoma desatinnými miestami.",
     note: "Poznámka",
     bookingNotePlaceholder: "Niečo, čo si treba pri tejto rezervácii zapamätať?",
     adding: "Pridávam…",
@@ -1634,6 +1649,7 @@ const sk: Dict = {
     pickValidStartEnd: "Vyberte platný počiatočný a koncový dátum.",
     endAfterStart: "Koncový dátum musí byť rovnaký alebo neskorší ako počiatočný.",
     datesBlocked: "Dni blokované.",
+    availabilityConflictsWithBookings: "V tomto čase sú potvrdené termíny. Pred zmenou dostupnosti ich presuňte alebo zrušte.",
     datesReopened: "Dni znovu otvorené.",
     businessHoursSaved: "Otváracie hodiny uložené.",
     cannotCancelRequest: "Túto žiadosť nemôžete zrušiť.",
@@ -1817,7 +1833,7 @@ const sk: Dict = {
         },
         {
           heading: "Zmeny, zrušenia a neúčasť",
-          body: "Čakajúcu alebo navrhnutú žiadosť môžete zrušiť na stránke svojich rezervácií. Potvrdené termíny spravuje Barbershop — pre zmenu alebo zrušenie potvrdenej rezervácie ho kontaktujte priamo. Oznámte to prosím čo najskôr. Opakovaná neúčasť alebo zneužívanie rezervačného systému môže viesť k zablokovaniu vášho účtu.",
+          body: "Čakajúcu alebo navrhnutú žiadosť môžete zrušiť na stránke svojich rezervácií. Potvrdený termín môžete v aplikácii zrušiť alebo požiadať o jeho zmenu viac ako 24 hodín pred začiatkom. Žiadosťou o zmenu sa pôvodný termín okamžite uvoľní; nový termín bude rezervovaný až po potvrdení barberom. Ak do termínu zostáva menej ako 24 hodín, kontaktujte prevádzku priamo. Oznámte zmenu čo najskôr. Opakovaná neúčasť alebo zneužívanie rezervačného systému môže viesť k zablokovaniu vášho účtu.",
         },
         {
           heading: "Prijateľné používanie",

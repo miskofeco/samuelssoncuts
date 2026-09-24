@@ -92,9 +92,19 @@ test("stale pending requests and sent proposals are closed after their start", a
           calls.push(["lt", table, column, value]);
           return builder;
         },
+        in(column, values) {
+          calls.push(["in", table, column, values]);
+          return builder;
+        },
         select(columns) {
           calls.push(["select", table, columns]);
-          return Promise.resolve({ count: counts[table], error: null });
+          return Promise.resolve({
+            count: counts[table],
+            data: table === "appointment_proposals"
+              ? [{ id: "expired-a" }, { id: "expired-b" }]
+              : [],
+            error: null,
+          });
         },
       };
       return builder;
@@ -118,6 +128,11 @@ test("stale pending requests and sent proposals are closed after their start", a
     ["eq", "appointment_proposals", "status", "sent"],
     ["lt", "appointment_proposals", "starts_at", "2026-07-24T15:30:00.000Z"],
     ["select", "appointment_proposals", "id"],
+    ["from", "booking_requests"],
+    ["update", "booking_requests", { status: "declined", selected_proposal_id: null }, { count: "exact" }],
+    ["eq", "booking_requests", "status", "proposed"],
+    ["in", "booking_requests", "selected_proposal_id", ["expired-a", "expired-b"]],
+    ["select", "booking_requests", "id"],
   ]);
 });
 

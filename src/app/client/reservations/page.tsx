@@ -38,6 +38,7 @@ export default async function ReservationsPage() {
           bookedSlots={bookingData.appointments}
           pendingRequests={bookingData.pendingRequests}
           blockedDates={bookingData.blockedDates}
+          blockedIntervals={bookingData.blockedIntervals}
           businessHours={bookingData.businessHours}
         />
       ) : null}
@@ -45,6 +46,7 @@ export default async function ReservationsPage() {
         requests={data.requests}
         proposals={data.proposals}
         services={data.services}
+        confirmedRequestSlots={data.confirmedRequestSlots}
       />
     </div>
   );

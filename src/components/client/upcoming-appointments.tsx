@@ -9,6 +9,7 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { formatFullDay, serviceById } from "@/domain/schedule";
 import type {
   Appointment,
+  BlockedInterval,
   BookingRequest,
   BusinessHoursDay,
   ClientAppointment,
@@ -29,6 +30,7 @@ export function UpcomingAppointments({
   bookedSlots,
   pendingRequests,
   blockedDates,
+  blockedIntervals,
   businessHours,
 }: {
   appointments: ClientAppointment[];
@@ -38,6 +40,7 @@ export function UpcomingAppointments({
   bookedSlots: Appointment[];
   pendingRequests: BookingRequest[];
   blockedDates: ReadonlySet<string>;
+  blockedIntervals: BlockedInterval[];
   businessHours: BusinessHoursDay[];
 }) {
   const t = useT();
@@ -56,6 +59,7 @@ export function UpcomingAppointments({
             bookedSlots={bookedSlots}
             pendingRequests={pendingRequests}
             blockedDates={blockedDates}
+            blockedIntervals={blockedIntervals}
             businessHours={businessHours}
           />
         ))}
@@ -71,6 +75,7 @@ function UpcomingCard({
   bookedSlots,
   pendingRequests,
   blockedDates,
+  blockedIntervals,
   businessHours,
 }: {
   appointment: ClientAppointment;
@@ -79,6 +84,7 @@ function UpcomingCard({
   bookedSlots: Appointment[];
   pendingRequests: BookingRequest[];
   blockedDates: ReadonlySet<string>;
+  blockedIntervals: BlockedInterval[];
   businessHours: BusinessHoursDay[];
 }) {
   const t = useT();
@@ -120,6 +126,7 @@ function UpcomingCard({
         bookedSlots={bookedSlots}
         pendingRequests={pendingRequests}
         blockedDates={blockedDates}
+        blockedIntervals={blockedIntervals}
         businessHours={businessHours}
       />
     </article>

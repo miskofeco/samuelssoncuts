@@ -37,9 +37,11 @@ test("availability guards check independent constraints concurrently", () => {
   assert.match(guard, /reason: "conflict"/);
 });
 
-test("admin realtime badge updates do not refresh the entire route", () => {
+test("admin attention polling refreshes only the relevant mounted lists", () => {
   assert.match(realtime, /\/api\/admin\/attention/);
-  assert.doesNotMatch(realtime, /router\.refresh\(\)/);
+  assert.match(realtime, /pathname === "\/admin\/requests"/);
+  assert.match(realtime, /pathname === "\/admin\/approvals"/);
+  assert.match(realtime, /document\.visibilityState === "visible"/);
   assert.match(realtime, /admin-attention-/);
 });
 

@@ -31,7 +31,7 @@ import { Modal } from "@/components/shared/modal";
 import { StatusPill } from "@/components/shared/status-pill";
 import type { BookedSlot, CalendarItem } from "@/components/admin/admin-calendar";
 import { addMinutesToTime, adminSlotOptions, formatFullDay, todayIso } from "@/domain/schedule";
-import type { ActionResult } from "@/domain/types";
+import type { ActionResult, BlockedInterval, BusinessHoursDay } from "@/domain/types";
 import { localeFor } from "@/i18n/config";
 import { useLang, useT } from "@/i18n/provider";
 import { shopDateTimeToEpochMs } from "@/lib/time-zone";
@@ -42,10 +42,14 @@ export function AppointmentDetailModal({
   item,
   onClose,
   bookedByDate,
+  businessHours,
+  blockedIntervals,
 }: {
   item: CalendarItem | null;
   onClose: () => void;
   bookedByDate: Map<string, BookedSlot[]>;
+  businessHours: BusinessHoursDay[];
+  blockedIntervals: BlockedInterval[];
 }) {
   const t = useT();
   return (
@@ -56,7 +60,8 @@ export function AppointmentDetailModal({
       description={item?.type === "Proposed" ? t.admin.calendarRequestDescription : t.admin.appointmentDescription}
     >
       {item ? (
-        <DetailBody key={item.id} item={item} onClose={onClose} bookedByDate={bookedByDate} />
+        <DetailBody key={item.id} item={item} onClose={onClose} bookedByDate={bookedByDate}
+          businessHours={businessHours} blockedIntervals={blockedIntervals} />
       ) : null}
     </Modal>
   );
@@ -66,10 +71,14 @@ function DetailBody({
   item,
   onClose,
   bookedByDate,
+  businessHours,
+  blockedIntervals,
 }: {
   item: CalendarItem;
   onClose: () => void;
   bookedByDate: Map<string, BookedSlot[]>;
+  businessHours: BusinessHoursDay[];
+  blockedIntervals: BlockedInterval[];
 }) {
   const t = useT();
   const locale = localeFor(useLang());
@@ -93,7 +102,7 @@ function DetailBody({
   const hasEnded = shopDateTimeToEpochMs(item.date, endTime) <= openedAt;
   const canManage = !isConfirmed || (!hasEnded && !item.outcome);
   const canConfirmRequest = isPendingRequest && shopDateTimeToEpochMs(item.date, item.time) > openedAt;
-  const finalPrice = Math.round(item.finalPriceCents / 100);
+  const finalPrice = (item.finalPriceCents / 100).toFixed(2);
 
   const timeOptions = useMemo(
     () =>
@@ -102,6 +111,8 @@ function DetailBody({
         bookedToday: date ? bookedByDate.get(date) ?? [] : [],
         excludeId: item.id,
         date,
+        businessHours,
+        blockedIntervals,
       }).map((option) => ({
         ...option,
         disabled: option.disabledReason !== null,
@@ -110,9 +121,11 @@ function DetailBody({
             ? t.feedback.chooseFutureTime
             : option.disabledReason === "conflict"
               ? t.admin.slotTakenHint
+              : option.disabledReason === "closed" || option.disabledReason === "blocked"
+                ? t.admin.off
               : undefined,
       })),
-    [item.durationMinutes, item.id, date, bookedByDate, t],
+    [item.durationMinutes, item.id, date, bookedByDate, businessHours, blockedIntervals, t],
   );
   const selectedOption = timeOptions.find((option) => option.value === time);
   const timeInvalid = !selectedOption || selectedOption.disabled;
@@ -179,7 +192,9 @@ function DetailBody({
   }
 
   const errorFeedback = feedback && !feedback.ok ? feedback : null;
-  const canRecordOutcome = isConfirmed && hasEnded && !item.outcome;
+  // Cron may infer "completed" before the barber records a no-show. Keep the
+  // opposite action available so attendance can be corrected afterward.
+  const canRecordOutcome = isConfirmed && hasEnded;
 
   return (
     <div className="space-y-4">
@@ -274,24 +289,28 @@ function DetailBody({
           {/* Outcome — only for confirmed appointments that already ended */}
           {canRecordOutcome ? (
             <div className="grid gap-2 sm:grid-cols-2">
-              <Button
-                type="button"
-                size="lg"
-                loading={pending}
-                onClick={() => run(() => markAppointmentOutcomeAction(item.appointmentId!, "completed"))}
-              >
-                {t.admin.markCompleted}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                disabled={pending}
-                onClick={() => setNoShowOpen(true)}
-                className="text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
-              >
-                {t.admin.markNoShow}
-              </Button>
+              {item.outcome !== "completed" ? (
+                <Button
+                  type="button"
+                  size="lg"
+                  loading={pending}
+                  onClick={() => run(() => markAppointmentOutcomeAction(item.appointmentId!, "completed"))}
+                >
+                  {t.admin.markCompleted}
+                </Button>
+              ) : null}
+              {item.outcome !== "no_show" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  disabled={pending}
+                  onClick={() => setNoShowOpen(true)}
+                  className="text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
+                >
+                  {t.admin.markNoShow}
+                </Button>
+              ) : null}
             </div>
           ) : null}
 

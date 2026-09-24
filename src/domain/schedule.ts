@@ -1,14 +1,20 @@
 import type {
   BookingRequest,
+  BlockedInterval,
+  BlockedRange,
   BusinessHoursDay,
   DayWindow,
   PricingSettings,
+  ConfirmedRequestSlot,
+  Proposal,
   Service,
 } from "./types";
 import {
   addDaysToDate,
   dateInShopTimeZone,
   nowMinutesInShopTimeZone,
+  shopDayRangeUtc,
+  zonedDateTimeToUtcIso,
 } from "../lib/time-zone";
 
 export const services: Service[] = [
@@ -135,6 +141,18 @@ export function formatFullDay(date: string, locale = "en-US") {
   }).format(new Date(`${date}T12:00:00`));
 }
 
+export function formatBlockedRange(range: BlockedRange, locale = "en-US"): string {
+  const first = formatFullDay(range.start, locale);
+  if (range.start === range.end) {
+    if (range.startTime || range.endTime) {
+      return `${first} · ${range.startTime ?? "00:00"}–${range.endTime ?? "24:00"}`;
+    }
+    return first;
+  }
+  const last = formatFullDay(range.end, locale);
+  return `${first}${range.startTime ? ` ${range.startTime}` : ""} – ${last}${range.endTime ? ` ${range.endTime}` : ""}`;
+}
+
 export type MonthCell = {
   date: string; // yyyy-mm-dd
   inMonth: boolean;
@@ -204,7 +222,25 @@ export function monthLabel(key: string, locale = "en-US") {
 }
 
 export function serviceById(id: string, serviceList: Service[] = services) {
-  return serviceList.find((service) => service.id === id) ?? serviceList[0] ?? services[0];
+  const matched = serviceList.find((service) => service.id === id);
+  if (matched) return matched;
+  if (!id) return serviceList[0] ?? services[0];
+  // A missing historical service must not masquerade as today's first item.
+  return { id, name: "—", duration: 0, price: 0, active: false } satisfies Service;
+}
+
+/** The appointment row is authoritative when a request has been rescheduled. */
+export function bookedSlotForRequest(
+  request: Pick<BookingRequest, "requestedDate" | "requestedTime">,
+  proposal?: Pick<Proposal, "date" | "time" | "status">,
+  confirmed?: Pick<ConfirmedRequestSlot, "date" | "time">,
+): { date: string; time: string } | null {
+  if (confirmed) return { date: confirmed.date, time: confirmed.time };
+  if (proposal?.status === "accepted") return { date: proposal.date, time: proposal.time };
+  if (request.requestedDate && request.requestedTime) {
+    return { date: request.requestedDate, time: request.requestedTime };
+  }
+  return null;
 }
 
 export function defaultServiceImage(service: Pick<Service, "name" | "imageUrl">) {
@@ -261,6 +297,41 @@ export function eachDate(start: string, end: string) {
   return days.length > 0 ? days : [first];
 }
 
+/** A partial block affects a slot only when their half-open UTC ranges overlap. */
+export function isSlotBlocked(
+  date: string,
+  time: string,
+  durationMinutes: number,
+  intervals: readonly BlockedInterval[],
+): boolean {
+  const start = Date.parse(zonedDateTimeToUtcIso(date, time));
+  const end = start + durationMinutes * 60_000;
+  return intervals.some((interval) =>
+    start < Date.parse(interval.end) && Date.parse(interval.start) < end,
+  );
+}
+
+/** Covers every instant of the local calendar day, including DST-short/long days. */
+export function isShopDayFullyBlocked(
+  date: string,
+  intervals: readonly BlockedInterval[],
+): boolean {
+  const { startIso, endIso } = shopDayRangeUtc(date);
+  const dayStart = Date.parse(startIso);
+  const dayEnd = Date.parse(endIso);
+  const sorted = intervals
+    .map(({ start, end }) => ({ start: Date.parse(start), end: Date.parse(end) }))
+    .filter((range) => range.start < dayEnd && range.end > dayStart)
+    .sort((a, b) => a.start - b.start);
+  let coveredUntil = dayStart;
+  for (const range of sorted) {
+    if (range.start > coveredUntil) return false;
+    coveredUntil = Math.max(coveredUntil, range.end);
+    if (coveredUntil >= dayEnd) return true;
+  }
+  return false;
+}
+
 function isoDateOnly(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -286,12 +357,10 @@ export function isStartInClientBookingWindow(iso: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Exact-slot booking + gap pricing.
-//
-// A client picks an exact start time sized to the service duration. Pricing rule
-// ("must extend one tight block"): the slot is BASE price only if it starts at
-// opening or directly continues the gapless run of confirmed appointments
-// anchored at opening; otherwise it leaves a gap and costs +10%.
+// Exact-slot booking and shared client/admin price suggestions. A start at the
+// opening of an empty day or touching a confirmed appointment gets base price
+// before 17:00; other daytime starts get the configured gap surcharge. Starts
+// at or after 17:00 always get the configured VIP surcharge.
 // ---------------------------------------------------------------------------
 
 export function minutesOf(time: string): number {
@@ -330,7 +399,7 @@ export type AdminBookedSlot = {
 export type AdminSlotOption = {
   value: string;
   label: string;
-  disabledReason: "past" | "conflict" | null;
+  disabledReason: "past" | "conflict" | "closed" | "blocked" | null;
 };
 
 /** Shared add/reschedule options, evaluated against the shop wall clock. */
@@ -339,18 +408,30 @@ export function adminSlotOptions({
   bookedToday,
   date,
   excludeId,
+  businessHours,
+  blockedIntervals = [],
   now = new Date(),
 }: {
   durationMinutes: number;
   bookedToday: AdminBookedSlot[];
   date?: string;
   excludeId?: string;
+  businessHours?: SlotBusinessHoursDay[];
+  blockedIntervals?: readonly BlockedInterval[];
   now?: Date;
 }): AdminSlotOption[] {
   const today = dateInShopTimeZone(now.toISOString());
   const nowMinutes = nowMinutesInShopTimeZone(now);
+  const dayHours = date ? businessHoursForDate(date, businessHours) : undefined;
+  const opens = dayHours ? minutesOf(dayHours.opensAt) : OPEN_MINUTES;
+  const closes = dayHours ? minutesOf(dayHours.closesAt) : CLOSE_MINUTES;
+  const options = dayHours
+    ? closes > opens && durationMinutes > 0
+      ? buildSlots(opens, closes - durationMinutes, 15)
+      : []
+    : slotsForService(durationMinutes);
 
-  return slotsForService(durationMinutes).map((time) => {
+  return options.map((time) => {
     const startMin = minutesOf(time);
     const conflict = bookedToday.some(
       (slot) =>
@@ -358,10 +439,19 @@ export function adminSlotOptions({
         overlaps(startMin, durationMinutes, minutesOf(slot.time), slot.durationMinutes),
     );
     const past = Boolean(date && (date < today || (date === today && startMin <= nowMinutes)));
+    const blocked = Boolean(date && isSlotBlocked(date, time, durationMinutes, blockedIntervals));
     return {
       value: time,
       label: time,
-      disabledReason: past ? "past" : conflict ? "conflict" : null,
+      disabledReason: past
+        ? "past"
+        : dayHours?.closed
+          ? "closed"
+          : blocked
+            ? "blocked"
+            : conflict
+              ? "conflict"
+              : null,
     };
   });
 }
@@ -505,26 +595,43 @@ export function surchargeDetailsForRequest(
 }
 
 export function priceKindForSlot(preferred: boolean, options: SlotPricingOptions = {}): SlotPriceKind {
-  if (preferred) return "base";
   if (options.startsAt && isVipStart(options.startsAt)) return "vip";
+  if (preferred) return "base";
   return "gap";
 }
 
-// Whole-euro price; best-price starts keep base pricing, then VIP starts
-// (17:00+) override gap pricing.
-export function priceForSlot(
-  basePrice: number,
+// Keep integer cents through surcharge calculations; round once to the final
+// cent. VIP starts take precedence over connecting best-price starts.
+export function priceCentsForSlot(
+  basePriceCents: number,
   preferred: boolean,
   options: SlotPricingOptions = {},
 ): number {
   const kind = priceKindForSlot(preferred, options);
-  if (kind === "base") return basePrice;
+  if (kind === "base") return basePriceCents;
 
   const surchargePercent =
     kind === "vip"
       ? options.vipSurchargePercent ?? DEFAULT_VIP_SURCHARGE_PERCENT
       : options.gapSurchargePercent ?? DEFAULT_GAP_SURCHARGE_PERCENT;
-  return Math.round(basePrice * (1 + surchargePercent / 100));
+  return Math.round(basePriceCents * (1 + surchargePercent / 100));
+}
+
+/** Euro display value derived from the same cent-accurate calculation. */
+export function priceForSlot(
+  basePrice: number,
+  preferred: boolean,
+  options: SlotPricingOptions = {},
+): number {
+  return priceCentsForSlot(Math.round(basePrice * 100), preferred, options) / 100;
+}
+
+/** Parse a barber-entered euro amount without floating-point cent rounding. */
+export function parseEuroCents(value: string): number | null {
+  const match = /^(\d{1,5})(?:[.,](\d{1,2}))?$/.exec(value.trim());
+  if (!match) return null;
+  const cents = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
+  return cents <= 1_000_000 ? cents : null;
 }
 
 export type SlotStatus = "taken" | "requested" | "free";

@@ -2,6 +2,8 @@ import { Card, SectionHeader } from "@/components/shared/card";
 import { formatFullDay, serviceById, surchargeDetailsForRequest } from "@/domain/schedule";
 import type {
   PricingSettings,
+  BusinessHoursDay,
+  BlockedInterval,
   Appointment,
   BookingRequest,
   ClientProfile,
@@ -65,18 +67,17 @@ function buildBookingCards({
         ? surchargeDetailsForRequest(request, { gapSurchargePercent, vipSurchargePercent })
         : null;
       const startsAt = dateTimeOf(appointment);
-      const endsAt = new Date(startsAt.getTime() + service.duration * 60_000);
+      const durationMinutes = appointment.durationMinutes ?? service.duration;
+      const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
       const servicePriceCents = Math.round(service.price * 100);
-      const bookedPriceCents = appointment.requestId
-        ? requestsById.get(appointment.requestId)?.priceCents ?? servicePriceCents
-        : servicePriceCents;
+      const bookedPriceCents = appointment.priceCents ?? request?.priceCents ?? servicePriceCents;
 
       return {
         appointment,
         clientName: client?.name ?? appointment.clientName ?? clientFallback,
         clientAvatarUrl: client?.avatarUrl,
         serviceName: service.name,
-        durationMinutes: service.duration,
+        durationMinutes,
         priceCents: bookedPriceCents,
         startsAt,
         endsAt,
@@ -93,7 +94,7 @@ function buildBookingCards({
           surchargePercent: surcharge?.percent,
           time: appointment.time,
           date: appointment.date,
-          durationMinutes: service.duration,
+          durationMinutes,
           type: appointment.requestId ? "Confirmed" : "Barber",
           appointmentId: appointment.id,
           requestId: appointment.requestId,
@@ -101,6 +102,7 @@ function buildBookingCards({
           clientEmail: client?.email,
           clientPhone: client?.phone,
           clientAvatarUrl: client?.avatarUrl,
+          note: appointment.note ?? undefined,
           outcome: appointment.outcome,
         },
       };
@@ -131,12 +133,16 @@ export async function AdminBookingStrip({
   appointments,
   services,
   pricingSettings,
+  businessHours,
+  blockedIntervals,
 }: {
   clients: ClientProfile[];
   requests: BookingRequest[];
   appointments: Appointment[];
   services: Service[];
   pricingSettings: PricingSettings;
+  businessHours: BusinessHoursDay[];
+  blockedIntervals: BlockedInterval[];
 }) {
   const [t, lang] = await Promise.all([getDict(), getLang()]);
   const locale = localeFor(lang);
@@ -196,7 +202,7 @@ export async function AdminBookingStrip({
     id: appointment.id,
     date: appointment.date,
     time: appointment.time,
-    durationMinutes: serviceById(appointment.serviceId, services).duration,
+    durationMinutes: appointment.durationMinutes ?? serviceById(appointment.serviceId, services).duration,
   }));
 
   return (
@@ -205,6 +211,8 @@ export async function AdminBookingStrip({
       <AdminBookingCarousel
         items={bookingStripItems}
         bookedSlots={bookedSlots}
+        businessHours={businessHours}
+        blockedIntervals={blockedIntervals}
         positionLabel={t.admin.bookingSnapshotPosition}
       />
     </Card>

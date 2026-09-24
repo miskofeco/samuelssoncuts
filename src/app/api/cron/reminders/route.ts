@@ -5,11 +5,9 @@
 // 1. Outcome sweep: confirmed appointments that ended at least two hours ago
 //    without a recorded outcome are marked `completed`; unanswered booking
 //    requests and unaccepted proposals whose start has passed are closed.
-// 2. Client reminders: every confirmed appointment on the NEXT shop-local day
-//    that hasn't been reminded yet gets a reminder email and a reminded_at stamp.
-//    The stamp is CLAIMED first (atomic update … where reminded_at is null), so
-//    a retry or an overlapping run can never double-send; a failed send releases
-//    the claim so the next run retries it.
+// 2. Client reminders: unreminded appointments later today or tomorrow in shop
+//    time get an email. The stamp is claimed before sending; changed/cancelled
+//    bookings fail the claim, and failed sends release their own claim for retry.
 // 3. Barber agenda: digest of today's confirmed appointments.
 // 4. Housekeeping: expired rate-limit rows are pruned.
 //
@@ -32,6 +30,7 @@ import { enforceRateLimit } from "@/server/rate-limit";
 import { clientReminderPush } from "@/domain/push-copy";
 import { createNotifications, type NotificationInput } from "@/server/notifications";
 import { reminderWindowFor } from "@/server/reminder-window";
+import { claimReminder, releaseReminderClaim, reminderStillCurrent } from "@/server/reminder-claim";
 import { getShopBarberEmail, getShopBarberId } from "@/server/shop-barber";
 
 export const runtime = "nodejs";
@@ -125,7 +124,7 @@ export async function GET(request: NextRequest) {
   }
 
   // ---- Client reminders -------------------------------------------------
-  const { startIso: windowStart, endIso: windowEnd } = reminderWindowFor(now);
+  const { todayShop, startIso: windowStart, endIso: windowEnd } = reminderWindowFor(now);
 
   const { data: appointments, error } = await supabase
     .from("appointments")
@@ -140,7 +139,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Could not load appointments" }, { status: 500 });
   }
 
-  const candidates = (appointments ?? []).filter((appt) => appt.client_id);
+  const candidates = (appointments ?? []).filter(
+    (appt): appt is typeof appt & { client_id: string } => Boolean(appt.client_id),
+  );
   let sent = 0;
   let failed = 0;
   const notifications: NotificationInput[] = [];
@@ -153,50 +154,64 @@ export async function GET(request: NextRequest) {
     );
 
     await mapLimited(candidates, SEND_CONCURRENCY, async (appt) => {
-      const profile = profiles.get(appt.client_id as string);
+      const profile = profiles.get(appt.client_id);
       if (!profile?.email) return;
 
-      // Claim first: only the run that flips reminded_at from null sends.
-      const { data: claimed } = await supabase
-        .from("appointments")
-        .update({ reminded_at: new Date().toISOString() })
-        .eq("id", appt.id)
-        .is("reminded_at", null)
-        .select("id")
-        .maybeSingle();
-      if (!claimed) return;
-
-      const date = dateInShopTimeZone(appt.starts_at);
-      const time = timeInShopTimeZone(appt.starts_at);
-      const subject = `Pripomienka: termín zajtra o ${time}`;
-
-      const delivered = await sendEmail({
-        to: profile.email,
-        subject,
-        react: AppointmentReminderEmail({
-          clientName: profile.full_name ?? "klient",
-          service: services.get(appt.service_id) ?? "",
-          date,
-          time,
-        }),
-      });
-
-      if (!delivered) {
-        // Release the claim so tomorrow's run (or a manual re-run) retries.
+      // The claim rechecks the slot and status from the candidate snapshot.
+      const claimAt = new Date().toISOString();
+      const { claimed, error: claimError } = await claimReminder(supabase, appt, claimAt, windowEnd);
+      if (claimError) {
         failed += 1;
-        await supabase.from("appointments").update({ reminded_at: null }).eq("id", appt.id);
+        await reportError("cron-reminder-claim", claimError, { appointmentId: appt.id });
         return;
       }
+      if (!claimed) return;
 
-      sent += 1;
-      notifications.push({
-        user_id: appt.client_id,
-        channel: "email",
-        recipient: profile.email,
-        subject,
-        push: clientReminderPush({ service: services.get(appt.service_id), date, time }),
-        pushUrl: "/client/reservations",
-      });
+      try {
+        const { current, error: freshnessError } = await reminderStillCurrent(
+          supabase, appt, claimAt, new Date().toISOString(),
+        );
+        if (freshnessError) throw freshnessError;
+        if (!current) {
+          const { error: releaseError } = await releaseReminderClaim(supabase, appt.id, claimAt);
+          if (releaseError) await reportError("cron-reminder-release", releaseError, { appointmentId: appt.id });
+          return;
+        }
+
+        const date = dateInShopTimeZone(appt.starts_at);
+        const time = timeInShopTimeZone(appt.starts_at);
+        const relativeDay = date === todayShop ? "today" : "tomorrow";
+        const dayLabel = relativeDay === "today" ? "dnes" : "zajtra";
+        const subject = `Pripomienka: termín ${dayLabel} o ${time}`;
+
+        const delivered = await sendEmail({
+          to: profile.email,
+          subject,
+          react: AppointmentReminderEmail({
+            clientName: profile.full_name ?? "klient",
+            service: services.get(appt.service_id) ?? "",
+            date,
+            time,
+            relativeDay,
+          }),
+        });
+        if (!delivered) throw new Error("Reminder email delivery was not accepted");
+
+        sent += 1;
+        notifications.push({
+          user_id: appt.client_id,
+          channel: "email",
+          recipient: profile.email,
+          subject,
+          push: clientReminderPush({ service: services.get(appt.service_id), date, time, relativeDay }),
+          pushUrl: "/client/reservations",
+        });
+      } catch (sendError) {
+        failed += 1;
+        const { error: releaseError } = await releaseReminderClaim(supabase, appt.id, claimAt);
+        if (releaseError) await reportError("cron-reminder-release", releaseError, { appointmentId: appt.id });
+        await reportError("cron-reminder-send", sendError, { appointmentId: appt.id });
+      }
     });
 
     try {
