@@ -115,6 +115,11 @@ export type SlotGuardInput = {
   end: string;
   barberId?: string;
   excludeAppointmentId?: string;
+  /**
+   * Barber-confirmed manual booking into closed hours or blocked time: only
+   * the confirmed-overlap check applies. Never set this for client paths.
+   */
+  allowUnavailable?: boolean;
 };
 
 export type SlotGuardResult =
@@ -150,10 +155,10 @@ export async function guardSlot(
       excludeAppointmentId: input.excludeAppointmentId,
     }),
   ]);
-  if (!insideHours) {
+  if (!insideHours && !input.allowUnavailable) {
     return { ok: false, reason: "outside-hours" };
   }
-  if (blocked) {
+  if (blocked && !input.allowUnavailable) {
     return { ok: false, reason: "blocked" };
   }
   if (conflict) {

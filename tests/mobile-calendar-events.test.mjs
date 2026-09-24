@@ -55,9 +55,9 @@ test("availability manager uses a range calendar for whole days and a single cal
 });
 
 test("blocked days are painted red and announced in every calendar", () => {
-  assert.match(adminCalendar, /blocked: \(day\) => blockedDates\.has\(localDateToIso\(day\)\)/);
+  assert.match(adminCalendar, /blocked: \(day\) => dayOffKind\(localDateToIso\(day\)\) === "blocked"/);
   assert.match(adminCalendar, /modifiers\.blocked &&\s*!modifiers\.past &&\s*"border-red-300 bg-red-50/);
-  assert.match(adminCalendar, /\{t\.admin\.off\}/);
+  assert.match(adminCalendar, /\{t\.admin\.blockedShort\}/);
   assert.match(availabilityManager, /blocked: \(day\) => blockedDates\.has\(localDateToIso\(day\)\)/);
   assert.match(availabilityManager, /border-red-300 bg-red-50/);
   assert.match(availabilityManager, /<span className="sr-only">\{t\.admin\.off\}<\/span>/);
@@ -120,20 +120,21 @@ test("admin calendar distinguishes confirmed, barber-added, and proposed colors"
 });
 
 test("week calendar marks blocked days red on desktop and mobile", () => {
-  assert.match(adminCalendar, /blockedDates=\{blockedDates\}/);
-  assert.match(adminCalendar, /isBlocked=\{blockedDates\.has\(day\)\}/);
-  assert.match(adminCalendar, /isBlocked\s*\?\s*"bg-red-50/);
-  assert.match(adminCalendar, /isBlocked\s*\?\s*t\.admin\.off\s*:\s*t\.admin\.noAppointments/);
+  assert.match(adminCalendar, /dayOffKind=\{dayOffKind\}/);
+  assert.match(adminCalendar, /dayOff=\{dayOffKind\(day\)\}/);
+  assert.match(adminCalendar, /dayOff === "blocked"\s*\?\s*"bg-red-50/);
+  assert.match(adminCalendar, /isBlocked\s*\?\s*"border-2 border-red-300 bg-red-50/);
+  assert.match(adminCalendar, /isBlocked\s*\?\s*blockReasonsFor\(day\)\.join\(", "\) \|\| t\.admin\.blockedShort\s*:\s*isClosed\s*\?\s*t\.admin\.off\s*:\s*t\.admin\.noAppointments/);
 });
 
-test("blocked days do not allow adding bookings in week or month views", () => {
-  assert.match(adminCalendar, /\{!isBlocked \? \(/);
-  assert.match(adminCalendar, /\{!isBlocked \? \(/);
-  assert.doesNotMatch(adminCalendar, /!isBlocked \? \(\s*isBlocked \? null/);
-  assert.match(adminCalendar, /onClick=\{\(\) => onAddSlot\(day, firstFreeSlot\(items, isToday\)\)\}/);
+test("blocked days ask for confirmation before adding bookings in week or month views", () => {
+  // Off days keep the click surface; the calendar confirms before the modal opens.
+  assert.match(adminCalendar, /\{!isPast \? \(/);
+  assert.match(adminCalendar, /const canAdd = !isPast;/);
+  assert.match(adminCalendar, /const addTime = firstFreeSlot\(items, isToday, availabilityFor\(day\)\)/);
+  assert.match(adminCalendar, /onClick=\{\(\) => onAddSlot\(day, addTime \?\? undefined\)\}/);
   assert.match(adminCalendar, /onSelect=\{\(iso\) => \{/);
-  assert.match(adminCalendar, /if \(items\.length === 0 && !blockedDates\.has\(iso\) && iso >= today\) \{/);
-  assert.match(adminCalendar, /setDraft\(\{ date: iso \}\)/);
+  assert.match(adminCalendar, /if \(items\.length === 0 && iso >= today\) \{\s*requestAdd\(iso\);/);
   assert.match(adminCalendar, /if \(modifiers\.blocked\) \{/);
 });
 

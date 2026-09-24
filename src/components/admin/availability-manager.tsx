@@ -11,6 +11,7 @@ import { useState, useTransition } from "react";
 import { blockDateAction, unblockDateAction } from "@/app/actions";
 import { Button } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
+import { Combobox } from "@/components/shared/combobox";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
 import { DateField, isoToLocalDate, localDateToIso } from "@/components/shared/date-field";
@@ -20,7 +21,15 @@ import { DAY_PICKER_LOCALES, ScheduleCalendar } from "@/components/shared/schedu
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Calendar } from "@/components/ui/calendar";
-import { addDays, formatBlockedRange, formatFullDay, monthKey } from "@/domain/schedule";
+import {
+  BLOCK_REASON_MAX_LENGTH,
+  addDays,
+  formatBlockedRange,
+  formatFullDay,
+  isValidBlockReason,
+  monthKey,
+  quarterHourTimes,
+} from "@/domain/schedule";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { ActionResult, BlockedRange } from "@/domain/types";
 import { localeFor } from "@/i18n/config";
@@ -46,12 +55,19 @@ export function AvailabilityManager({
   const [endTime, setEndTime] = useState("13:00");
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
+  // The reason error appears only after the barber has typed or tried to submit.
+  const [reasonTouched, setReasonTouched] = useState(false);
   const sliceMode = mode === "slice";
   const invalidRange = sliceMode ? endTime <= startTime : end < start;
+  const reasonValid = isValidBlockReason(reason);
   const visibleRanges = ranges.filter((range) => range.end >= today);
 
   function block(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!reasonValid) {
+      setReasonTouched(true);
+      return;
+    }
     if (invalidRange) return;
     setFeedback(null);
     startTransition(async () => {
@@ -59,11 +75,14 @@ export function AvailabilityManager({
         const result = await blockDateAction({
           start,
           end: sliceMode ? start : end,
-          reason: reason || undefined,
+          reason: reason.trim(),
           ...(sliceMode ? { startTime, endTime } : {}),
         });
         setFeedback(result);
-        if (result.ok) setReason("");
+        if (result.ok) {
+          setReason("");
+          setReasonTouched(false);
+        }
       } catch {
         setFeedback({ ok: false, error: t.common.somethingWentWrong });
       }
@@ -193,21 +212,21 @@ export function AvailabilityManager({
             />
             {sliceMode ? (
               <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-                <Field
+                <Combobox
                   className="min-w-0"
-                  type="time"
                   label={t.admin.startTime}
+                  options={quarterHourTimes(startTime).map((value) => ({ value, label: value }))}
+                  searchable={false}
                   value={startTime}
-                  step={1800}
-                  onChange={(event) => setStartTime(event.target.value)}
+                  onChange={setStartTime}
                 />
-                <Field
+                <Combobox
                   className="min-w-0"
-                  type="time"
                   label={t.admin.endTime}
+                  options={quarterHourTimes(endTime).map((value) => ({ value, label: value }))}
+                  searchable={false}
                   value={endTime}
-                  step={1800}
-                  onChange={(event) => setEndTime(event.target.value)}
+                  onChange={setEndTime}
                   error={invalidRange ? t.admin.availabilityInvalidRange : undefined}
                 />
               </div>
@@ -222,10 +241,18 @@ export function AvailabilityManager({
             )}
           </div>
           <Field
-            label={`${t.admin.reason} ${t.common.optional}`}
+            label={t.admin.reason}
             value={reason}
-            onChange={(event) => setReason(event.target.value)}
+            onChange={(event) => {
+              setReason(event.target.value);
+              setReasonTouched(true);
+            }}
             placeholder={t.admin.reasonPlaceholder}
+            maxLength={BLOCK_REASON_MAX_LENGTH}
+            autoComplete="off"
+            aria-required
+            hint={t.admin.reasonHint(BLOCK_REASON_MAX_LENGTH)}
+            error={reasonTouched && !reasonValid ? t.feedback.blockReasonRequired : undefined}
           />
 
           <Feedback result={feedback} />
@@ -234,7 +261,7 @@ export function AvailabilityManager({
             type="submit"
             size="lg"
             variant="destructive"
-            disabled={invalidRange}
+            disabled={invalidRange || (reasonTouched && !reasonValid)}
             loading={pending}
             className="w-full sm:w-auto"
           >
@@ -277,12 +304,19 @@ export function AvailabilityManager({
                     <Icon icon={CalendarRemove01Icon} className="size-[18px]" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">
+                    {/* The reason leads; older blocks without one show only their dates. */}
+                    {range.reason ? (
+                      <p className="truncate text-sm font-semibold text-foreground">{range.reason}</p>
+                    ) : null}
+                    <p
+                      className={
+                        range.reason
+                          ? "text-xs text-muted-foreground"
+                          : "text-sm font-semibold text-foreground"
+                      }
+                    >
                       {formatBlockedRange(range, locale)}
                     </p>
-                    {range.reason ? (
-                      <p className="truncate text-xs text-muted-foreground">{range.reason}</p>
-                    ) : null}
                   </div>
                   <Button
                     type="button"

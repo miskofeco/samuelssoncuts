@@ -14,6 +14,7 @@ import {
   dateInShopTimeZone,
   nowMinutesInShopTimeZone,
   shopDayRangeUtc,
+  timeInShopTimeZone,
   zonedDateTimeToUtcIso,
 } from "../lib/time-zone";
 
@@ -24,6 +25,7 @@ export const services: Service[] = [
     description: "Detailed haircut with consultation and styling.",
     duration: 45,
     price: 32,
+    sundayPrice: 32,
     imageUrl: "/signature.jpg",
   },
   {
@@ -32,6 +34,7 @@ export const services: Service[] = [
     description: "Beard trim, shape, and hot towel finish.",
     duration: 30,
     price: 20,
+    sundayPrice: 20,
     imageUrl: "/beard-shape.jpg",
   },
   {
@@ -40,6 +43,7 @@ export const services: Service[] = [
     description: "Full haircut and beard service.",
     duration: 75,
     price: 48,
+    sundayPrice: 48,
     imageUrl: "/beard-plus-cut.jpg",
   },
 ];
@@ -226,7 +230,7 @@ export function serviceById(id: string, serviceList: Service[] = services) {
   if (matched) return matched;
   if (!id) return serviceList[0] ?? services[0];
   // A missing historical service must not masquerade as today's first item.
-  return { id, name: "—", duration: 0, price: 0, active: false } satisfies Service;
+  return { id, name: "—", duration: 0, price: 0, sundayPrice: 0, active: false } satisfies Service;
 }
 
 /** The appointment row is authoritative when a request has been rescheduled. */
@@ -295,6 +299,68 @@ export function eachDate(start: string, end: string) {
   }
 
   return days.length > 0 ? days : [first];
+}
+
+/**
+ * Quarter-hour wall times across the shop window (07:00–21:00) for admin time
+ * pickers. A saved value off that grid stays selectable instead of vanishing.
+ */
+export function quarterHourTimes(current?: string): string[] {
+  const times = buildSlots(OPEN_MINUTES, CLOSE_MINUTES, 15);
+  return current && !times.includes(current) ? [...times, current].sort() : times;
+}
+
+/** Blocking reasons are required and kept to a few words. */
+export const BLOCK_REASON_MIN_LENGTH = 2;
+export const BLOCK_REASON_MAX_LENGTH = 40;
+
+export function isValidBlockReason(value: string): boolean {
+  const length = value.trim().length;
+  return length >= BLOCK_REASON_MIN_LENGTH && length <= BLOCK_REASON_MAX_LENGTH;
+}
+
+/**
+ * A blocked_times row as shop-local dates plus wall times only where the block
+ * does not start/end at a shop midnight. Instants are compared numerically:
+ * Supabase returns "+00:00" offsets while computed midnights use toISOString's
+ * "Z", so string comparison would label every whole-day block "00:00–00:00".
+ * `window` clips long blocks to the loaded range.
+ */
+export function blockedRangeFromRow(
+  row: { id: string; starts_at: string; ends_at: string; reason: string | null },
+  window?: { fromIso: string; toIso: string },
+): BlockedRange {
+  const startMs = Math.max(Date.parse(row.starts_at), window ? Date.parse(window.fromIso) : -Infinity);
+  const endMs = Math.min(Date.parse(row.ends_at), window ? Date.parse(window.toIso) : Infinity);
+  const startIso = new Date(startMs).toISOString();
+  const endIso = new Date(endMs).toISOString();
+  // Whole-day blocks end at the NEXT shop day's midnight (exclusive), so the
+  // last covered day comes from eachDate rather than the raw end instant.
+  const days = eachDate(startIso, endIso);
+  const firstDay = days[0] ?? dateInShopTimeZone(startIso);
+  const lastDay = days[days.length - 1] ?? dateInShopTimeZone(endIso);
+  return {
+    id: row.id,
+    start: firstDay,
+    end: lastDay,
+    startTime: startMs === Date.parse(shopDayRangeUtc(firstDay).startIso) ? null : timeInShopTimeZone(startIso),
+    endTime: endMs === Date.parse(shopDayRangeUtc(lastDay).endIso) ? null : timeInShopTimeZone(endIso),
+    reason: row.reason,
+  };
+}
+
+/** Distinct block reasons touching a shop-local day, in start order. */
+export function blockReasonsForDate(date: string, intervals: readonly BlockedInterval[]): string[] {
+  const { startIso, endIso } = shopDayRangeUtc(date);
+  const dayStart = Date.parse(startIso);
+  const dayEnd = Date.parse(endIso);
+  const reasons: string[] = [];
+  for (const interval of [...intervals].sort((a, b) => Date.parse(a.start) - Date.parse(b.start))) {
+    const reason = interval.reason?.trim();
+    if (!reason || reasons.includes(reason)) continue;
+    if (Date.parse(interval.start) < dayEnd && Date.parse(interval.end) > dayStart) reasons.push(reason);
+  }
+  return reasons;
 }
 
 /** A partial block affects a slot only when their half-open UTC ranges overlap. */
@@ -400,6 +466,8 @@ export type AdminSlotOption = {
   value: string;
   label: string;
   disabledReason: "past" | "conflict" | "closed" | "blocked" | null;
+  /** Why clients could not book this start, even when the barber may override it. */
+  unavailableReason: "closed" | "blocked" | null;
 };
 
 /** Shared add/reschedule options, evaluated against the shop wall clock. */
@@ -411,6 +479,7 @@ export function adminSlotOptions({
   businessHours,
   blockedIntervals = [],
   now = new Date(),
+  allowUnavailable = false,
 }: {
   durationMinutes: number;
   bookedToday: AdminBookedSlot[];
@@ -419,17 +488,31 @@ export function adminSlotOptions({
   businessHours?: SlotBusinessHoursDay[];
   blockedIntervals?: readonly BlockedInterval[];
   now?: Date;
+  /**
+   * The barber confirmed booking outside availability: offer the whole shop
+   * window and enable closed/blocked starts. Past and overlapping starts stay
+   * disabled.
+   */
+  allowUnavailable?: boolean;
 }): AdminSlotOption[] {
   const today = dateInShopTimeZone(now.toISOString());
   const nowMinutes = nowMinutesInShopTimeZone(now);
   const dayHours = date ? businessHoursForDate(date, businessHours) : undefined;
   const opens = dayHours ? minutesOf(dayHours.opensAt) : OPEN_MINUTES;
   const closes = dayHours ? minutesOf(dayHours.closesAt) : CLOSE_MINUTES;
-  const options = dayHours
-    ? closes > opens && durationMinutes > 0
-      ? buildSlots(opens, closes - durationMinutes, 15)
+  const options = allowUnavailable
+    ? durationMinutes > 0
+      ? buildSlots(
+        Math.min(opens, OPEN_MINUTES),
+        Math.max(closes, CLOSE_MINUTES) - durationMinutes,
+        15,
+      )
       : []
-    : slotsForService(durationMinutes);
+    : dayHours
+      ? closes > opens && durationMinutes > 0
+        ? buildSlots(opens, closes - durationMinutes, 15)
+        : []
+      : slotsForService(durationMinutes);
 
   return options.map((time) => {
     const startMin = minutesOf(time);
@@ -440,18 +523,21 @@ export function adminSlotOptions({
     );
     const past = Boolean(date && (date < today || (date === today && startMin <= nowMinutes)));
     const blocked = Boolean(date && isSlotBlocked(date, time, durationMinutes, blockedIntervals));
+    const outsideHours = Boolean(dayHours?.closed) ||
+      startMin < opens ||
+      startMin + durationMinutes > closes;
+    const unavailableReason = outsideHours ? "closed" : blocked ? "blocked" : null;
     return {
       value: time,
       label: time,
       disabledReason: past
         ? "past"
-        : dayHours?.closed
-          ? "closed"
-          : blocked
-            ? "blocked"
-            : conflict
-              ? "conflict"
-              : null,
+        : unavailableReason && !allowUnavailable
+          ? unavailableReason
+          : conflict
+            ? "conflict"
+            : null,
+      unavailableReason,
     };
   });
 }
@@ -478,6 +564,106 @@ export function isDateClosedForBusinessHours(
   businessHours?: SlotBusinessHoursDay[],
 ): boolean {
   return businessHoursForDate(date, businessHours)?.closed === true;
+}
+
+const MINUTES_PER_DAY = 24 * 60;
+
+/** A closed stretch of a shop day in minutes-of-day, half-open [start, end). */
+export type ClosedPeriod = {
+  startMinutes: number;
+  endMinutes: number;
+  /** `closed` = outside the weekday's opening hours; `blocked` = a blocked-time range. */
+  kind: "closed" | "blocked";
+  /** The block's reason, when the interval carried one (admin calendar only). */
+  reason?: string;
+};
+
+export type DayAvailability = {
+  /** No bookable minute remains inside the opening window. */
+  closedAllDay: boolean;
+  opensAt: number;
+  closesAt: number;
+  closedPeriods: ClosedPeriod[];
+};
+
+/**
+ * Everything the admin calendar needs to mark a day's unavailable time: the
+ * weekday's opening window (or the default shop window when none is stored)
+ * and any blocked-time ranges clipped to the shop-local day. The booking
+ * modal and server guards enforce the same hours and blocks.
+ */
+export function dayAvailability(
+  date: string,
+  businessHours: SlotBusinessHoursDay[] | undefined,
+  blockedIntervals: readonly BlockedInterval[],
+): DayAvailability {
+  const dayHours = businessHoursForDate(date, businessHours);
+  const opensAt = dayHours ? minutesOf(dayHours.opensAt) : OPEN_MINUTES;
+  const closesAt = dayHours ? minutesOf(dayHours.closesAt) : CLOSE_MINUTES;
+  const closedPeriods: ClosedPeriod[] = [];
+
+  if (dayHours?.closed || closesAt <= opensAt) {
+    closedPeriods.push({ startMinutes: 0, endMinutes: MINUTES_PER_DAY, kind: "closed" });
+  } else {
+    if (opensAt > 0) closedPeriods.push({ startMinutes: 0, endMinutes: opensAt, kind: "closed" });
+    if (closesAt < MINUTES_PER_DAY) {
+      closedPeriods.push({ startMinutes: closesAt, endMinutes: MINUTES_PER_DAY, kind: "closed" });
+    }
+  }
+
+  const { startIso, endIso } = shopDayRangeUtc(date);
+  const dayStart = Date.parse(startIso);
+  const dayEnd = Date.parse(endIso);
+  for (const interval of blockedIntervals) {
+    const start = Date.parse(interval.start);
+    const end = Date.parse(interval.end);
+    if (start >= dayEnd || end <= dayStart) continue;
+    const startMinutes = start <= dayStart ? 0 : minutesOf(timeInShopTimeZone(interval.start));
+    const endMinutes = end >= dayEnd ? MINUTES_PER_DAY : minutesOf(timeInShopTimeZone(interval.end));
+    if (endMinutes > startMinutes) {
+      const reason = interval.reason?.trim();
+      closedPeriods.push({ startMinutes, endMinutes, kind: "blocked", ...(reason ? { reason } : {}) });
+    }
+  }
+  closedPeriods.sort((a, b) => a.startMinutes - b.startMinutes || a.endMinutes - b.endMinutes);
+
+  // The day is off when the closed/blocked periods cover the whole opening window.
+  let coveredUntil = opensAt;
+  for (const period of closedPeriods) {
+    if (period.startMinutes > coveredUntil) break;
+    coveredUntil = Math.max(coveredUntil, period.endMinutes);
+  }
+
+  return {
+    closedAllDay: coveredUntil >= closesAt,
+    opensAt,
+    closesAt,
+    closedPeriods,
+  };
+}
+
+/** Whether a booking may not start at `minute` (minutes-of-day) on this day. */
+export function isMinuteUnavailable(availability: DayAvailability, minute: number): boolean {
+  return availability.closedPeriods.some(
+    (period) => minute >= period.startMinutes && minute < period.endMinutes,
+  );
+}
+
+/**
+ * Which kind of unavailable time covers `minute`: an explicit block wins over
+ * closed opening hours, so blocked time is always shown and named as blocked.
+ */
+export function unavailableKindAt(
+  availability: DayAvailability,
+  minute: number,
+): ClosedPeriod["kind"] | null {
+  let kind: ClosedPeriod["kind"] | null = null;
+  for (const period of availability.closedPeriods) {
+    if (minute < period.startMinutes || minute >= period.endMinutes) continue;
+    if (period.kind === "blocked") return "blocked";
+    kind = "closed";
+  }
+  return kind;
 }
 
 // A slot is taken only by CONFIRMED appointments that overlap it. Pending
@@ -600,24 +786,49 @@ export function priceKindForSlot(preferred: boolean, options: SlotPricingOptions
   return "gap";
 }
 
-// Keep integer cents through surcharge calculations; round once to the final
-// cent. VIP starts take precedence over connecting best-price starts.
+/** Round an amount in cents to whole euros (half a euro rounds up). */
+function wholeEuroCents(cents: number): number {
+  return Math.round(cents / 100) * 100;
+}
+
+// Prices are whole euros: the catalog base is whole (migration 0049) and the
+// surcharged total is rounded once to the nearest euro, halves up. The
+// surcharge math stays in integers until that final rounding. VIP starts take
+// precedence over connecting best-price starts.
 export function priceCentsForSlot(
   basePriceCents: number,
   preferred: boolean,
   options: SlotPricingOptions = {},
 ): number {
+  const wholeBaseCents = wholeEuroCents(basePriceCents);
   const kind = priceKindForSlot(preferred, options);
-  if (kind === "base") return basePriceCents;
+  if (kind === "base") return wholeBaseCents;
 
   const surchargePercent =
     kind === "vip"
       ? options.vipSurchargePercent ?? DEFAULT_VIP_SURCHARGE_PERCENT
       : options.gapSurchargePercent ?? DEFAULT_GAP_SURCHARGE_PERCENT;
-  return Math.round(basePriceCents * (1 + surchargePercent / 100));
+  return wholeEuroCents((wholeBaseCents * (100 + surchargePercent)) / 100);
 }
 
-/** Euro display value derived from the same cent-accurate calculation. */
+/** Shop-calendar Sunday check for a "yyyy-mm-dd" day (no clock time involved). */
+export function isSundayDate(date: string): boolean {
+  return new Date(`${date}T12:00:00Z`).getUTCDay() === 0;
+}
+
+/**
+ * Service list price (euros) that applies on `date`: Sundays use the
+ * barber-set Sunday price, every other day the regular price. Gap and VIP
+ * surcharges are applied on top of this base.
+ */
+export function servicePriceForDate(
+  service: Pick<Service, "price" | "sundayPrice">,
+  date: string | null | undefined,
+): number {
+  return date && isSundayDate(date) ? service.sundayPrice : service.price;
+}
+
+/** Euro display value derived from the same whole-euro calculation. */
 export function priceForSlot(
   basePrice: number,
   preferred: boolean,
@@ -626,12 +837,23 @@ export function priceForSlot(
   return priceCentsForSlot(Math.round(basePrice * 100), preferred, options) / 100;
 }
 
-/** Parse a barber-entered euro amount without floating-point cent rounding. */
+/**
+ * Parse a barber-entered whole-euro amount into cents. A zero decimal part
+ * ("20.00", "20,0") is tolerated; any real cents are rejected.
+ */
 export function parseEuroCents(value: string): number | null {
-  const match = /^(\d{1,5})(?:[.,](\d{1,2}))?$/.exec(value.trim());
+  const match = /^(\d{1,5})(?:[.,]0{1,2})?$/.exec(value.trim());
   if (!match) return null;
-  const cents = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
+  const cents = Number(match[1]) * 100;
   return cents <= 1_000_000 ? cents : null;
+}
+
+/**
+ * Display a stored price in cents. Whole euros (every new price) show no
+ * decimals; legacy snapshots with cents keep their exact amount.
+ */
+export function formatEuroAmount(cents: number): string {
+  return cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
 }
 
 export type SlotStatus = "taken" | "requested" | "free";

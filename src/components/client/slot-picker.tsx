@@ -26,6 +26,7 @@ import {
   priceKindForSlot,
   priceForSlot,
   serviceById,
+  servicePriceForDate,
   slotStatusFor,
   todayIso,
 } from "@/domain/schedule";
@@ -201,7 +202,7 @@ export function SlotPicker({
           status,
           preferred,
           priceKind,
-          price: priceForSlot(service.price, preferred, {
+          price: priceForSlot(servicePriceForDate(service, date), preferred, {
             startsAt: time,
             ...pricingSettings,
           }),
@@ -217,7 +218,7 @@ export function SlotPicker({
           (!excludedDate || date !== excludedDate || s.time !== excludedTime) &&
           !isSlotBlocked(date, s.time, service.duration, blockedIntervals);
       });
-  }, [blockedIntervals, businessHours, date, confirmed, earliestStartMs, excludedDate, excludedTime, pendingStarts, pricingSettings, service.duration, service.price]);
+  }, [blockedIntervals, businessHours, date, confirmed, earliestStartMs, excludedDate, excludedTime, pendingStarts, pricingSettings, service]);
 
   useEffect(() => {
     if (!selectedTime || !date) return;
@@ -292,7 +293,7 @@ export function SlotPicker({
           <PanelTitle
             step={steps?.time}
             icon={Clock01Icon}
-            trailing={`${service.duration} ${t.admin.minutesShort} · ${service.price} €`}
+            trailing={`${service.duration} ${t.admin.minutesShort} · ${servicePriceForDate(service, date)} €`}
           >
             {t.client.pickTime}
           </PanelTitle>

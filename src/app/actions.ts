@@ -32,6 +32,8 @@ import {
 } from "@/lib/time-zone";
 import { CONSENT_VERSION } from "@/lib/consent/config";
 import {
+  BLOCK_REASON_MAX_LENGTH,
+  BLOCK_REASON_MIN_LENGTH,
   isStartInClientBookingWindow,
   isStartInFuture,
   minutesOf,
@@ -111,8 +113,10 @@ const adminBookingSchema = z
     serviceId: z.uuid(),
     date: shopDateSchema,
     time: shopTimeSchema,
-    priceCents: z.number().int().min(0).max(1_000_000),
+    priceCents: z.number().int().min(0).max(1_000_000).multipleOf(100),
     note: z.string().max(1000).optional(),
+    // The barber confirmed booking into closed hours or blocked time.
+    allowUnavailable: z.boolean().optional(),
   })
   // Exactly one of clientId / customerName: an existing client or a walk-in.
   // The sentinel message is mapped to a localized string in the action.
@@ -155,7 +159,8 @@ const serviceSchema = z.object({
   name: z.string().min(2).max(120),
   description: z.string().max(1000).optional(),
   durationMinutes: z.number().int().min(5).max(600),
-  priceCents: z.number().int().min(0).max(1_000_000),
+  priceCents: z.number().int().min(0).max(1_000_000).multipleOf(100),
+  sundayPriceCents: z.number().int().min(0).max(1_000_000).multipleOf(100),
   imageUrl: z.string().max(500).optional(),
 });
 
@@ -172,7 +177,8 @@ const bookingContactSchema = z.object({
 const blockDateSchema = z.object({
   start: shopDateSchema,
   end: shopDateSchema,
-  reason: z.string().max(200).optional(),
+  // Required, a few words: shown on the admin calendar and the blocked list.
+  reason: z.string().trim().min(BLOCK_REASON_MIN_LENGTH).max(BLOCK_REASON_MAX_LENGTH),
   // Optional time slice on the start date (e.g. a lunch break or a 2–4pm gap).
   // When both are present, only that window on `start` is blocked, not full days.
   startTime: shopTimeSchema.optional(),
@@ -624,7 +630,7 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
   // never trusted from the client.
   const { data: service, error: serviceError } = await supabase
     .from("services")
-    .select("name, duration_minutes, price_cents")
+    .select("name, duration_minutes, price_cents, sunday_price_cents")
     .eq("id", parsed.data.serviceId)
     .single();
 
@@ -659,6 +665,7 @@ export async function createBookingRequestAction(input: unknown): Promise<Action
       time: parsed.data.time,
       durationMinutes: service.duration_minutes,
       basePriceCents: service.price_cents,
+      sundayPriceCents: service.sunday_price_cents,
     }),
   ]);
   if (!guarded.ok) {
@@ -1663,7 +1670,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
 
   const { data: service, error: serviceError } = await supabase
     .from("services")
-    .select("name, duration_minutes, price_cents, active")
+    .select("name, duration_minutes, price_cents, sunday_price_cents, active")
     .eq("id", parsed.data.serviceId)
     .single();
 
@@ -1673,6 +1680,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
 
   const end = addMinutes(start, service.duration_minutes);
 
+  const allowUnavailable = parsed.data.allowUnavailable === true;
   const guarded = await guardSlot(supabase, {
     barberId: await getShopBarberId(),
     date: parsed.data.date,
@@ -1680,6 +1688,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
     durationMinutes: service.duration_minutes,
     start,
     end,
+    allowUnavailable,
   });
   if (!guarded.ok) {
     const error = guarded.reason === "outside-hours"
@@ -1695,6 +1704,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
     time: parsed.data.time,
     durationMinutes: service.duration_minutes,
     basePriceCents: service.price_cents,
+    sundayPriceCents: service.sunday_price_cents,
   });
   if (!quote.ok) {
     return { ok: false, error: t.feedback.slotTaken };
@@ -1714,6 +1724,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
     p_price_cents: parsed.data.priceCents,
     p_surcharge: quote.priceCents === parsed.data.priceCents && quote.surcharge,
     p_note: parsed.data.note ?? null,
+    p_allow_unavailable: allowUnavailable,
   });
 
   if (insertError || !appointmentId) {
@@ -1757,6 +1768,7 @@ export async function createAdminBookingAction(input: unknown): Promise<ActionRe
       walkIn: !parsed.data.clientId,
       priceCents: parsed.data.priceCents,
       customPrice: parsed.data.priceCents !== quote.priceCents,
+      allowUnavailable,
     },
   });
 
@@ -2107,6 +2119,7 @@ export async function createServiceAction(input: {
   description?: string;
   durationMinutes: number;
   priceCents: number;
+  sundayPriceCents: number;
   imageUrl?: string;
 }): Promise<ActionResult & { id?: string }> {
   await requireAdmin();
@@ -2125,6 +2138,7 @@ export async function createServiceAction(input: {
       description: parsed.data.description ?? null,
       duration_minutes: parsed.data.durationMinutes,
       price_cents: parsed.data.priceCents,
+      sunday_price_cents: parsed.data.sundayPriceCents,
       image_url: parsed.data.imageUrl?.trim() || null,
     })
     .select("id")
@@ -2152,6 +2166,7 @@ export async function updateServiceAction(
     description?: string;
     durationMinutes: number;
     priceCents: number;
+    sundayPriceCents: number;
     imageUrl?: string;
   },
 ): Promise<ActionResult> {
@@ -2171,6 +2186,7 @@ export async function updateServiceAction(
       description: parsed.data.description ?? null,
       duration_minutes: parsed.data.durationMinutes,
       price_cents: parsed.data.priceCents,
+      sunday_price_cents: parsed.data.sundayPriceCents,
       image_url: parsed.data.imageUrl?.trim() || null,
     })
     .eq("id", serviceId);
@@ -2373,14 +2389,17 @@ export async function uploadServiceImageAction(
 export async function blockDateAction(input: {
   start: string;
   end: string;
-  reason?: string;
+  reason: string;
+  startTime?: string;
+  endTime?: string;
 }): Promise<ActionResult> {
   await requireAdmin();
   const t = await getDict();
   const parsed = blockDateSchema.safeParse(input);
 
   if (!parsed.success) {
-    return { ok: false, error: t.feedback.pickValidStartEnd };
+    const reasonIssue = parsed.error.issues.some((issue) => issue.path[0] === "reason");
+    return { ok: false, error: reasonIssue ? t.feedback.blockReasonRequired : t.feedback.pickValidStartEnd };
   }
 
   if (parsed.data.end < parsed.data.start) {
@@ -2429,7 +2448,7 @@ export async function blockDateAction(input: {
     barber_id: barberId,
     starts_at: starts,
     ends_at: ends,
-    reason: parsed.data.reason ?? null,
+    reason: parsed.data.reason,
   });
 
   if (error) {
@@ -2832,7 +2851,7 @@ export async function requestRescheduleAction(
 
   const { data: rescheduleService, error: serviceError } = await supabase
     .from("services")
-    .select("name, price_cents")
+    .select("name, price_cents, sunday_price_cents")
     .eq("id", appointment.service_id)
     .single();
   if (serviceError || !rescheduleService) {
@@ -2847,6 +2866,7 @@ export async function requestRescheduleAction(
     time: parsed.data.time,
     durationMinutes,
     basePriceCents: rescheduleService.price_cents,
+    sundayPriceCents: rescheduleService.sunday_price_cents,
     excludeStartsAt: appointment.starts_at,
   });
   if (!quote.ok) {

@@ -48,6 +48,7 @@ export type Database = {
           description: string | null;
           duration_minutes: number;
           price_cents: number;
+          sunday_price_cents: number;
           image_url: string | null;
           active: boolean;
           created_at: string;
@@ -58,6 +59,7 @@ export type Database = {
           description?: string | null;
           duration_minutes: number;
           price_cents: number;
+          sunday_price_cents: number;
           image_url?: string | null;
           active?: boolean;
           created_at?: string;
@@ -257,6 +259,7 @@ export type Database = {
           status: "confirmed" | "cancelled";
           reminded_at: string | null;
           outcome: "completed" | "no_show" | "cancelled" | null;
+          availability_override: boolean;
           created_at: string;
         };
         Insert: {
@@ -274,6 +277,7 @@ export type Database = {
           status?: "confirmed" | "cancelled";
           reminded_at?: string | null;
           outcome?: "completed" | "no_show" | "cancelled" | null;
+          availability_override?: boolean;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["appointments"]["Insert"]>;
@@ -393,6 +397,7 @@ export type Database = {
           p_service_id: string;
           p_start: string;
           p_note?: string | null;
+          p_allow_unavailable?: boolean;
         };
         Returns: string;
       };
@@ -405,6 +410,7 @@ export type Database = {
           p_price_cents: number;
           p_surcharge: boolean;
           p_note?: string | null;
+          p_allow_unavailable?: boolean;
         };
         Returns: string;
       };

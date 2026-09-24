@@ -33,6 +33,7 @@ import {
   addDays,
   dayCapacity,
   formatDay,
+  formatEuroAmount,
   formatMonth,
   hoursInWindow,
   monthGrid,
@@ -360,7 +361,7 @@ export function ProposalComposer({
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                       {typeof request.priceCents === "number" ? (
                         <span className="font-semibold text-foreground tabular-nums">
-                          {(request.priceCents / 100).toFixed(2)} €
+                          {formatEuroAmount(request.priceCents)} €
                         </span>
                       ) : null}
                       {surcharge ? (

@@ -13,6 +13,7 @@ import { Avatar } from "@/components/shared/avatar";
 import { Button } from "@/components/shared/button";
 import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
+import { formatEuroAmount } from "@/domain/schedule";
 import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
 import type { BlockedInterval, BusinessHoursDay } from "@/domain/types";
@@ -235,7 +236,7 @@ function BookingSummaryCard({
               </p>
             </div>
             <p className="text-2xl font-semibold tracking-tight text-foreground tabular-nums">
-              {(booking.priceCents / 100).toFixed(2)} €
+              {formatEuroAmount(booking.priceCents)} €
             </p>
           </div>
         </div>

@@ -6,10 +6,11 @@ import { useState, useTransition } from "react";
 import { saveBusinessHoursAction } from "@/app/actions";
 import { Button } from "@/components/shared/button";
 import { Card, SectionHeader } from "@/components/shared/card";
+import { Combobox } from "@/components/shared/combobox";
 import { Feedback } from "@/components/shared/feedback";
-import { Field } from "@/components/shared/form";
 import { Icon } from "@/components/shared/icon";
 import { Toggle } from "@/components/shared/toggle";
+import { quarterHourTimes } from "@/domain/schedule";
 import type { BusinessHoursDay } from "@/domain/types";
 import type { ActionResult } from "@/domain/types";
 import { useT } from "@/i18n/provider";
@@ -18,6 +19,11 @@ import { cn } from "@/lib/classnames";
 // Monday-first display order; the underlying weekday numbers (0 = Sunday) and
 // the array sent to the server are unchanged.
 const DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+/** Quarter-hour options; a saved value off the grid stays selectable as-is. */
+function timeOptions(current: string) {
+  return quarterHourTimes(current).map((value) => ({ value, label: value }));
+}
 
 export function BusinessHoursEditor({
   initialHours,
@@ -136,26 +142,26 @@ export function BusinessHoursEditor({
                 {/* Time pickers */}
                 {!day.closed ? (
                   <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] items-start gap-2 sm:flex-1 lg:ml-auto lg:max-w-sm lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-                    <Field
+                    <Combobox
                       className="w-full min-w-0 max-w-full"
                       label={t.admin.from}
-                      aria-label={`${name} ${t.admin.from}`}
-                      type="time"
-                      step={1800}
+                      ariaLabel={`${name} ${t.admin.from}`}
+                      options={timeOptions(day.opensAt)}
+                      searchable={false}
                       value={day.opensAt}
-                      onChange={(e) => update(day.weekday, { opensAt: e.target.value })}
+                      onChange={(value) => update(day.weekday, { opensAt: value })}
                     />
                     <span aria-hidden className="mt-[2.25rem] hidden text-sm text-muted-foreground lg:block">
                       –
                     </span>
-                    <Field
+                    <Combobox
                       className="w-full min-w-0 max-w-full"
                       label={t.admin.to}
-                      aria-label={`${name} ${t.admin.to}`}
-                      type="time"
-                      step={1800}
+                      ariaLabel={`${name} ${t.admin.to}`}
+                      options={timeOptions(day.closesAt)}
+                      searchable={false}
                       value={day.closesAt}
-                      onChange={(e) => update(day.weekday, { closesAt: e.target.value })}
+                      onChange={(value) => update(day.weekday, { closesAt: value })}
                       error={invalid ? t.admin.businessHoursInvalid : undefined}
                     />
                   </div>

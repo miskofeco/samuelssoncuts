@@ -19,7 +19,7 @@ import { ButtonLink } from "@/components/shared/button";
 import { Card } from "@/components/shared/card";
 import { Icon, type IconSource } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
-import { DEFAULT_PRICING_SETTINGS, formatFullDay } from "@/domain/schedule";
+import { DEFAULT_PRICING_SETTINGS, formatEuroAmount, formatFullDay } from "@/domain/schedule";
 import { localeFor } from "@/i18n/config";
 import { getDict, getLang } from "@/i18n/server";
 import { bookingMapUrl } from "@/domain/shop-contact";
@@ -58,6 +58,7 @@ export default async function AppointmentDetailPage({
     name: appt.serviceName,
     duration: appt.serviceDuration,
     price: (appt.priceCents ?? 0) / 100,
+    sundayPrice: (appt.priceCents ?? 0) / 100,
     active: appt.serviceActive,
   };
   const confirmed = appt.status === "confirmed";
@@ -115,7 +116,7 @@ export default async function AppointmentDetailPage({
           </Row>
           {appt.priceCents != null ? (
             <Row icon={EuroIcon} label={t.client.detailPrice}>
-              <span className="tabular-nums">{(appt.priceCents / 100).toFixed(2)} €</span>
+              <span className="tabular-nums">{formatEuroAmount(appt.priceCents)} €</span>
               {appt.surcharge ? (
                 <span
                   className={cn(

@@ -29,13 +29,19 @@ import { Tooltip } from "@/components/shared/tooltip";
 import {
   CLOSE_MINUTES,
   addMinutesToTime,
+  blockReasonsForDate,
+  dayAvailability,
   formatDay,
   formatFullDay,
+  isMinuteUnavailable,
   minutesOf,
+  unavailableKindAt,
   monthKey,
   monthLabel,
   OPEN_MINUTES,
+  formatEuroAmount,
   serviceById,
+  servicePriceForDate,
   shiftMonth,
   shiftWeek,
   surchargeDetailsForRequest,
@@ -44,6 +50,7 @@ import {
   weekLabel,
   weekStart,
 } from "@/domain/schedule";
+import type { DayAvailability } from "@/domain/schedule";
 import { addDaysToDate, nowMinutesInShopTimeZone } from "@/lib/time-zone";
 
 import type {
@@ -65,6 +72,10 @@ import { useLiveSnapshot } from "@/hooks/use-live-snapshot";
 
 const AddBookingModal = dynamic(
   () => import("./add-booking-modal").then((module) => module.AddBookingModal),
+  { ssr: false },
+);
+const UnavailableBookingConfirm = dynamic(
+  () => import("./add-booking-modal").then((module) => module.UnavailableBookingConfirm),
   { ssr: false },
 );
 const AppointmentDetailModal = dynamic(
@@ -153,7 +164,11 @@ export function AdminCalendar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isMobile = useSyncExternalStore(subscribeMobile, mobileSnapshot, () => false);
-  const [draft, setDraft] = useState<{ date?: string; time?: string } | null>(null);
+  const [draft, setDraft] = useState<{ date?: string; time?: string; allowUnavailable?: boolean } | null>(null);
+  // A click on closed or blocked time waits here for the barber's confirmation.
+  const [unavailableDraft, setUnavailableDraft] = useState<
+    { date: string; time?: string; reason: "closed" | "blocked" } | null
+  >(null);
   const [selected, setSelected] = useState<CalendarItem | null>(null);
   const [addOpened, setAddOpened] = useState(false);
   const [detailOpened, setDetailOpened] = useState(false);
@@ -190,6 +205,36 @@ export function AdminCalendar({
   );
   const { appointments, proposals, requests, clients, services, pricingSettings, blockedIntervals, businessHours } = liveCalendar;
   const blockedDates = useMemo(() => new Set(liveCalendar.blockedDates), [liveCalendar.blockedDates]);
+  // Opening hours and partial blocks per day, so every view marks the same
+  // closed time the booking modal and server guards reject.
+  const availabilityFor = (date: string) => dayAvailability(date, businessHours, blockedIntervals);
+  // A whole day off is "closed" when the weekday is switched off in opening
+  // hours (grey) and "blocked" when blocked-time ranges take it out (red).
+  const dayOffKind = (date: string): DayOffKind => {
+    const availability = availabilityFor(date);
+    if (!blockedDates.has(date) && !availability.closedAllDay) return null;
+    const closedWeekday = availability.closedPeriods.some(
+      (item) => item.kind === "closed" && item.startMinutes === 0 && item.endMinutes === 24 * 60,
+    );
+    return closedWeekday && !blockedDates.has(date) ? "closed" : "blocked";
+  };
+  // The barber's own notes for blocks touching a day (admin payload only).
+  const blockReasonsFor = (date: string) => blockReasonsForDate(date, blockedIntervals);
+  // Why clients could not book this slot (or, without a time, this whole day).
+  const unavailableReason = (date: string, time?: string): DayOffKind => {
+    if (time) return dayOffKind(date) ?? unavailableKindAt(availabilityFor(date), minutesOf(time));
+    return dayOffKind(date);
+  };
+  // Every "add booking" entry point in the calendar goes through here: closed
+  // or blocked time asks the barber to confirm before the modal opens.
+  const requestAdd = (date: string, time?: string) => {
+    const reason = unavailableReason(date, time);
+    if (reason) {
+      setUnavailableDraft({ date, time, reason });
+      return;
+    }
+    setDraft({ date, time });
+  };
   const channelId = useId();
   useEffect(() => {
     const supabase = createClient();
@@ -241,12 +286,13 @@ export function AdminCalendar({
       const client = appointment.clientId ? clientsById.get(appointment.clientId) : undefined;
       const request = appointment.requestId ? requestsById.get(appointment.requestId) : undefined;
       const surcharge = request ? surchargeDetailsForRequest(request, pricingSettings) : null;
-      const bookedPriceCents = appointment.priceCents ?? request?.priceCents ?? Math.round(service.price * 100);
+      const servicePrice = servicePriceForDate(service, appointment.date);
+      const bookedPriceCents = appointment.priceCents ?? request?.priceCents ?? Math.round(servicePrice * 100);
       push(appointment.date, {
         id: appointment.id,
         title: client?.name ?? appointment.clientName ?? t.admin.clientFallback,
         service: service.name,
-        servicePrice: service.price,
+        servicePrice,
         finalPriceCents: bookedPriceCents,
         surcharge: request?.surcharge,
         surchargeKind: surcharge?.kind,
@@ -270,12 +316,13 @@ export function AdminCalendar({
       const client = clientsById.get(request.clientId);
       const service = serviceById(request.serviceId, services);
       const surcharge = surchargeDetailsForRequest(request, pricingSettings);
-      const bookedPriceCents = request.priceCents ?? Math.round(service.price * 100);
+      const servicePrice = servicePriceForDate(service, slot.date);
+      const bookedPriceCents = request.priceCents ?? Math.round(servicePrice * 100);
       push(slot.date, {
         id: slot.kind === "pending" ? request.id : slot.proposal.id,
         title: client?.name ?? t.admin.clientFallback,
         service: service.name,
-        servicePrice: service.price,
+        servicePrice,
         finalPriceCents: bookedPriceCents,
         surcharge: request.surcharge,
         surchargeKind: surcharge?.kind,
@@ -480,8 +527,10 @@ export function AdminCalendar({
             t={t}
             date={selectedDate}
             items={itemsByDate.get(selectedDate) ?? []}
-            blocked={blockedDates.has(selectedDate)}
-            onAddSlot={(date, time) => setDraft({ date, time })}
+            dayOff={dayOffKind(selectedDate)}
+            blockReasons={blockReasonsFor(selectedDate)}
+            availability={availabilityFor(selectedDate)}
+            onAddSlot={requestAdd}
             onSelect={setSelected}
           />
         ) : view === "week" ? (
@@ -490,8 +539,10 @@ export function AdminCalendar({
             locale={locale}
             weekMonday={weekMonday}
             itemsByDate={itemsByDate}
-            blockedDates={blockedDates}
-            onAddSlot={(date, time) => setDraft({ date, time })}
+            dayOffKind={dayOffKind}
+            availabilityFor={availabilityFor}
+            blockReasonsFor={blockReasonsFor}
+            onAddSlot={requestAdd}
             onSelect={setSelected}
           />
         ) : (
@@ -504,8 +555,8 @@ export function AdminCalendar({
               selected={selectedDate}
               onSelect={(iso) => {
                 const items = itemsByDate.get(iso) ?? [];
-                if (items.length === 0 && !blockedDates.has(iso) && iso >= today) {
-                  setDraft({ date: iso });
+                if (items.length === 0 && iso >= today) {
+                  requestAdd(iso);
                   return;
                 }
                 // Drill into week view for that day — works for any date (past or future).
@@ -513,7 +564,8 @@ export function AdminCalendar({
               }}
               modifiers={{
                 past: (day) => localDateToIso(day) < today,
-                blocked: (day) => blockedDates.has(localDateToIso(day)),
+                blocked: (day) => dayOffKind(localDateToIso(day)) === "blocked",
+                closed: (day) => dayOffKind(localDateToIso(day)) === "closed",
               }}
               dayClassName={({ modifiers }) =>
                 cn(
@@ -521,14 +573,25 @@ export function AdminCalendar({
                   modifiers.blocked &&
                     !modifiers.past &&
                     "border-red-300 bg-red-50 text-red-900 dark:border-red-500/50 dark:bg-red-500/15 dark:text-red-100",
+                  modifiers.closed && !modifiers.past && "bg-foreground/6 text-muted-foreground",
                 )
               }
               renderDay={({ iso, modifiers }) => {
                 const items = itemsByDate.get(iso) ?? [];
                 if (modifiers.blocked) {
+                  const reasons = blockReasonsFor(iso);
                   return (
-                    <span className="inline-flex min-w-0 items-center gap-1 text-[0.65rem] font-semibold tracking-wide uppercase">
+                    <span className="inline-flex min-w-0 items-center gap-1 text-[0.65rem] font-semibold">
                       <Icon icon={BlockedIcon} className="size-3 shrink-0" strokeWidth={2.5} />
+                      <span className="sr-only sm:not-sr-only sm:truncate">
+                        {reasons.length > 0 ? reasons.join(", ") : t.admin.blockedShort}
+                      </span>
+                    </span>
+                  );
+                }
+                if (modifiers.closed) {
+                  return (
+                    <span className="min-w-0 text-[0.65rem] font-semibold tracking-wide uppercase">
                       <span className="sr-only sm:not-sr-only sm:truncate">{t.admin.off}</span>
                     </span>
                   );
@@ -564,10 +627,27 @@ export function AdminCalendar({
           services={services}
           initialDate={draft?.date}
           initialTime={draft?.time}
+          allowUnavailable={draft?.allowUnavailable}
           bookedByDate={bookedByDate}
           businessHours={businessHours}
           blockedIntervals={blockedIntervals}
           pricingSettings={pricingSettings}
+        />
+      ) : null}
+
+      {unavailableDraft ? (
+        <UnavailableBookingConfirm
+          open
+          onOpenChange={(next) => {
+            if (!next) setUnavailableDraft(null);
+          }}
+          reason={unavailableDraft.reason}
+          date={unavailableDraft.date}
+          time={unavailableDraft.time}
+          onConfirm={() => {
+            setDraft({ date: unavailableDraft.date, time: unavailableDraft.time, allowUnavailable: true });
+            setUnavailableDraft(null);
+          }}
         />
       ) : null}
 
@@ -592,6 +672,9 @@ function LegendItem({ tone, children }: { tone: string; children: React.ReactNod
     </li>
   );
 }
+
+/** Whole day unavailable: `closed` per opening hours (grey) or `blocked` (red). */
+type DayOffKind = "closed" | "blocked" | null;
 
 // Desktop time grid spans the working day. Each hour is HOUR_HEIGHT px tall, so
 // a booking's top offset and height map directly to its start time / duration.
@@ -624,41 +707,74 @@ function DayAgenda({
   t,
   date,
   items,
-  blocked,
+  dayOff,
+  blockReasons,
+  availability,
   onAddSlot,
   onSelect,
 }: {
   t: Dict;
   date: string;
   items: CalendarItem[];
-  blocked: boolean;
+  dayOff: DayOffKind;
+  blockReasons: string[];
+  availability: DayAvailability;
   onAddSlot: (date: string, time?: string) => void;
   onSelect: (item: CalendarItem) => void;
 }) {
   const today = todayIso();
   const sorted = [...items].sort((a, b) => (a.time < b.time ? -1 : 1));
-  const addTime = firstFreeSlot(sorted, date === today);
-  const canAdd = date >= today && !blocked;
+  const addTime = firstFreeSlot(sorted, date === today, availability);
+  // Closed or blocked days stay addable; the calendar asks for confirmation.
+  const canAdd = date >= today;
+  const blockedPeriods = availability.closedPeriods.filter((period) => period.kind === "blocked");
 
   return (
     <div className="space-y-4 p-4 sm:p-5">
-      {blocked ? (
+      {dayOff === "blocked" ? (
         <div className="flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-500/15 dark:text-red-200 dark:ring-red-500/30">
-          <Icon icon={BlockedIcon} className="size-5" strokeWidth={2} />
+          <Icon icon={BlockedIcon} className="size-5 shrink-0" strokeWidth={2} />
+          <span className="min-w-0 truncate">
+            {blockReasons.length > 0 ? `${t.admin.blockedShort} · ${blockReasons.join(", ")}` : t.admin.blockedShort}
+          </span>
+        </div>
+      ) : dayOff === "closed" ? (
+        <div className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2.5 text-sm font-semibold text-muted-foreground ring-1 ring-foreground/10">
+          <Icon icon={Clock01Icon} className="size-5" strokeWidth={2} />
           {t.admin.off}
         </div>
-      ) : null}
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
+          <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-muted px-2.5 tabular-nums">
+            <Icon icon={Clock01Icon} className="size-3.5" strokeWidth={2} />
+            {t.admin.openingHoursRange(timeOfMinutes(availability.opensAt), timeOfMinutes(availability.closesAt))}
+          </span>
+          {blockedPeriods.map((period) => (
+            <span
+              key={`${period.startMinutes}-${period.endMinutes}`}
+              className="inline-flex h-7 items-center gap-1.5 rounded-full bg-red-50 px-2.5 text-red-800 tabular-nums dark:bg-red-500/15 dark:text-red-200"
+            >
+              <Icon icon={BlockedIcon} className="size-3.5" strokeWidth={2} />
+              {t.admin.blockedPeriodRange(
+                timeOfMinutes(period.startMinutes),
+                timeOfMinutes(period.endMinutes),
+              )}
+              {period.reason ? ` · ${period.reason}` : null}
+            </span>
+          ))}
+        </div>
+      )}
 
       {canAdd ? (
         <Button
           type="button"
           variant="outline"
           size="lg"
-          onClick={() => onAddSlot(date, addTime)}
+          onClick={() => onAddSlot(date, addTime ?? undefined)}
           className="w-full sm:w-auto"
         >
           <Icon icon={Add01Icon} strokeWidth={2.2} />
-          {t.admin.addAt(addTime)}
+          {addTime ? t.admin.addAt(addTime) : t.admin.addBooking}
         </Button>
       ) : null}
 
@@ -716,7 +832,7 @@ function DayAgenda({
                     </StatusPill>
                   ) : null}
                   <span className="shrink-0 text-sm font-semibold text-foreground tabular-nums">
-                    {(item.finalPriceCents / 100).toFixed(2)} €
+                    {formatEuroAmount(item.finalPriceCents)} €
                   </span>
                 </button>
               </li>
@@ -768,7 +884,9 @@ function WeekGrid({
   locale,
   weekMonday,
   itemsByDate,
-  blockedDates,
+  dayOffKind,
+  availabilityFor,
+  blockReasonsFor,
   onAddSlot,
   onSelect,
 }: {
@@ -776,8 +894,10 @@ function WeekGrid({
   locale: string;
   weekMonday: string;
   itemsByDate: Map<string, CalendarItem[]>;
-  blockedDates: Set<string>;
-  onAddSlot: (date: string, time: string) => void;
+  dayOffKind: (date: string) => DayOffKind;
+  availabilityFor: (date: string) => DayAvailability;
+  blockReasonsFor: (date: string) => string[];
+  onAddSlot: (date: string, time?: string) => void;
   onSelect: (item: CalendarItem) => void;
 }) {
   const today = todayIso();
@@ -826,20 +946,27 @@ function WeekGrid({
               <div className="bg-card" />
               {days.map((day) => {
                 const isToday = day === today;
-                const isBlocked = blockedDates.has(day);
+                const dayOff = dayOffKind(day);
                 return (
                   <div
                     key={day}
                     className={cn(
                       "px-2 py-3 text-center text-sm font-semibold",
-                      isBlocked
+                      dayOff === "blocked"
                         ? "bg-red-50 text-red-900 dark:bg-red-500/15 dark:text-red-100"
-                        : isToday
+                        : dayOff === "closed"
+                          ? "bg-muted text-muted-foreground"
+                          : isToday
                           ? "bg-primary text-primary-foreground"
                           : "bg-card text-foreground",
                     )}
                   >
                     {formatDay(day, locale)}
+                    {dayOff === "blocked" && blockReasonsFor(day).length > 0 ? (
+                      <span className="mt-0.5 block truncate text-[0.7rem] font-medium text-red-700 dark:text-red-200">
+                        {blockReasonsFor(day).join(", ")}
+                      </span>
+                    ) : null}
                   </div>
                 );
               })}
@@ -876,7 +1003,8 @@ function WeekGrid({
                   items={itemsByDate.get(day) ?? []}
                   isToday={day === today}
                   isPast={day < today}
-                  isBlocked={blockedDates.has(day)}
+                  dayOff={dayOffKind(day)}
+                  availability={availabilityFor(day)}
                   onAddSlot={onAddSlot}
                   onSelect={onSelect}
                 />
@@ -895,8 +1023,15 @@ function WeekGrid({
           const items = itemsByDate.get(day) ?? [];
           const isToday = day === today;
           const isPast = day < today;
-          const isBlocked = blockedDates.has(day);
-          const canAdd = !isBlocked && !isPast;
+          const dayOff = dayOffKind(day);
+          const isBlocked = dayOff === "blocked";
+          const isClosed = dayOff === "closed";
+          const addTime = firstFreeSlot(items, isToday, availabilityFor(day));
+          const partialBlocks = dayOff
+            ? []
+            : availabilityFor(day).closedPeriods.filter((period) => period.kind === "blocked");
+          // Closed or blocked days stay addable; the calendar asks for confirmation.
+          const canAdd = !isPast;
           return (
             <section
               key={day}
@@ -904,7 +1039,9 @@ function WeekGrid({
                 "rounded-xl border p-3",
                 isBlocked
                   ? "border-2 border-red-300 bg-red-50 dark:border-red-500/60 dark:bg-red-500/15"
-                  : isToday
+                  : isClosed
+                    ? "border-transparent bg-muted ring-1 ring-foreground/10"
+                    : isToday
                     ? "border-primary bg-card"
                     : "border-transparent bg-card ring-1 ring-foreground/10",
               )}
@@ -914,19 +1051,21 @@ function WeekGrid({
                   className={cn(
                     "text-sm font-semibold text-foreground",
                     isBlocked && "text-red-900 dark:text-red-100",
+                    isClosed && "text-muted-foreground",
                   )}
                 >
                   {formatDay(day, locale)}
                 </h3>
                 <div className="flex items-center gap-2">
-                  {isBlocked ? <StatusPill tone="danger">{t.admin.off}</StatusPill> : null}
+                  {isBlocked ? <StatusPill tone="danger">{t.admin.blockedShort}</StatusPill> : null}
+                  {isClosed ? <StatusPill tone="neutral">{t.admin.off}</StatusPill> : null}
                   {isToday ? <StatusPill tone="neutral" dot>{t.common.today}</StatusPill> : null}
                   {canAdd ? (
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => onAddSlot(day, firstFreeSlot(items, isToday))}
+                      onClick={() => onAddSlot(day, addTime ?? undefined)}
                       className="h-9"
                     >
                       <Icon icon={Add01Icon} strokeWidth={2.2} />
@@ -935,6 +1074,19 @@ function WeekGrid({
                   ) : null}
                 </div>
               </div>
+              {partialBlocks.length > 0 ? (
+                <ul className="mt-2 flex flex-wrap gap-1.5">
+                  {partialBlocks.map((period) => (
+                      <li
+                        key={`${period.startMinutes}-${period.endMinutes}`}
+                        className="inline-flex h-6 items-center rounded-full bg-red-50 px-2 text-[0.7rem] font-medium text-red-800 tabular-nums dark:bg-red-500/15 dark:text-red-200"
+                      >
+                        {timeOfMinutes(period.startMinutes)}–{timeOfMinutes(period.endMinutes)}
+                        {period.reason ? ` · ${period.reason}` : null}
+                      </li>
+                    ))}
+                </ul>
+              ) : null}
               <div className="mt-3 space-y-2">
                 {items.length === 0 ? (
                   <p
@@ -942,9 +1094,14 @@ function WeekGrid({
                       "rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground",
                       isBlocked &&
                         "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200",
+                      isClosed && "bg-card",
                     )}
                   >
-                    {isBlocked ? t.admin.off : t.admin.noAppointments}
+                    {isBlocked
+                      ? blockReasonsFor(day).join(", ") || t.admin.blockedShort
+                      : isClosed
+                        ? t.admin.off
+                        : t.admin.noAppointments}
                   </p>
                 ) : (
                   items.map((item) => (
@@ -981,19 +1138,21 @@ function earliestMinute(isToday: boolean) {
   return Math.ceil(Math.max(OPEN_MINUTES, nowMin) / SNAP_MINUTES) * SNAP_MINUTES;
 }
 
-// First 15-min slot from `earliest` that doesn't fall inside an existing booking,
-// or the earliest slot if the whole day is somehow busy. Used to seed the mobile
-// "+ Add" button so it lands on a sensible free time rather than a fixed 09:00.
-function firstFreeSlot(items: CalendarItem[], isToday: boolean) {
+// First 15-min slot from `earliest` inside the day's opening hours that is not
+// closed, blocked, or inside an existing booking; null when none remains. Seeds
+// the "+ Add" buttons so they land on a bookable time rather than a fixed 09:00.
+function firstFreeSlot(items: CalendarItem[], isToday: boolean, availability: DayAvailability) {
   const busy = items.map((item) => ({
     start: minutesOf(item.time),
     end: minutesOf(item.time) + item.durationMinutes,
   }));
-  const start = earliestMinute(isToday);
-  for (let minute = start; minute <= CLOSE_MINUTES - SNAP_MINUTES; minute += SNAP_MINUTES) {
+  const start = Math.max(earliestMinute(isToday), availability.opensAt);
+  const lastStart = Math.min(availability.closesAt, CLOSE_MINUTES) - SNAP_MINUTES;
+  for (let minute = start; minute <= lastStart; minute += SNAP_MINUTES) {
+    if (isMinuteUnavailable(availability, minute)) continue;
     if (!busy.some((b) => minute >= b.start && minute < b.end)) return timeOfMinutes(minute);
   }
-  return timeOfMinutes(Math.min(start, CLOSE_MINUTES - SNAP_MINUTES));
+  return null;
 }
 
 function layoutOverlappingItems(items: CalendarItem[]) {
@@ -1025,7 +1184,8 @@ function DayColumn({
   items,
   isToday,
   isPast,
-  isBlocked,
+  dayOff,
+  availability,
   onAddSlot,
   onSelect,
 }: {
@@ -1035,8 +1195,9 @@ function DayColumn({
   items: CalendarItem[];
   isToday: boolean;
   isPast: boolean;
-  isBlocked: boolean;
-  onAddSlot: (date: string, time: string) => void;
+  dayOff: DayOffKind;
+  availability: DayAvailability;
+  onAddSlot: (date: string, time?: string) => void;
   onSelect: (item: CalendarItem) => void;
 }) {
   const hours = Array.from({ length: GRID_HOURS }, (_, index) => START_HOUR + index);
@@ -1059,48 +1220,74 @@ function DayColumn({
   }
 
   function handleMove(event: React.MouseEvent<HTMLDivElement>) {
-    if (isBlocked || isPast) return;
+    if (isPast) return;
     const rect = event.currentTarget.getBoundingClientRect();
     setHoverMin(snapPointerToMinutes(event.clientY, rect));
   }
 
   function handleClick(event: React.MouseEvent<HTMLDivElement>) {
-    if (isBlocked || isPast) return;
+    if (isPast) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const minute = snapPointerToMinutes(event.clientY, rect);
     // No-op when the click lands inside an existing booking (the chip's own
-    // onClick handles selection) or before the earliest bookable time.
+    // onClick handles selection) or before the earliest bookable time. Closed
+    // and blocked time is still addable; the calendar asks for confirmation.
     if (minuteIsBusy(minute) || minute < earliest) return;
     onAddSlot(day, timeOfMinutes(minute));
   }
 
+  // Unavailable kind at a minute: the whole-day kind wins on days off.
+  const kindAt = (minute: number) => dayOff ?? unavailableKindAt(availability, minute);
+  const hoverKind = hoverMin === null ? null : kindAt(hoverMin);
   const showHoverAdd =
-    !isBlocked && !isPast && hoverMin !== null && !minuteIsBusy(hoverMin) && hoverMin >= earliest;
+    !isPast &&
+    hoverMin !== null &&
+    !minuteIsBusy(hoverMin) &&
+    hoverMin >= earliest;
+  const gridStart = START_HOUR * 60;
+  const gridEnd = END_HOUR * 60;
 
   return (
     <div
       className={cn(
         "relative",
-        isBlocked
+        dayOff === "blocked"
           ? "bg-red-50 dark:bg-red-500/15"
-          : isToday
+          : dayOff === "closed"
+            ? "bg-card"
+            : isToday
             ? "bg-muted/60"
             : "bg-card",
       )}
       style={{ height: GRID_HOURS * HOUR_HEIGHT }}
     >
-      {/* Hour gridlines (non-interactive background) */}
-      {hours.map((hour, index) => (
-        <div
-          key={hour}
-          style={{ height: HOUR_HEIGHT }}
-          className={cn(
-            "border-t",
-            index === 0 && "border-t-0",
-            isBlocked ? "border-red-200/70 dark:border-red-500/20" : "border-border/60",
-          )}
-        />
-      ))}
+      {/* Whole closed weekday: the same grey as closed hours on open days. */}
+      {dayOff === "closed" ? (
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-foreground/6" />
+      ) : null}
+
+      {/* Hour gridlines, lifted above the closed-time shading (z-1) and
+          click-through so the add surface underneath still receives clicks.
+          A line inside one kind of unavailable time takes that kind's tint. */}
+      {hours.map((hour, index) => {
+        const minute = hour * 60;
+        const kind = kindAt(minute) === kindAt(minute - 1) ? kindAt(minute) : null;
+        return (
+          <div
+            key={hour}
+            style={{ height: HOUR_HEIGHT }}
+            className={cn(
+              "pointer-events-none relative z-1 border-t",
+              index === 0 && "border-t-0",
+              kind === "blocked"
+                ? "border-red-200/70 dark:border-red-500/20"
+                : kind === "closed"
+                  ? "border-foreground/10"
+                  : "border-border/60",
+            )}
+          />
+        );
+      })}
 
       {/* Past-time veil on today's column (above gridlines, below bookings/click) */}
       {isToday && earliest > OPEN_MINUTES && earliest <= CLOSE_MINUTES ? (
@@ -1111,24 +1298,67 @@ function DayColumn({
         />
       ) : null}
 
+      {/* Closed hours (grey) and partial blocks (red, like a blocked day).
+          Blocks are painted after closed hours so they stay red on overlap. */}
+      {!dayOff
+        ? [...availability.closedPeriods]
+          .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "closed" ? -1 : 1))
+          .map((period) => {
+          const start = Math.max(period.startMinutes, gridStart);
+          const end = Math.min(period.endMinutes, gridEnd);
+          if (end <= start) return null;
+          return (
+            <div
+              key={`${period.kind}-${period.startMinutes}-${period.endMinutes}`}
+              aria-hidden
+              className={cn(
+                "pointer-events-none absolute inset-x-0",
+                period.kind === "blocked"
+                  ? "bg-red-50 dark:bg-red-500/15"
+                  : "bg-foreground/6",
+              )}
+              style={{
+                top: ((start - gridStart) / 60) * HOUR_HEIGHT,
+                height: ((end - start) / 60) * HOUR_HEIGHT,
+              }}
+            >
+              {/* A block's reason is its only label; closed hours stay plain grey. */}
+              {period.reason && (end - start) >= 20 ? (
+                <span className="block truncate px-1.5 pt-0.5 text-[0.65rem] font-medium text-red-700 dark:text-red-200">
+                  {period.reason}
+                </span>
+              ) : null}
+            </div>
+          );
+        })
+        : null}
+
       {/* Click-to-add surface — snaps to the cursor's 15-min slot. Sits beneath
           the booking chips (z-10) so clicks on bookings select rather than add. */}
-      {!isBlocked ? (
+      {!isPast ? (
         <div
             className="absolute inset-0 cursor-pointer"
             onMouseMove={handleMove}
             onMouseLeave={() => setHoverMin(null)}
             onClick={handleClick}
             title={
-              hoverMin !== null
-                ? t.admin.addBookingAt(formatDay(day, locale), timeOfMinutes(hoverMin))
-                : undefined
+              hoverMin === null
+                ? undefined
+                : t.admin.addBookingAt(formatDay(day, locale), timeOfMinutes(hoverMin))
             }
           >
             {showHoverAdd ? (
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-x-1 flex items-center gap-1 rounded-md border border-dashed border-foreground/30 bg-card/80 px-1.5 text-[0.6rem] font-semibold text-muted-foreground"
+                className={cn(
+                  "pointer-events-none absolute inset-x-1 flex items-center gap-1 rounded-md border border-dashed px-1.5 text-[0.6rem] font-semibold",
+                  // Closed/blocked starts stay addable but look like an exception.
+                  hoverKind === "blocked"
+                    ? "border-red-400/70 bg-card/90 text-red-700 dark:text-red-200"
+                    : hoverKind === "closed"
+                      ? "border-foreground/40 bg-card text-foreground/70"
+                      : "border-foreground/30 bg-card/80 text-muted-foreground",
+                )}
                 style={{
                   top: ((hoverMin - START_HOUR * 60) / 60) * HOUR_HEIGHT,
                   height: (SNAP_MINUTES / 60) * HOUR_HEIGHT,
@@ -1289,7 +1519,7 @@ function MobileChip({
         </span>
       </span>
       <span className="shrink-0 text-sm font-semibold tabular-nums">
-        {(item.finalPriceCents / 100).toFixed(2)} €
+        {formatEuroAmount(item.finalPriceCents)} €
       </span>
     </button>
   );

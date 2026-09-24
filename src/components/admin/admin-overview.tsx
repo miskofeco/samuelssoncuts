@@ -20,6 +20,7 @@ import { isReadyForApproval } from "@/domain/approval";
 import {
   formatFullDay,
   serviceById,
+  servicePriceForDate,
   surchargeDetailsForRequest,
   todayIso,
 } from "@/domain/schedule";
@@ -99,7 +100,8 @@ export async function AdminOverview({
     const service = serviceById(appointment.serviceId, services);
     const request = appointment.requestId ? requestsById.get(appointment.requestId) : undefined;
     const surcharge = request ? surchargeDetailsForRequest(request, pricingSettings) : null;
-    const servicePriceCents = Math.round(service.price * 100);
+    const servicePrice = servicePriceForDate(service, appointment.date);
+    const servicePriceCents = Math.round(servicePrice * 100);
     const bookedPriceCents = appointment.priceCents ?? request?.priceCents ?? servicePriceCents;
     const clientName = client?.name ?? appointment.clientName ?? t.admin.clientFallback;
 
@@ -113,7 +115,7 @@ export async function AdminOverview({
         id: appointment.id,
         title: clientName,
         service: service.name,
-        servicePrice: service.price,
+        servicePrice,
         finalPriceCents: bookedPriceCents,
         surcharge: request?.surcharge,
         surchargeKind: surcharge?.kind,

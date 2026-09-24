@@ -31,6 +31,7 @@ type ServiceItem = {
   name: string;
   duration: number;
   price: number;
+  sundayPrice: number;
   imageUrl?: string | null;
   active: boolean;
   description: string | null;
@@ -42,6 +43,7 @@ type Draft = {
   description: string;
   duration: string;
   price: string;
+  sundayPrice: string;
   imageUrl: string;
 };
 
@@ -50,6 +52,7 @@ const emptyDraft: Draft = {
   description: "",
   duration: "45",
   price: "32",
+  sundayPrice: "32",
   imageUrl: "",
 };
 
@@ -97,6 +100,7 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
       description: service.description ?? "",
       duration: String(service.duration),
       price: String(service.price),
+      sundayPrice: String(service.sundayPrice),
       imageUrl: service.imageUrl ?? "",
     });
   }
@@ -146,7 +150,8 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
       name: draft.name,
       description: draft.description || undefined,
       durationMinutes: Number(draft.duration),
-      priceCents: Math.round(Number(draft.price) * 100),
+      priceCents: Math.round(Number(draft.price)) * 100,
+      sundayPriceCents: Math.round(Number(draft.sundayPrice)) * 100,
       imageUrl: draft.imageUrl || undefined,
     };
     startTransition(async () => {
@@ -256,7 +261,8 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-foreground">{service.name}</p>
                       <p className="text-sm text-muted-foreground tabular-nums">
-                        {service.duration} {t.admin.minutesShort} · {service.price} €
+                        {service.duration} {t.admin.minutesShort} · {service.price} € ·{" "}
+                        {t.admin.sundayPriceLabel(service.sundayPrice)}
                       </p>
                     </div>
                     {!service.active ? <StatusPill tone="neutral">{t.admin.hiddenLabel}</StatusPill> : null}
@@ -356,27 +362,40 @@ export function ServiceManager({ services }: { services: ServiceItem[] }) {
               onChange={(event) => setDraft({ ...draft, description: event.target.value })}
             />
 
-            <div className="grid grid-cols-2 gap-3">
-              <Field
-                type="number"
-                inputMode="numeric"
-                min={15}
-                max={480}
-                step={15}
-                label={t.admin.serviceDuration}
-                value={draft.duration}
-                onChange={(event) => setDraft({ ...draft, duration: event.target.value })}
-              />
-              <Field
-                type="number"
-                inputMode="decimal"
-                min={0}
-                max={1000}
-                step={0.5}
-                label={t.admin.servicePrice}
-                value={draft.price}
-                onChange={(event) => setDraft({ ...draft, price: event.target.value })}
-              />
+            <Field
+              type="number"
+              inputMode="numeric"
+              min={15}
+              max={480}
+              step={15}
+              label={t.admin.serviceDuration}
+              value={draft.duration}
+              onChange={(event) => setDraft({ ...draft, duration: event.target.value })}
+            />
+            <div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={1000}
+                  step={1}
+                  label={t.admin.servicePrice}
+                  value={draft.price}
+                  onChange={(event) => setDraft({ ...draft, price: event.target.value })}
+                />
+                <Field
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={1000}
+                  step={1}
+                  label={t.admin.serviceSundayPrice}
+                  value={draft.sundayPrice}
+                  onChange={(event) => setDraft({ ...draft, sundayPrice: event.target.value })}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">{t.admin.serviceSundayPriceHint}</p>
             </div>
             <Feedback result={feedback && !feedback.ok ? feedback : null} />
             <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">

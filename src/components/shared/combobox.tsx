@@ -13,7 +13,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useT } from "@/i18n/provider";
 import { cn } from "@/lib/classnames";
@@ -48,6 +48,10 @@ export function Combobox({
   className,
   /** Hide the search input for short fixed lists (e.g. time slots). */
   searchable = true,
+  /** Accessible name when the visible label repeats across rows (e.g. per weekday). */
+  ariaLabel,
+  /** Validation error shown under the trigger; marks it `aria-invalid`. */
+  error,
 }: {
   label: string;
   options: ComboboxOption[];
@@ -56,6 +60,8 @@ export function Combobox({
   placeholder?: string;
   className?: string;
   searchable?: boolean;
+  ariaLabel?: string;
+  error?: string | null;
 }) {
   const t = useT();
   const id = useId();
@@ -82,7 +88,7 @@ export function Combobox({
   }
 
   return (
-    <Field className={cn("gap-1.5", className)}>
+    <Field data-invalid={error ? true : undefined} className={cn("gap-1.5", className)}>
       <FieldLabel htmlFor={id} className="text-sm font-medium text-foreground">
         {label}
       </FieldLabel>
@@ -94,6 +100,9 @@ export function Combobox({
             variant="outline"
             role="combobox"
             aria-expanded={open}
+            aria-label={ariaLabel}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? `${id}-error` : undefined}
             className="h-10 w-full justify-between bg-card px-3 font-normal aria-expanded:bg-card"
           >
             <span className={cn("truncate", !selected && "text-muted-foreground")}>
@@ -143,6 +152,11 @@ export function Combobox({
           </Command>
         </PopoverContent>
       </Popover>
+      {error ? (
+        <FieldError id={`${id}-error`} className="text-xs font-medium">
+          {error}
+        </FieldError>
+      ) : null}
     </Field>
   );
 }

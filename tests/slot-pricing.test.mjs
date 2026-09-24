@@ -16,15 +16,48 @@ test("VIP pricing starts at 17:00, defaults to 20 percent, and overrides gap pri
   assert.match(schedule, /isVipStart\(options\.startsAt\)/);
   assert.match(schedule, /vipSurchargePercent/);
   assert.match(schedule, /gapSurchargePercent/);
-  assert.match(schedule, /return Math\.round\(basePriceCents \* \(1 \+ surchargePercent \/ 100\)\)/);
+  assert.match(schedule, /return wholeEuroCents\(\(wholeBaseCents \* \(100 \+ surchargePercent\)\) \/ 100\)/);
   assert.match(actions, /quoteClientSlot/);
-  assert.match(bookingPricing, /priceCentsForSlot\(input\.basePriceCents, preferred,[\s\S]*startsAt: input\.time/);
+  assert.match(bookingPricing, /priceCentsForSlot\(basePriceCents, preferred,[\s\S]*startsAt: input\.time/);
 });
 
 test("VIP starts override best-price connecting slots in the client and server quotes", () => {
   assert.match(schedule, /export function priceKindForSlot/);
   assert.match(schedule, /if \(options\.startsAt && isVipStart\(options\.startsAt\)\) return "vip";\s*if \(preferred\) return "base"/);
   assert.match(bookingPricing, /priceKindForSlot\(preferred, \{ startsAt: input\.time \}\) !== "base"/);
+});
+
+test("Sunday bookings quote from the service's Sunday price on client and server", () => {
+  const migration = readFileSync("supabase/migrations/0048_sunday_service_prices.sql", "utf8");
+  const serviceManager = readFileSync("src/components/admin/service-manager.tsx", "utf8");
+
+  assert.match(migration, /add column sunday_price_cents integer/);
+  assert.match(migration, /set sunday_price_cents = price_cents/);
+  assert.match(migration, /alter column sunday_price_cents set not null/);
+  assert.match(bookingPricing, /isSundayDate\(input\.date\) \? input\.sundayPriceCents : input\.basePriceCents/);
+  // Every server quote caller passes the Sunday price alongside the regular one.
+  assert.equal(
+    (actions.match(/basePriceCents: \w+\.price_cents,\s*sundayPriceCents: \w+\.sunday_price_cents/g) ?? []).length,
+    3,
+  );
+  assert.match(actions, /sundayPriceCents: z\.number\(\)\.int\(\)\.min\(0\)\.max\(1_000_000\)/);
+  assert.match(actions, /sunday_price_cents: parsed\.data\.sundayPriceCents/);
+  assert.match(slotPicker, /priceForSlot\(servicePriceForDate\(service, date\), preferred/);
+  assert.match(requestForm, /const basePrice = servicePriceForDate\(service, date\)/);
+  assert.match(serviceManager, /label=\{t\.admin\.serviceSundayPrice\}/);
+});
+
+test("catalog and manual prices are whole euros end to end", () => {
+  const migration = readFileSync("supabase/migrations/0049_whole_euro_service_prices.sql", "utf8");
+  const serviceManager = readFileSync("src/components/admin/service-manager.tsx", "utf8");
+
+  assert.match(migration, /set price_cents = round\(price_cents \/ 100\.0\) \* 100/);
+  assert.match(migration, /sunday_price_cents = round\(sunday_price_cents \/ 100\.0\) \* 100/);
+  assert.match(migration, /check \(price_cents % 100 = 0\)/);
+  assert.match(migration, /check \(sunday_price_cents % 100 = 0\)/);
+  assert.equal((actions.match(/PriceCents: z\.number\(\)\.int\(\)\.min\(0\)\.max\(1_000_000\)\.multipleOf\(100\)/g) ?? []).length, 1);
+  assert.equal((actions.match(/priceCents: z\.number\(\)\.int\(\)\.min\(0\)\.max\(1_000_000\)\.multipleOf\(100\)/g) ?? []).length, 2);
+  assert.doesNotMatch(serviceManager, /step=\{0\.5\}/);
 });
 
 test("barber can manage pricing surcharges from admin settings", () => {

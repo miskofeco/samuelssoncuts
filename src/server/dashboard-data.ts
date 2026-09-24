@@ -5,7 +5,7 @@ import { adminCalendarWindowDates } from "@/domain/calendar-window";
 import {
   DEFAULT_PRICING_SETTINGS,
   addDays,
-  eachDate,
+  blockedRangeFromRow,
   isShopDayFullyBlocked,
   latestClientBookingDate,
   surchargeDetailsForRequest,
@@ -140,6 +140,7 @@ export function mapServiceRow(row: ServiceRow): Service {
     description: row.description,
     duration: row.duration_minutes,
     price: row.price_cents / 100,
+    sundayPrice: row.sunday_price_cents / 100,
     active: row.active,
     imageUrl: row.image_url,
   };
@@ -352,7 +353,10 @@ export async function loadBookingContactSettings(): Promise<BookingContact> {
 /** Blocked calendar days expanded from blocked_times ranges. */
 export async function loadBlockedDays(window?: { fromIso: string; toIso: string }): Promise<{
   dates: Set<string>;
+  /** Reason-free intervals: safe for client availability payloads. */
   intervals: BlockedInterval[];
+  /** The same intervals with the barber's reason, for admin views only. */
+  labeledIntervals: BlockedInterval[];
   ranges: BlockedRange[];
 }> {
   const supabase = await createClient();
@@ -367,35 +371,20 @@ export async function loadBlockedDays(window?: { fromIso: string; toIso: string 
   });
 
   const intervals = rows.map((row) => ({ start: row.starts_at, end: row.ends_at }));
+  const labeledIntervals = rows.map((row) => ({ start: row.starts_at, end: row.ends_at, reason: row.reason }));
+  const ranges = rows.map((row) => blockedRangeFromRow(row, window));
   const candidateDates = new Set<string>();
-  const ranges = rows.map((row) => {
-    const rangeStartIso = window && row.starts_at < window.fromIso ? window.fromIso : row.starts_at;
-    const rangeEndIso = window && row.ends_at > window.toIso ? window.toIso : row.ends_at;
-    // Whole-day blocks end at the NEXT shop day's midnight (exclusive), so the
-    // last covered day comes from eachDate rather than the raw end instant.
-    const days = eachDate(rangeStartIso, rangeEndIso);
-    const firstDay = days[0] ?? dateFromIso(rangeStartIso);
-    const lastDay = days[days.length - 1] ?? dateFromIso(rangeEndIso);
-    for (const day of days) {
+  for (const range of ranges) {
+    for (let day = range.start; day <= range.end; day = addDaysToDate(day, 1)) {
       candidateDates.add(day);
     }
-    return {
-      id: row.id,
-      start: firstDay,
-      end: lastDay,
-      startTime: rangeStartIso === shopDayRangeUtc(firstDay).startIso
-        ? null : timeFromIso(rangeStartIso),
-      endTime: rangeEndIso === shopDayRangeUtc(addDaysToDate(lastDay, 1)).startIso
-        ? null : timeFromIso(rangeEndIso),
-      reason: row.reason,
-    };
-  });
+  }
 
   const dates = new Set(
     [...candidateDates].filter((day) => isShopDayFullyBlocked(day, intervals)),
   );
 
-  return { dates, intervals, ranges };
+  return { dates, intervals, labeledIntervals, ranges };
 }
 
 // A PostgREST `.or()` filter is a comma/paren-delimited string, so an email
@@ -816,7 +805,8 @@ export async function loadAdminCalendar(window: { fromIso: string; toIso: string
     appointments: confirmedOnly(appointmentRows).map(mapAppointmentRow),
     pricingSettings,
     blockedDates: blocked.dates,
-    blockedIntervals: blocked.intervals,
+    // Admin-only payload: the calendar shows each block's reason.
+    blockedIntervals: blocked.labeledIntervals,
     businessHours,
   };
 }

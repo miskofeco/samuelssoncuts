@@ -31,7 +31,10 @@ export type Service = {
   name: string;
   description?: string | null;
   duration: number;
+  /** Regular (Monday–Saturday) list price in euros. */
   price: number;
+  /** Sunday list price in euros; Sunday bookings quote from this base instead. */
+  sundayPrice: number;
   /** Hidden services remain readable only when attached to the client's history. */
   active?: boolean;
   imageUrl?: string | null;
@@ -103,7 +106,12 @@ export type Appointment = {
 };
 
 /** Half-open UTC range [start, end) during which the barber is unavailable. */
-export type BlockedInterval = { start: string; end: string };
+export type BlockedInterval = {
+  start: string;
+  end: string;
+  /** Barber's short note; only admin loaders include it, never client payloads. */
+  reason?: string | null;
+};
 
 /** Shop-local dates and optional wall times for a human-readable closure. */
 export type BlockedRange = {

@@ -14,10 +14,12 @@ test("manual booking offers an editable price seeded from client slot pricing", 
   assert.match(modal, /priceCentsForSlot\(/);
   assert.match(modal, /priceCents: enteredPriceCents/);
   assert.match(modal, /setPriceInput\(null\)/);
+  // The service dropdown shows the price that applies on the chosen day.
+  assert.match(modal, /isSundayDate\(date\) \? option\.sundayPrice : option\.price/);
 });
 
 test("server validates the barber's price and persists it in one admin-only booking RPC", () => {
-  assert.match(actions, /priceCents: z\.number\(\)\.int\(\)\.min\(0\)\.max\(1_000_000\)/);
+  assert.match(actions, /priceCents: z\.number\(\)\.int\(\)\.min\(0\)\.max\(1_000_000\)\.multipleOf\(100\)/);
   assert.match(actions, /quoteAdminSlot\(/);
   assert.match(actions, /rpc\("admin_create_booking_priced"/);
   assert.match(actions, /p_price_cents: parsed\.data\.priceCents/);

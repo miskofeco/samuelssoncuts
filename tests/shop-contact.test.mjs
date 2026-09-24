@@ -30,3 +30,11 @@ test("contact settings are barber-owned and customer-readable", () => {
   assert.match(detail, /location: address/);
   assert.match(calendar, /params\.set\("location", location\)/);
 });
+
+test("calendar subscription offers Google and a solid Apple button", () => {
+  const exportModal = readFileSync("src/components/shared/calendar-export.tsx", "utf8");
+  assert.match(exportModal, /https:\/\/calendar\.google\.com\/calendar\/render\?cid=\$\{encodeURIComponent\(webcalUrl\)\}/);
+  assert.match(exportModal, /src="\/email-icons\/google\.png"/);
+  assert.match(exportModal, /<Icon icon=\{AppleIcon\} className="size-\[18px\] \[&_path\]:fill-current" \/>/);
+  assert.match(exportModal, /border-black bg-black text-white/);
+});

@@ -9,6 +9,7 @@ import { createAdminBookingAction } from "@/app/actions";
 import type { BookedSlot } from "@/components/admin/admin-calendar";
 import { Button } from "@/components/shared/button";
 import { Combobox } from "@/components/shared/combobox";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DateField } from "@/components/shared/date-field";
 import { Feedback } from "@/components/shared/feedback";
 import { Field, SelectField } from "@/components/shared/form";
@@ -18,17 +19,59 @@ import { SegmentedControl } from "@/components/shared/segmented-control";
 import {
   addMinutesToTime,
   adminSlotOptions,
+  formatFullDay,
   isPreferredClientStart,
+  isSundayDate,
   minutesOf,
+  formatEuroAmount,
   parseEuroCents,
   priceCentsForSlot,
   priceKindForSlot,
   todayIso,
 } from "@/domain/schedule";
 import type { ActionResult, BlockedInterval, BusinessHoursDay, ClientProfile, PricingSettings, Service } from "@/domain/types";
-import { useT } from "@/i18n/provider";
+import { localeFor } from "@/i18n/config";
+import { useLang, useT } from "@/i18n/provider";
 
 type CustomerMode = "client" | "walkin";
+
+/**
+ * Warning shown before the barber books into closed hours or blocked time.
+ * Used by the calendar before this modal opens and by the form itself when a
+ * closed/blocked date or time is picked inside it.
+ */
+export function UnavailableBookingConfirm({
+  open,
+  onOpenChange,
+  reason,
+  date,
+  time,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  reason: "closed" | "blocked";
+  date: string;
+  time?: string;
+  onConfirm: () => void;
+}) {
+  const t = useT();
+  const locale = localeFor(useLang());
+  const when = date ? t.admin.slotWhen(formatFullDay(date, locale), time) : "";
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      destructive={false}
+      title={reason === "blocked" ? t.admin.unavailableConfirmBlockedTitle : t.admin.unavailableConfirmClosedTitle}
+      description={reason === "blocked"
+        ? t.admin.unavailableConfirmBlockedBody(when)
+        : t.admin.unavailableConfirmClosedBody(when)}
+      confirmLabel={t.admin.unavailableConfirmAction}
+      onConfirm={onConfirm}
+    />
+  );
+}
 
 export function AddBookingModal({
   open,
@@ -38,6 +81,7 @@ export function AddBookingModal({
   services,
   initialDate,
   initialTime,
+  allowUnavailable,
   bookedByDate,
   businessHours,
   blockedIntervals,
@@ -50,6 +94,8 @@ export function AddBookingModal({
   services: Service[];
   initialDate?: string;
   initialTime?: string;
+  /** The barber already confirmed booking this slot outside availability. */
+  allowUnavailable?: boolean;
   bookedByDate: Map<string, BookedSlot[]>;
   businessHours: BusinessHoursDay[];
   blockedIntervals: BlockedInterval[];
@@ -66,11 +112,12 @@ export function AddBookingModal({
       {/* Remount per slot so the form re-seeds from initialDate/initialTime
           without a setState-in-effect. */}
       <BookingForm
-        key={`${initialDate ?? ""}-${initialTime ?? ""}`}
+        key={`${initialDate ?? ""}-${initialTime ?? ""}-${allowUnavailable ? "override" : ""}`}
         clients={clients}
         services={services}
         initialDate={initialDate}
         initialTime={initialTime}
+        allowUnavailable={allowUnavailable}
         bookedByDate={bookedByDate}
         businessHours={businessHours}
         blockedIntervals={blockedIntervals}
@@ -87,6 +134,7 @@ function BookingForm({
   services,
   initialDate,
   initialTime,
+  allowUnavailable = false,
   bookedByDate,
   businessHours,
   blockedIntervals,
@@ -98,6 +146,7 @@ function BookingForm({
   services: Service[];
   initialDate?: string;
   initialTime?: string;
+  allowUnavailable?: boolean;
   bookedByDate: Map<string, BookedSlot[]>;
   businessHours: BusinessHoursDay[];
   blockedIntervals: BlockedInterval[];
@@ -121,6 +170,10 @@ function BookingForm({
   const [priceInput, setPriceInput] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<ActionResult | null>(null);
+  // Booking into closed hours or blocked time needs an explicit confirmation,
+  // given before the modal opened (calendar click) or from inside the form.
+  const [overrideAvailability, setOverrideAvailability] = useState(allowUnavailable);
+  const [confirmingOverride, setConfirmingOverride] = useState(false);
   const today = todayIso();
 
   const service = services.find((s) => s.id === serviceId);
@@ -133,6 +186,7 @@ function BookingForm({
         date,
         businessHours,
         blockedIntervals,
+        allowUnavailable: overrideAvailability,
       }).map((option) => ({
         ...option,
         disabled: option.disabledReason !== null,
@@ -141,11 +195,13 @@ function BookingForm({
             ? t.feedback.chooseFutureTime
             : option.disabledReason === "conflict"
               ? t.admin.slotTakenHint
-              : option.disabledReason === "closed" || option.disabledReason === "blocked"
-                ? t.admin.off
-              : undefined,
+              : option.unavailableReason === "blocked"
+                ? t.admin.blockedShort
+                : option.unavailableReason === "closed"
+                  ? t.admin.off
+                  : undefined,
       })),
-    [duration, date, bookedByDate, businessHours, blockedIntervals, t],
+    [duration, date, bookedByDate, businessHours, blockedIntervals, overrideAvailability, t],
   );
   const [time, setTime] = useState(initialTime ?? options[0]?.value ?? "");
 
@@ -154,6 +210,16 @@ function BookingForm({
   const timeInvalid = !selected || selected.disabled;
   const dateInvalid = Boolean(date && date < today);
   const allTaken = options.length > 0 && options.every((option) => option.disabled);
+  const dayClosed = options.length > 0 && options.every((option) => option.disabledReason === "closed");
+  const selectedUnavailable = overrideAvailability && Boolean(selected?.unavailableReason);
+  // Offer the override only when availability (not the past or an overlap) is
+  // what makes the chosen date/time unbookable.
+  const canOverride = !overrideAvailability && Boolean(date) && !dateInvalid && (
+    dayClosed ||
+    !selected ||
+    selected.disabledReason === "closed" ||
+    selected.disabledReason === "blocked"
+  );
   const preferred = date && time && service
     ? isPreferredClientStart(
       date,
@@ -169,7 +235,7 @@ function BookingForm({
     : false;
   const priceKind = time ? priceKindForSlot(preferred, { startsAt: time }) : null;
   const suggestedPriceCents = service && date && time && !timeInvalid && !dateInvalid
-    ? priceCentsForSlot(Math.round(service.price * 100), preferred, {
+    ? priceCentsForSlot(Math.round((isSundayDate(date) ? service.sundayPrice : service.price) * 100), preferred, {
       startsAt: time,
       ...pricingSettings,
     })
@@ -179,7 +245,7 @@ function BookingForm({
     : priceKind === "gap"
       ? t.client.extraPrice(pricingSettings.gapSurchargePercent)
       : t.client.bestPrice;
-  const priceValue = priceInput ?? (suggestedPriceCents === null ? "" : (suggestedPriceCents / 100).toFixed(2));
+  const priceValue = priceInput ?? (suggestedPriceCents === null ? "" : formatEuroAmount(suggestedPriceCents));
   const enteredPriceCents = parseEuroCents(priceValue);
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -196,6 +262,7 @@ function BookingForm({
           time,
           priceCents: enteredPriceCents,
           note: note.trim() || undefined,
+          allowUnavailable: selectedUnavailable,
         });
         setFeedback(result);
         if (result.ok) {
@@ -218,13 +285,23 @@ function BookingForm({
     enteredPriceCents === null ||
     (mode === "client" ? !clientId : customerName.trim().length === 0);
 
+  // Name the actual reason: a time missing from the options lies outside the
+  // day's opening hours (or the service would run past closing).
   const slotHint = dateInvalid
     ? t.feedback.chooseFutureTime
-    : date && allTaken
-      ? t.admin.dayFull
-      : date && timeInvalid
-        ? t.admin.slotOverlapError
-        : null;
+    : date && dayClosed
+      ? t.admin.dayClosedHint
+      : date && allTaken
+        ? t.admin.dayFull
+        : date && timeInvalid
+          ? !selected
+            ? t.feedback.slotOutsideHours
+            : selected.disabledReason === "past"
+              ? t.feedback.chooseFutureTime
+              : selected.disabledReason === "closed" || selected.disabledReason === "blocked"
+                ? t.feedback.slotUnavailable
+                : t.admin.slotOverlapError
+          : null;
 
   return (
     <form className="space-y-4" onSubmit={submit}>
@@ -279,7 +356,8 @@ function BookingForm({
       >
         {services.map((option) => (
           <option key={option.id} value={option.id}>
-            {option.name} — {option.duration} {t.admin.minutesShort} · {option.price} €
+            {option.name} — {option.duration} {t.admin.minutesShort} ·{" "}
+            {date && isSundayDate(date) ? option.sundayPrice : option.price} €
           </option>
         ))}
       </SelectField>
@@ -302,7 +380,21 @@ function BookingForm({
         />
       </div>
       {slotHint ? (
-        <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{slotHint}</p>
+        <div className="flex flex-col items-start gap-1">
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{slotHint}</p>
+          {canOverride ? (
+            <Button type="button" variant="outline" size="sm" onClick={() => setConfirmingOverride(true)}>
+              {t.admin.bookOutsideAvailability}
+            </Button>
+          ) : null}
+        </div>
+      ) : selectedUnavailable ? (
+        <p className="text-xs font-medium text-amber-700 dark:text-amber-300 tabular-nums">
+          {time}–{addMinutesToTime(time, duration)} ·{" "}
+          {selected?.unavailableReason === "blocked"
+            ? t.admin.bookingInBlockedTimeNotice
+            : t.admin.bookingOutsideHoursNotice}
+        </p>
       ) : time && !timeInvalid && service ? (
         <p className="text-xs text-muted-foreground tabular-nums">
           {time}–{addMinutesToTime(time, duration)} · {service.name}
@@ -313,13 +405,13 @@ function BookingForm({
         label={t.admin.bookingPrice}
         value={priceValue}
         onChange={(event) => setPriceInput(event.target.value)}
-        inputMode="decimal"
+        inputMode="numeric"
         autoComplete="off"
         maxLength={10}
         required
         hint={suggestedPriceCents === null
           ? undefined
-          : `${t.admin.suggestedPrice}: ${(suggestedPriceCents / 100).toFixed(2)} € · ${suggestedPriceLabel}`}
+          : `${t.admin.suggestedPrice}: ${formatEuroAmount(suggestedPriceCents)} € · ${suggestedPriceLabel}`}
         error={priceInput !== null && enteredPriceCents === null ? t.admin.invalidBookingPrice : undefined}
       />
       {priceInput !== null && suggestedPriceCents !== null ? (
@@ -353,6 +445,19 @@ function BookingForm({
           )}
         </Button>
       </div>
+
+      <UnavailableBookingConfirm
+        open={confirmingOverride}
+        onOpenChange={setConfirmingOverride}
+        reason={selected?.disabledReason === "blocked" ? "blocked" : "closed"}
+        date={date}
+        time={selected ? time : undefined}
+        onConfirm={() => {
+          setOverrideAvailability(true);
+          setConfirmingOverride(false);
+          setPriceInput(null);
+        }}
+      />
     </form>
   );
 }

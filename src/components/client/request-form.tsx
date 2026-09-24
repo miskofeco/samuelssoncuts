@@ -27,6 +27,7 @@ import {
   formatFullDay,
   orderClientServices,
   serviceById,
+  servicePriceForDate,
 } from "@/domain/schedule";
 import type {
   ActionResult,
@@ -128,12 +129,13 @@ export function RequestForm({
   } | null>(null);
 
   const service = serviceById(serviceId, services);
+  const basePrice = servicePriceForDate(service, date);
   const priceCalculation = slot
     ? slot.priceKind === "vip"
-      ? `${service.price} € + ${availability.pricingSettings.vipSurchargePercent}%`
+      ? `${basePrice} € + ${availability.pricingSettings.vipSurchargePercent}%`
       : slot.priceKind === "gap"
-        ? `${service.price} € + ${availability.pricingSettings.gapSurchargePercent}%`
-        : `${service.price} €`
+        ? `${basePrice} € + ${availability.pricingSettings.gapSurchargePercent}%`
+        : `${basePrice} €`
     : null;
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -321,6 +323,9 @@ export function RequestForm({
                   </span>
                   <Badge variant={selected ? "default" : "secondary"} className="col-start-2 w-fit shrink-0 tabular-nums">
                     {service.duration} {t.admin.minutesShort} · {service.price} €
+                    {service.sundayPrice !== service.price
+                      ? ` · ${t.admin.sundayPriceLabel(service.sundayPrice)}`
+                      : null}
                   </Badge>
                 </button>
               );

@@ -1,5 +1,5 @@
 import { Card, SectionHeader } from "@/components/shared/card";
-import { formatFullDay, serviceById, surchargeDetailsForRequest } from "@/domain/schedule";
+import { formatFullDay, serviceById, servicePriceForDate, surchargeDetailsForRequest } from "@/domain/schedule";
 import type {
   PricingSettings,
   BusinessHoursDay,
@@ -69,7 +69,8 @@ function buildBookingCards({
       const startsAt = dateTimeOf(appointment);
       const durationMinutes = appointment.durationMinutes ?? service.duration;
       const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
-      const servicePriceCents = Math.round(service.price * 100);
+      const servicePrice = servicePriceForDate(service, appointment.date);
+      const servicePriceCents = Math.round(servicePrice * 100);
       const bookedPriceCents = appointment.priceCents ?? request?.priceCents ?? servicePriceCents;
 
       return {
@@ -87,7 +88,7 @@ function buildBookingCards({
           id: appointment.id,
           title: client?.name ?? appointment.clientName ?? clientFallback,
           service: service.name,
-          servicePrice: service.price,
+          servicePrice,
           finalPriceCents: bookedPriceCents,
           surcharge: request?.surcharge,
           surchargeKind: surcharge?.kind,

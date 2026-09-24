@@ -18,7 +18,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Feedback } from "@/components/shared/feedback";
 import { Icon } from "@/components/shared/icon";
 import { StatusPill } from "@/components/shared/status-pill";
-import { bookedSlotForRequest, formatFullDay, serviceById } from "@/domain/schedule";
+import { bookedSlotForRequest, formatEuroAmount, formatFullDay, serviceById, servicePriceForDate } from "@/domain/schedule";
 import type {
   ActionResult,
   BookingRequest,
@@ -133,7 +133,7 @@ function ReservationCard({
             <h3 className="truncate text-base font-semibold text-foreground">{service.name}</h3>
             <p className="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground tabular-nums">
               <Icon icon={Clock01Icon} className="size-3.5" />
-              {service.duration} {t.admin.minutesShort} · {service.price} €
+              {service.duration} {t.admin.minutesShort} · {servicePriceForDate(service, bookedSlot?.date)} €
             </p>
           </div>
           <StatusPill tone={meta.tone} dot className="shrink-0">
@@ -154,7 +154,7 @@ function ReservationCard({
                 {formatFullDay(request.requestedDate as string, locale)} ·{" "}
                 {request.requestedTime as string}
                 {typeof request.priceCents === "number"
-                  ? ` · ${(request.priceCents / 100).toFixed(2)} €`
+                  ? ` · ${formatEuroAmount(request.priceCents)} €`
                   : ""}
               </p>
             </div>

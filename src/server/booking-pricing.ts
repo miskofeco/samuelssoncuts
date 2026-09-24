@@ -1,6 +1,7 @@
 import {
   clientSlotsForService,
   isPreferredClientStart,
+  isSundayDate,
   minutesOf,
   priceCentsForSlot,
   priceKindForSlot,
@@ -16,8 +17,10 @@ export type SlotQuoteInput = {
   date: string;
   time: string;
   durationMinutes: number;
-  /** Service list price in cents; the quote is derived from it server-side. */
+  /** Regular service list price in cents; the quote is derived from it server-side. */
   basePriceCents: number;
+  /** Sunday service list price in cents; replaces `basePriceCents` on Sundays. */
+  sundayPriceCents: number;
   /**
    * Confirmed appointment start (ISO) to leave out of the day's busy slots —
    * used when the client moves an existing appointment within the same day so
@@ -88,7 +91,9 @@ async function quoteSlot(
     confirmedForDay,
     businessHours,
   );
-  const priceCents = priceCentsForSlot(input.basePriceCents, preferred, {
+  // Sundays swap the list price; gap/VIP surcharges still apply on top.
+  const basePriceCents = isSundayDate(input.date) ? input.sundayPriceCents : input.basePriceCents;
+  const priceCents = priceCentsForSlot(basePriceCents, preferred, {
     startsAt: input.time,
     ...pricingSettings,
   });

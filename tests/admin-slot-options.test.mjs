@@ -14,7 +14,8 @@ test("admin slot options use the shop clock and reject partial overlaps", () => 
   assert.match(schedule, /nowMinutesInShopTimeZone\(now\)/);
   assert.match(schedule, /overlaps\(startMin, durationMinutes, minutesOf\(slot\.time\), slot\.durationMinutes\)/);
   assert.match(schedule, /isSlotBlocked\(date, time, durationMinutes, blockedIntervals\)/);
-  assert.match(schedule, /disabledReason: past[\s\S]*"closed"[\s\S]*"blocked"[\s\S]*"conflict"/);
+  assert.match(schedule, /const unavailableReason = outsideHours \? "closed" : blocked \? "blocked" : null/);
+  assert.match(schedule, /disabledReason: past[\s\S]*unavailableReason && !allowUnavailable[\s\S]*"conflict"/);
 });
 
 test("add and reschedule pickers share the same pure option builder", () => {

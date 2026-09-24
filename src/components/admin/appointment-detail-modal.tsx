@@ -30,7 +30,7 @@ import { Icon } from "@/components/shared/icon";
 import { Modal } from "@/components/shared/modal";
 import { StatusPill } from "@/components/shared/status-pill";
 import type { BookedSlot, CalendarItem } from "@/components/admin/admin-calendar";
-import { addMinutesToTime, adminSlotOptions, formatFullDay, todayIso } from "@/domain/schedule";
+import { addMinutesToTime, adminSlotOptions, formatEuroAmount, formatFullDay, todayIso } from "@/domain/schedule";
 import type { ActionResult, BlockedInterval, BusinessHoursDay } from "@/domain/types";
 import { localeFor } from "@/i18n/config";
 import { useLang, useT } from "@/i18n/provider";
@@ -102,7 +102,7 @@ function DetailBody({
   const hasEnded = shopDateTimeToEpochMs(item.date, endTime) <= openedAt;
   const canManage = !isConfirmed || (!hasEnded && !item.outcome);
   const canConfirmRequest = isPendingRequest && shopDateTimeToEpochMs(item.date, item.time) > openedAt;
-  const finalPrice = (item.finalPriceCents / 100).toFixed(2);
+  const finalPrice = formatEuroAmount(item.finalPriceCents);
 
   const timeOptions = useMemo(
     () =>

@@ -1,6 +1,7 @@
 "use client";
 
 import { AppleIcon, Copy01Icon, Download04Icon, Link01Icon, Refresh01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import Image from "next/image";
 import { useState, useTransition } from "react";
 
 import { rotateCalendarTokenAction } from "@/app/actions";
@@ -36,8 +37,13 @@ export function CalendarExport({ feedUrl }: { feedUrl?: string }) {
     });
   }
 
-  // Apple Calendar subscribes via the webcal:// scheme.
+  // Apple Calendar subscribes via the webcal:// scheme; Google Calendar's
+  // subscribe screen takes the same webcal URL as its `cid` parameter. Google
+  // fetches the feed from its servers, so it only works on a public HTTPS host.
   const webcalUrl = feedUrl?.replace(/^https?:\/\//, "webcal://");
+  const googleSubscribeUrl = webcalUrl
+    ? `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcalUrl)}`
+    : undefined;
 
   async function copyFeed() {
     if (!feedUrl) return;
@@ -103,11 +109,29 @@ export function CalendarExport({ feedUrl }: { feedUrl?: string }) {
                     {copied ? t.admin.exportCopied : t.admin.exportCopy}
                   </Button>
                 </div>
-                {webcalUrl ? (
-                  <a href={webcalUrl} className={buttonClass("primary", "mt-3 w-full sm:w-auto")}>
-                    <Icon icon={AppleIcon} className="size-[18px]" strokeWidth={2} />
-                    {t.admin.exportSubscribeApple}
-                  </a>
+                {webcalUrl && googleSubscribeUrl ? (
+                  <div className="mt-3 grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 sm:flex sm:flex-wrap">
+                    <a
+                      href={googleSubscribeUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={buttonClass("secondary", "w-full min-w-0 sm:w-auto")}
+                    >
+                      <Image src="/email-icons/google.png" alt="" width={18} height={18} className="size-[18px]" />
+                      {t.admin.exportSubscribeGoogle}
+                    </a>
+                    {/* Same solid Apple button as the appointment detail page. */}
+                    <a
+                      href={webcalUrl}
+                      className={buttonClass(
+                        "secondary",
+                        "w-full min-w-0 border-black bg-black text-white hover:bg-black/90 hover:text-white sm:w-auto dark:border-white dark:bg-white dark:text-black dark:hover:bg-white/90 dark:hover:text-black",
+                      )}
+                    >
+                      <Icon icon={AppleIcon} className="size-[18px] [&_path]:fill-current" />
+                      {t.admin.exportSubscribeApple}
+                    </a>
+                  </div>
                 ) : null}
                 <p className="mt-4 text-xs leading-5 text-muted-foreground">{t.admin.exportRotateHint}</p>
                 <Button
