@@ -21,6 +21,22 @@ function serializeError(error: unknown) {
     };
   }
 
+  // Supabase's PostgrestError (and similar SDK results) is a plain object, not
+  // an Error; String() would log "[object Object]" and hide the real cause.
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const text = (key: string) => {
+      const value = record[key];
+      return typeof value === "string" ? redact(value) : undefined;
+    };
+    return {
+      message: text("message") ?? "Unknown error object",
+      code: text("code"),
+      details: text("details"),
+      hint: text("hint"),
+    };
+  }
+
   return { message: redact(String(error)) };
 }
 

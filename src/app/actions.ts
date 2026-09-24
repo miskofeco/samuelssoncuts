@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath, updateTag } from "next/cache";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
@@ -43,7 +43,9 @@ import {
 } from "@/server/booking-guards";
 import { dashboardPathFor, getCurrentProfile, requireAdmin, requireApprovedClient, requireProfile } from "@/server/auth";
 import { isReadyForApproval } from "@/domain/approval";
+import { authErrorKind } from "@/domain/auth-errors";
 import type { AuthFormState } from "@/domain/auth-form";
+import { OAUTH_INTENT_COOKIE, oauthStartPath, parseOAuthIntent } from "@/domain/oauth-landing";
 import { parsePhone } from "@/domain/phone";
 import type { BookingContact } from "@/domain/shop-contact";
 import {
@@ -289,15 +291,22 @@ export async function signInAction(
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
+    const kind = authErrorKind(error);
     // The account exists but the confirmation link was never opened. Say so
     // and let the form offer to resend it instead of blaming the password.
-    if (error.code === "email_not_confirmed") {
+    if (kind === "email_not_confirmed") {
       return { error: t.auth.errors.emailNotConfirmed, unconfirmedEmail: email, values };
     }
-    if (error.code === "invalid_credentials" || error.status === 400) {
+    if (kind === "rate_limited") {
+      return { error: t.feedback.tooManyAttempts, values };
+    }
+    if (kind === "banned") {
+      return { error: t.auth.errors.accountBanned, values };
+    }
+    if (kind === "invalid_credentials" || (kind === "unknown" && error.status === 400)) {
       return { error: t.feedback.checkEmailPassword, values };
     }
-    await reportError("auth-sign-in", error, { code: error.code });
+    await reportError("auth-sign-in", error, { code: error.code, status: error.status });
     return { error: t.common.somethingWentWrong, values };
   }
 
@@ -383,8 +392,15 @@ export async function updatePasswordAction(formData: FormData) {
   const { error } = await supabase.auth.updateUser({ password: password.data });
 
   if (error) {
-    if (error.code === "same_password") {
+    const kind = authErrorKind(error);
+    if (kind === "same_password") {
       redirect(authErrorPath("/auth/update-password", "same_password"));
+    }
+    if (kind === "weak_password") {
+      redirect(authErrorPath("/auth/update-password", "password_weak"));
+    }
+    if (kind === "rate_limited") {
+      redirect(authErrorPath("/auth/update-password", "too_many_attempts"));
     }
     if (error.status === 401 || error.status === 403) {
       redirect(authErrorPath("/reset-password", "reset_link_invalid"));
@@ -401,10 +417,24 @@ export async function updatePasswordAction(formData: FormData) {
 
 export async function signInWithOAuthAction(formData: FormData) {
   const provider = oauthProviderSchema.safeParse(formString(formData, "provider"));
+  const intent = parseOAuthIntent(formString(formData, "intent"));
+  const startPath = oauthStartPath(intent);
 
   if (!provider.success) {
-    redirect(authErrorPath("/login", "oauth_failed"));
+    redirect(authErrorPath(startPath, "oauth_failed"));
   }
+
+  // The same Google flow signs in and registers. Remember which page the
+  // person started from so /auth/callback can say that an unknown account has
+  // just started a registration. A short-lived cookie rather than a query
+  // parameter keeps redirectTo identical to the URL allow-listed in Supabase.
+  (await cookies()).set(OAUTH_INTENT_COOKIE, intent, {
+    httpOnly: true,
+    secure: getSiteUrl().startsWith("https://"),
+    sameSite: "lax",
+    path: "/auth",
+    maxAge: 10 * 60,
+  });
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -418,7 +448,7 @@ export async function signInWithOAuthAction(formData: FormData) {
     if (error) {
       await reportError("auth-oauth", error, { provider: provider.data });
     }
-    redirect(authErrorPath("/login", "oauth_failed"));
+    redirect(authErrorPath(startPath, "oauth_failed"));
   }
 
   // Hand off to the provider's consent screen.
@@ -484,15 +514,29 @@ export async function registerAction(
   });
 
   if (error) {
-    if (error.code === "user_already_exists" || error.code === "email_exists") {
-      return { fieldErrors: { email: t.auth.errors.emailTaken }, values };
+    // Nothing is saved when signUp fails (the auth user, its profile and the
+    // confirmation email are one transaction), so every message invites a retry
+    // or a correction. A phone claimed concurrently is not an error here: the
+    // sign-up trigger creates the profile without it (migration 0053) and the
+    // account is asked for another number on /complete-profile.
+    switch (authErrorKind(error)) {
+      case "email_taken":
+        return { fieldErrors: { email: t.auth.errors.emailTaken }, values };
+      case "email_invalid":
+        return { fieldErrors: { email: t.auth.errors.emailInvalid }, values };
+      case "weak_password":
+        return { fieldErrors: { password: t.auth.errors.passwordWeak }, values };
+      case "rate_limited":
+        return { error: t.feedback.tooManyAttempts, values };
+      case "signup_disabled":
+        return { error: t.auth.errors.signupDisabled, values };
+      case "email_delivery":
+        await reportError("auth-register-email", error, { code: error.code, status: error.status });
+        return { error: t.auth.errors.emailDeliveryFailed, values };
+      default:
+        await reportError("auth-register", error, { code: error.code, status: error.status });
+        return { error: t.common.somethingWentWrong, values };
     }
-    // Backstop for a race between the check above and the trigger insert.
-    if (isDuplicatePhoneError(error.message)) {
-      return { fieldErrors: { phone: t.feedback.phoneTaken }, values };
-    }
-    await reportError("auth-register", error, { code: error.code });
-    return { error: t.common.somethingWentWrong, values };
   }
 
   if (isExistingUserSignUp(data.user)) {

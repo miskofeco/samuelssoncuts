@@ -103,9 +103,15 @@ const en = {
       emailNotConfirmed: "Confirm your email before signing in. We can send the link again.",
       oauthFailed: "Google sign-in could not be completed. Please try again.",
       oauthCancelled: "Google sign-in was cancelled. Nothing was changed.",
+      oauthNotRegistered:
+        "This Google account isn't registered yet. Register first with your email, then you can sign in.",
       linkInvalid: "This link is invalid or has expired. Sign in or request a new one.",
       sessionExpired: "Your session has expired. Please sign in again.",
       samePassword: "Choose a password different from your current one.",
+      passwordWeak: "This password is too easy to guess. Use a longer one with letters, numbers and a symbol.",
+      emailDeliveryFailed: "We couldn't send the confirmation email. Nothing was saved, so please try again in a moment.",
+      signupDisabled: "New registrations are paused right now. Please contact the shop.",
+      accountBanned: "This account can't sign in. Please contact the shop.",
       profileMissing:
         "Your account could not be loaded. Sign out and try again, or contact the shop if it keeps happening.",
     },
@@ -113,6 +119,9 @@ const en = {
       confirmSent: (email: string) =>
         `We sent a confirmation link to ${email}. Open it, then sign in.`,
       confirmResent: "Confirmation link sent again. Check your inbox and spam folder.",
+      googleRegistered:
+        "This Google account wasn't registered yet, so we started a registration for you. Add your phone number to finish it.",
+      registrationIncomplete: "Your registration isn't finished yet. Add your phone number to complete it.",
     },
   },
   setup: {
@@ -1069,9 +1078,15 @@ const sk: Dict = {
       emailNotConfirmed: "Pred prihlásením potvrďte svoj e-mail. Odkaz vám môžeme poslať znova.",
       oauthFailed: "Prihlásenie cez Google sa nepodarilo dokončiť. Skúste to znova.",
       oauthCancelled: "Prihlásenie cez Google bolo zrušené. Nič sa nezmenilo.",
+      oauthNotRegistered:
+        "Tento Google účet ešte nie je zaregistrovaný. Najprv sa zaregistrujte e-mailom, potom sa môžete prihlásiť.",
       linkInvalid: "Tento odkaz je neplatný alebo vypršal. Prihláste sa alebo si vyžiadajte nový.",
       sessionExpired: "Vaša relácia vypršala. Prihláste sa znova.",
       samePassword: "Zvoľte iné heslo, než aké máte teraz.",
+      passwordWeak: "Toto heslo je príliš ľahké uhádnuť. Použite dlhšie heslo s písmenami, číslicami a symbolom.",
+      emailDeliveryFailed: "Potvrdzovací e-mail sa nepodarilo odoslať. Nič sa neuložilo, skúste to prosím o chvíľu znova.",
+      signupDisabled: "Nové registrácie sú momentálne pozastavené. Kontaktujte prosím prevádzku.",
+      accountBanned: "S týmto účtom sa nedá prihlásiť. Kontaktujte prosím prevádzku.",
       profileMissing:
         "Váš účet sa nepodarilo načítať. Odhláste sa a skúste to znova, alebo kontaktujte prevádzku, ak problém pretrváva.",
     },
@@ -1079,6 +1094,9 @@ const sk: Dict = {
       confirmSent: (email: string) =>
         `Na ${email} sme poslali potvrdzovací odkaz. Otvorte ho a potom sa prihláste.`,
       confirmResent: "Potvrdzovací odkaz sme poslali znova. Skontrolujte doručenú poštu aj spam.",
+      googleRegistered:
+        "Tento Google účet ešte nebol zaregistrovaný, preto sme vám začali registráciu. Dokončite ju doplnením telefónneho čísla.",
+      registrationIncomplete: "Vaša registrácia ešte nie je dokončená. Doplňte telefónne číslo a dokončite ju.",
     },
   },
   setup: {

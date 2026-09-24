@@ -9,11 +9,13 @@ import type { Dict } from "./dictionaries";
 export const AUTH_ERROR_CODES = [
   "oauth_failed",
   "oauth_cancelled",
+  "oauth_not_registered",
   "link_invalid",
   "reset_link_invalid",
   "session_expired",
   "same_password",
   "password_too_short",
+  "password_weak",
   "too_many_attempts",
   "profile_missing",
   "generic",
@@ -39,6 +41,8 @@ export function resolveAuthError(t: Dict, code: string | undefined): string | nu
       return t.auth.errors.oauthFailed;
     case "oauth_cancelled":
       return t.auth.errors.oauthCancelled;
+    case "oauth_not_registered":
+      return t.auth.errors.oauthNotRegistered;
     case "link_invalid":
       return t.auth.errors.linkInvalid;
     case "reset_link_invalid":
@@ -49,6 +53,8 @@ export function resolveAuthError(t: Dict, code: string | undefined): string | nu
       return t.auth.errors.samePassword;
     case "password_too_short":
       return t.auth.errors.passwordTooShort;
+    case "password_weak":
+      return t.auth.errors.passwordWeak;
     case "too_many_attempts":
       return t.feedback.tooManyAttempts;
     case "profile_missing":

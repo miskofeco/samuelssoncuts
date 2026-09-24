@@ -91,9 +91,10 @@ test("clickable data-table rows are keyboard accessible without breaking table s
 
 test("oauth callback handles provider errors and failed code exchange", () => {
   assert.match(authCallback, /error_description/);
-  assert.match(authCallback, /const \{ error \} = await supabase\.auth\.exchangeCodeForSession\(code\)/);
-  // Errors travel as short codes resolved on the login page, never as free text.
-  assert.match(authCallback, /authErrorPath\("\/login", reason\)/);
+  assert.match(authCallback, /const \{ data, error \} = await supabase\.auth\.exchangeCodeForSession\(code\)/);
+  // Errors travel as short codes resolved on the page the flow started from
+  // (login or register), never as free text.
+  assert.match(authCallback, /authErrorPath\(oauthStartPath\(intent\), reason\)/);
   assert.match(authCallback, /fail\("oauth_failed"\)/);
 });
 

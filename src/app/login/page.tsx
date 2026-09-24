@@ -59,7 +59,7 @@ export default async function LoginPage({
         initialEmail={email}
         unconfirmedEmail={noticeOffersResend(params.notice) ? email : undefined}
       />
-      <OAuthButtons />
+      <OAuthButtons intent="login" />
     </AuthPanel>
   );
 }

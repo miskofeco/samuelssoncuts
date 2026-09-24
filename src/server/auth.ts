@@ -94,7 +94,7 @@ export async function requireApprovedClient() {
 
 // True when a non-admin account has no phone number yet. Admins are exempt so
 // the seeded admin is never forced through the completion step.
-export function needsPhone(profile: AuthProfile) {
+export function needsPhone(profile: Pick<AuthProfile, "role" | "phone">) {
   return profile.role !== "admin" && !profile.phone?.trim();
 }
 
